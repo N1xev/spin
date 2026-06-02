@@ -55,6 +55,39 @@ func IsValidLicense(s string) bool {
 	return validLicenses[strings.ToLower(s)]
 }
 
+// IsValidTemplateRepo reports whether s is an acceptable --template-repo
+// URL (TMPL-03). Permissive: we accept https://, http://, git://, and
+// git@ (for ssh-agent URLs); the actual choke point is git itself, which
+// returns its own error if the URL is unreachable or not a git repo.
+//
+// Rejected:
+//
+//   - empty string
+//   - schemes other than http(s)/git (e.g. ftp://, file://)
+//   - strings that don't look like a URL at all (no scheme prefix)
+//
+// file:// is intentionally rejected because the recommended workflow is
+// to push the template repo to a remote and clone via the remote URL.
+// Local debugging can use `git clone` manually and then point the
+// embedded template's _base/ contents into a local working copy.
+func IsValidTemplateRepo(s string) bool {
+	if s == "" {
+		return false
+	}
+	// SSH-agent style: git@github.com:user/repo.git
+	if strings.HasPrefix(s, "git@") {
+		return true
+	}
+	// Standard schemes. We use prefix matching instead of url.Parse
+	// because url.Parse accepts relative paths and we want to reject
+	// those. The scheme check is enough to catch the common typos
+	// (--template-repo not-a-url, --template-repo foo/bar).
+	if strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "git://") {
+		return true
+	}
+	return false
+}
+
 // IsValidGoModuleSegment reports whether s is acceptable as a project name
 // (i.e. a Go module path segment, the directory name, and the binary name).
 //

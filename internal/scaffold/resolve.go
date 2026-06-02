@@ -54,6 +54,20 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	} else {
 		p.Template = v
 	}
+	if v, err := mustString(cmd, "template-repo"); err != nil {
+		return nil, err
+	} else {
+		p.TemplateRepo = v
+	}
+	// TMPL-03: reject obviously-invalid --template-repo values before
+	// the git clone attempt. The check is permissive (any of http(s)://,
+	// git://, git@); git itself returns the real error for unreachable
+	// URLs. An empty TemplateRepo is fine (default = embedded templates).
+	if p.TemplateRepo != "" && !IsValidTemplateRepo(p.TemplateRepo) {
+		return nil, &ArgError{
+			Message: "--template-repo " + p.TemplateRepo + ": must start with https://, http://, git://, or git@ (ssh-agent)",
+		}
+	}
 
 	// Bool flags — behavior flags
 	if v, err := mustBool(cmd, "force"); err != nil {
@@ -75,6 +89,11 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 		return nil, err
 	} else {
 		p.Quiet = v
+	}
+	if v, err := mustBool(cmd, "keep-template-cache"); err != nil {
+		return nil, err
+	} else {
+		p.KeepTemplateCache = v
 	}
 
 	// Type resolution (mutually-exclusive project variants).

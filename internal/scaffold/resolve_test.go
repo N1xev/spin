@@ -25,6 +25,8 @@ func newResolveCmd() *cobra.Command {
 	pf.String("module", "", "module path override")
 	pf.String("license", "mit", "license type: mit, apache-2.0, none")
 	pf.String("template", "tui-bubbletea", "template name")
+	pf.String("template-repo", "", "external template git URL (TMPL-03)")
+	pf.Bool("keep-template-cache", false, "retain cloned template on disk")
 	pf.Bool("force", false, "overwrite existing directory")
 	pf.Bool("no-git", false, "skip git init")
 	pf.Bool("no-verify", false, "skip post-scaffold go build")

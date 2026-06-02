@@ -63,6 +63,14 @@ type Project struct {
 	// in ResolveFlags.
 	KeepTemplateCache bool
 
+	// TemplateRepo is the user-supplied git URL from --template-repo
+	// (TMPL-03). Empty when the embedded template is used. Format is
+	// validated by IsValidTemplateRepo before any clone attempt, but
+	// the actual choke point is git itself — invalid paths return
+	// a clear error from CloneTemplateRepo. Populated by ResolveFlags
+	// from the --template-repo flag.
+	TemplateRepo string
+
 	// Force overwrites an existing ./<name>/ directory (SCAF-08). When
 	// false, Project.Validate returns an error if the dir exists.
 	Force bool

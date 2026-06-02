@@ -1,7 +1,11 @@
 package cmd
 
 import (
+	"context"
+	"os"
+
 	"github.com/spf13/cobra"
+	"charm.land/log/v2"
 
 	"github.com/example/spin/internal/scaffold"
 )
@@ -36,6 +40,14 @@ func init() {
 	pf.String("license", "mit", "license type: mit, apache-2.0, none")
 	pf.String("template", "tui-bubbletea", "template name (default: tui-bubbletea)")
 
+	// External template repo (TMPL-03). When set, replaces the embedded
+	// template tree with a depth-1 git clone of <url>. The cloned repo
+	// must contain a _base/ subdir (the spin overlay engine's required
+	// entry point). The clone lives in a tempdir; pass --keep-template-cache
+	// to retain it for inspection.
+	pf.String("template-repo", "", "override the embedded template with an external git repo (depth-1 clone to a tempdir; the repo must have a _base/ directory)")
+	pf.Bool("keep-template-cache", false, "retain the cloned template repo on disk after scaffolding (useful for debugging external templates)")
+
 	// Behavior flags.
 	pf.Bool("force", false, "overwrite existing ./<name>/ directory")
 	pf.Bool("no-git", false, "skip git init + initial commit")
@@ -61,13 +73,20 @@ func init() {
 
 // runNew is the `spin new` RunE. It binds CLI flags to a *Project via
 // ResolveFlags, validates the project (name regex, license whitelist,
-// dir conflict — all enforced by p.Validate per validate.go), and
-// hands off to scaffold.New for rendering + emit + smoke test.
+// dir conflict — all enforced by p.Validate per validate.go), clones
+// the external template repo if --template-repo is set, and hands off
+// to scaffold.New for rendering + emit + smoke test.
 //
 // Validation contract: runNew owns the Validate() call so we fail
 // fast before any FS write. scaffold.New does NOT re-validate (WR-003
 // removed the duplicate call). Any other entry point that calls
 // scaffold.New must validate first.
+//
+// External template lifecycle (TMPL-03): when --template-repo is set,
+// we clone to a fresh tempdir (CloneTemplateRepo) BEFORE scaffolding.
+// On success, the tempdir is either removed on return (default) or
+// retained for inspection (--keep-template-cache). The path is logged
+// at Info level so users with --keep-template-cache can find it.
 func runNew(cmd *cobra.Command, args []string) error {
 	p, err := scaffold.ResolveFlags(cmd, args)
 	if err != nil {
@@ -76,5 +95,29 @@ func runNew(cmd *cobra.Command, args []string) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
+
+	// External template repo (TMPL-03). Clone BEFORE scaffold.New so a
+	// failed clone produces no FS writes in the target dir. The clone
+	// also pre-validates that the repo has a _base/ subdir.
+	if p.TemplateRepo != "" {
+		dir, err := scaffold.CloneTemplateRepo(context.Background(), p.TemplateRepo)
+		if err != nil {
+			return err
+		}
+		p.ExternalDir = dir
+		log.Info("external template cloned", "path", dir, "url", p.TemplateRepo)
+		if !p.KeepTemplateCache {
+			// Schedule cleanup. Deferring here means even a panic in
+			// scaffold.New still cleans up the tempdir.
+			defer func() {
+				if rmErr := os.RemoveAll(dir); rmErr != nil {
+					log.Warn("failed to remove template cache", "path", dir, "err", rmErr.Error())
+				}
+			}()
+		} else {
+			log.Info("template cache retained (--keep-template-cache)", "path", dir)
+		}
+	}
+
 	return scaffold.New(p)
 }
