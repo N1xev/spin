@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"charm.land/log/v2"
 )
@@ -96,14 +97,35 @@ func New(p *Project) error {
 // emit writes the rendered files to ./<name>/ preserving relative paths.
 // All files are written with 0644 perms. Plan 02 may add +x for shell
 // scripts in Taskfile hooks.
+//
+// Path-traversal guard: every rendered relative path is resolved against
+// the project root and verified to remain inside it. A template that
+// renders `{{.Name}}` to `../../etc/passwd` (or any other escape) is
+// rejected with a descriptive error before any filesystem write happens.
+// The check uses filepath.Clean and a string-prefix comparison against
+// the cleaned root, both computed with filepath.Separator so it is
+// portable across POSIX and Windows.
 func emit(p *Project, files map[string][]byte) error {
 	root := filepath.Join(".", p.Name)
+	cleanRoot := filepath.Clean(root) + string(filepath.Separator)
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return fmt.Errorf("mkdir %q: %w", root, err)
 	}
 
 	for rel, content := range files {
 		full := filepath.Join(root, rel)
+		// Defense-in-depth: a malicious or buggy template that renders a
+		// relative path with `..` segments must not be allowed to write
+		// outside the project root. filepath.Clean collapses the path
+		// so the prefix check is unambiguous.
+		cleanFull := filepath.Clean(full)
+		if !strings.HasPrefix(cleanFull+string(filepath.Separator), cleanRoot) &&
+			cleanFull+string(filepath.Separator) != cleanRoot {
+			return fmt.Errorf(
+				"path traversal: rendered %q resolves to %q which is outside project root %q",
+				rel, cleanFull, cleanRoot,
+			)
+		}
 		dir := filepath.Dir(full)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return fmt.Errorf("mkdir %q: %w", dir, err)
