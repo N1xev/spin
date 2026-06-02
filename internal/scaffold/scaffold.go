@@ -56,10 +56,11 @@ func New(p *Project) error {
 		return fmt.Errorf("scaffold: project name is required")
 	}
 
-	target := filepath.Join(".", p.Name)
-	if _, err := os.Stat(target); err == nil {
-		return fmt.Errorf("scaffold: directory %q already exists (use --force in Plan 02)", target)
-	}
+	// The existing-directory check moved to Project.Validate (Task 2 of
+	// Plan 01-02). The cmd/new.go runNew now runs Validate before New, and
+	// direct callers of New (tests, future internal callers) are expected
+	// to run Validate first too. Keeping the check out of New avoids a
+	// second, --force-blind error path.
 
 	files, err := renderToMap(p)
 	if err != nil {
