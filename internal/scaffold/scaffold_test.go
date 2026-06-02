@@ -30,7 +30,7 @@ func TestRenderToMapWalkingSkeleton(t *testing.T) {
 		SpinVer: "0.1.0",
 	}
 
-	files, err := renderToMap(p)
+	files, err := p.renderToMap()
 	if err != nil {
 		t.Fatalf("renderToMap failed: %v", err)
 	}
@@ -90,7 +90,7 @@ func TestNewEndToEndWalkingSkeleton(t *testing.T) {
 	// Pre-flight: if templates haven't been written yet, skip.
 	// We probe by trying a one-line render — if it errors with "no
 	// templates", skip; otherwise proceed.
-	if _, err := renderToMap(&Project{Name: "probe", Module: "probe", Type: "tui", Libs: []string{"bubbletea"}, Year: 2026, SpinVer: "0.1.0"}); err != nil {
+	if _, err := (&Project{Name: "probe", Module: "probe", Type: "tui", Libs: []string{"bubbletea"}, Year: 2026, SpinVer: "0.1.0"}).renderToMap(); err != nil {
 		if strings.Contains(err.Error(), "no templates") || strings.Contains(err.Error(), "embed") {
 			t.Skipf("templates not yet written (deferred to Task 3): %v", err)
 		}
