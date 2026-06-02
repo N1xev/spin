@@ -30,6 +30,9 @@ go run .
 - `task vet` — run `go vet ./...`
 - `task build` — produce `./bin/{{.Name}}`
 - `task clean` — remove `./bin` and `./tmp`
+{{ if hasGlow . -}}
+- `glow README.md` — preview the README in the terminal (glow is a binary, not a Go import; install with `go install github.com/charmbracelet/glow/v2@latest`)
+{{- end}}
 
 ## Project layout
 
