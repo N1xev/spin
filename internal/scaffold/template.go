@@ -35,15 +35,54 @@ import (
 // overlayOrder returns the layer paths in walk order (lowest precedence
 // first, last-write-wins last). The result is independent of which .tmpl
 // files exist — missing layers are silently skipped by the walker.
+//
+// In addition to the entries in p.Libs, the function also walks the
+// lib/<name>/ overlay for every active bool flag (Cobra, Fang, Viper,
+// Huh, Glamour, Glow, Wish, Log, Harmonica). Plan 02-03 introduced
+// these as bools so the scaffolder didn't have to know the
+// forward-compat flag set at ResolveFlags time, but the overlay
+// engine still needs to walk their lib/<name>/ directories when
+// the corresponding flag is set (e.g. lib/viper/internal/config/config.go.tmpl
+// for --viper).
 func (p *Project) overlayOrder() []string {
 	layers := []string{"_base"}
 	if p.Type != "" {
 		layers = append(layers, "variant_"+p.Type)
 	}
+	seen := map[string]bool{}
 	for _, lib := range p.Libs {
 		layers = append(layers, "lib/"+lib)
+		seen[lib] = true
+	}
+	// Walk the lib/<name>/ overlay for every active bool flag. Skip
+	// entries that were already added via p.Libs (the bool may be
+	// derived from the same flag).
+	for lib, active := range p.boolFlagOverlayMap() {
+		if !active || seen[lib] {
+			continue
+		}
+		layers = append(layers, "lib/"+lib)
+		seen[lib] = true
 	}
 	return layers
+}
+
+// boolFlagOverlayMap returns the set of lib overlay names that should
+// be walked when the corresponding bool flag is set. Keys match the
+// templates/lib/<name>/ directory names; values are the bool fields on
+// Project. Kept in declaration order so the overlay walk is stable.
+func (p *Project) boolFlagOverlayMap() map[string]bool {
+	return map[string]bool{
+		"cobra":     p.Cobra,
+		"fang":      p.Fang,
+		"viper":     p.Viper,
+		"huh":       p.Huh,
+		"glamour":   p.Glamour,
+		"glow":      p.Glow,
+		"wish":      p.Wish,
+		"log":       p.Log,
+		"harmonica": p.Harmonica,
+	}
 }
 
 // renderToMap walks the embed FS in overlay order, renders every .tmpl
