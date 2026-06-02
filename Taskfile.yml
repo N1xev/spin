@@ -1,0 +1,40 @@
+# Taskfile.yml — spin's own dev workflow
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  NAME: spin
+  BIN: ./bin/{{.NAME}}
+
+env:
+  CGO_ENABLED: '0'
+
+tasks:
+  default:
+    cmds:
+      - task: build
+
+  build:
+    desc: Build the spin binary
+    cmds:
+      - go build -o {{.BIN}} .
+
+  test:
+    desc: Run unit and integration tests
+    cmds:
+      - go test ./... -count=1
+
+  grep-v1-leaks:
+    desc: Grep the embedded templates for v1 charmbracelet patterns (catches template-side regressions)
+    cmds:
+      - bash scripts/check-v1-leaks.sh ./internal/scaffold/templates
+
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - test -x "$(go env GOPATH)/bin/golangci-lint" && golangci-lint run ./... || echo "golangci-lint not installed; skipping"
+
+  clean:
+    cmds:
+      - rm -rf ./bin ./tmp ./dist
