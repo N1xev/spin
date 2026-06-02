@@ -81,7 +81,7 @@ func TestProjectValidate_DirConflict(t *testing.T) {
 
 	// 1. Non-existent dir -> nil.
 	name := "spin-validate-ok-" + randStr(t)
-	p := &Project{Name: name, Force: false}
+	p := &Project{Name: name, License: "mit", Force: false}
 	if err := p.Validate(); err != nil {
 		t.Errorf("non-existent dir: Validate() = %v, want nil", err)
 	}
@@ -93,7 +93,7 @@ func TestProjectValidate_DirConflict(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(conflict) })
 
-	p2 := &Project{Name: conflict, Force: false}
+	p2 := &Project{Name: conflict, License: "mit", Force: false}
 	err = p2.Validate()
 	if err == nil {
 		t.Fatal("existing dir without --force: Validate() = nil, want error")
@@ -103,7 +103,7 @@ func TestProjectValidate_DirConflict(t *testing.T) {
 	}
 
 	// 3. Existing dir with --force -> nil.
-	p3 := &Project{Name: conflict, Force: true}
+	p3 := &Project{Name: conflict, License: "mit", Force: true}
 	if err := p3.Validate(); err != nil {
 		t.Errorf("existing dir with --force: Validate() = %v, want nil", err)
 	}
@@ -125,7 +125,7 @@ func TestProjectValidate_NameRegex(t *testing.T) {
 	t.Cleanup(func() { _ = os.Chdir(cwd) })
 
 	for _, bad := range []string{"MyApp", "test", "..", "a", "internal"} {
-		p := &Project{Name: bad, Force: true} // force=true sidesteps dir check
+		p := &Project{Name: bad, License: "mit", Force: true} // force=true sidesteps dir check
 		if err := p.Validate(); err == nil {
 			t.Errorf("Validate(%q) = nil, want error", bad)
 		}
@@ -135,7 +135,7 @@ func TestProjectValidate_NameRegex(t *testing.T) {
 // TestProjectValidate_ErrorFormat ensures the user-facing error names the
 // regex constraint and points at the example invocation.
 func TestProjectValidate_ErrorFormat(t *testing.T) {
-	p := &Project{Name: "MyApp", Force: true}
+	p := &Project{Name: "MyApp", License: "mit", Force: true}
 	err := p.Validate()
 	if err == nil {
 		t.Fatal("expected error for uppercase name")

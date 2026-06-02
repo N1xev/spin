@@ -41,17 +41,23 @@ func InitLogger() {
 
 // New is the main scaffolder entrypoint.
 //
+// Contract: the caller is responsible for calling p.Validate() BEFORE
+// calling New. New does not re-validate because runNew does the
+// fail-fast check before any FS write, and the only other direct
+// caller (scaffold_test.go's TestNewEndToEndWalkingSkeleton) builds
+// its Project struct manually with valid fields. WR-003 removed the
+// duplicate call.
+//
 // Steps:
 //  0. Configure the default logger (stderr, InfoLevel). This is the
 //     first thing New() does so importing this package has no side
 //     effects — WR-002 moved this out of a package-level init() so
 //     tests that import scaffold do not silently override the global
 //     log default.
-//  1. Validate the Project (name regex + existing-dir check, with --force).
-//  2. Call p.renderToMap() to walk the embed FS in overlay order.
-//  3. Call emit(p, files) to write the files to ./<name>/.
-//  4. Call p.VerifyBuild() to run `go build ./...` with CGO_ENABLED=0.
-//  5. Call p.GitInit() to make the initial commit (skipped with --no-git).
+//  1. Call p.renderToMap() to walk the embed FS in overlay order.
+//  2. Call emit(p, files) to write the files to ./<name>/.
+//  3. Call p.VerifyBuild() to run `go build ./...` with CGO_ENABLED=0.
+//  4. Call p.GitInit() to make the initial commit (skipped with --no-git).
 func New(p *Project) error {
 	// Configure the default logger on entry, not at package init. This
 	// keeps the scaffold package side-effect-free on import. Tests and
@@ -61,9 +67,6 @@ func New(p *Project) error {
 
 	if p == nil || p.Name == "" {
 		return fmt.Errorf("scaffold: project name is required")
-	}
-	if err := p.Validate(); err != nil {
-		return err
 	}
 
 	files, err := p.renderToMap()

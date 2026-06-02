@@ -60,8 +60,14 @@ func init() {
 }
 
 // runNew is the `spin new` RunE. It binds CLI flags to a *Project via
-// ResolveFlags, validates the project (name regex, dir conflict), and
+// ResolveFlags, validates the project (name regex, license whitelist,
+// dir conflict — all enforced by p.Validate per validate.go), and
 // hands off to scaffold.New for rendering + emit + smoke test.
+//
+// Validation contract: runNew owns the Validate() call so we fail
+// fast before any FS write. scaffold.New does NOT re-validate (WR-003
+// removed the duplicate call). Any other entry point that calls
+// scaffold.New must validate first.
 func runNew(cmd *cobra.Command, args []string) error {
 	p, err := scaffold.ResolveFlags(cmd, args)
 	if err != nil {
