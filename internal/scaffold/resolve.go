@@ -110,6 +110,13 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	if containsString(libs, "bubbles") && !containsString(libs, "bubbletea") {
 		libs = append(libs, "bubbletea")
 	}
+	// --tui implies --bubbletea: a TUI project without bubbletea has no
+	// program loop, so variant_tui/main.go.tmpl (which always wraps a
+	// bubbletea Model + tea.NewProgram) would emit an import for a module
+	// that go.mod does not require. CR-001.
+	if p.Type == "tui" && !containsString(libs, "bubbletea") {
+		libs = append(libs, "bubbletea")
+	}
 	sort.Strings(libs)
 	libs = dedupStrings(libs)
 	p.Libs = libs

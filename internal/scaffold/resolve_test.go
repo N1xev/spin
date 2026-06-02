@@ -189,6 +189,40 @@ func TestResolveFlags_AllBoolsBind(t *testing.T) {
 	}
 }
 
+// TestResolveFlags_TUIImpliesBubbletea is the CR-001 regression test.
+// --tui alone (no --bubbletea flag) must still produce a project whose
+// Libs includes "bubbletea" so variant_tui/main.go.tmpl's bubbletea
+// import lines up with go.mod's require block.
+//
+// The reverse direction is also asserted: --bubbletea alone must NOT
+// flip Type to "tui" (a future bubbletea-CLI variant should be possible
+// without forcing the TUI scaffold).
+func TestResolveFlags_TUIImpliesBubbletea(t *testing.T) {
+	// --tui alone: bubbletea should be auto-added.
+	p := runResolveCmd(t, "myapp", "--tui")
+	if !containsString(p.Libs, "bubbletea") {
+		t.Errorf("Libs = %v, want contains %q (--tui must imply --bubbletea)", p.Libs, "bubbletea")
+	}
+
+	// --tui --lipgloss: bubbletea should still be auto-added even when
+	// other charm libs are present.
+	p2 := runResolveCmd(t, "myapp", "--tui", "--lipgloss")
+	if !containsString(p2.Libs, "bubbletea") {
+		t.Errorf("Libs = %v, want contains %q (--tui must imply --bubbletea even with --lipgloss)", p2.Libs, "bubbletea")
+	}
+
+	// --bubbletea alone: Type must remain the default (no --cli / --all
+	// flipped it), and the CLI variant in particular must stay "cli" if
+	// --cli was passed — --bubbletea must never imply --tui.
+	p3 := runResolveCmd(t, "myapp", "--cli", "--bubbletea")
+	if p3.Type != "cli" {
+		t.Errorf("Type = %q, want %q (--bubbletea must not imply --tui)", p3.Type, "cli")
+	}
+	if !containsString(p3.Libs, "bubbletea") {
+		t.Errorf("Libs = %v, want contains %q", p3.Libs, "bubbletea")
+	}
+}
+
 func TestResolveFlags_TemplateDefault(t *testing.T) {
 	p := runResolveCmd(t, "myapp", "--tui", "--bubbletea")
 	if p.Template != "tui-bubbletea" {
