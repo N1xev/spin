@@ -42,6 +42,27 @@ type Project struct {
 	// "tui-bubbletea". Plan 02 only ships one; Phase 2 adds more.
 	Template string
 
+	// ExternalDir is the on-disk path of a cloned template repo
+	// (--template-repo). Empty by default; the template walker reads
+	// from the package embed (FS in scaffold.go) when ExternalDir is
+	// empty. Populated by runNew after CloneTemplateRepo succeeds.
+	//
+	// This is a pipeline-internal field: callers do not set it
+	// directly. It is set by the --template-repo flag handler in
+	// runNew (cmd/new.go) once the git clone + _base/ validation
+	// passes. The currentFS helper (fs.go) reads this field.
+	ExternalDir string
+
+	// KeepTemplateCache, when true, retains the cloned template repo
+	// on disk after scaffolding completes. Useful for debugging a
+	// broken template repo. When false (the default), runNew
+	// schedules os.RemoveAll(ExternalDir) on completion.
+	//
+	// This is a pipeline-internal field: callers do not set it
+	// directly. It is set by the --keep-template-cache flag handler
+	// in ResolveFlags.
+	KeepTemplateCache bool
+
 	// Force overwrites an existing ./<name>/ directory (SCAF-08). When
 	// false, Project.Validate returns an error if the dir exists.
 	Force bool
