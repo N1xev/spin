@@ -11,10 +11,15 @@ import (
 	"charm.land/fang/v2"
 
 	"github.com/example/spin/cmd"
+	"github.com/example/spin/internal/version"
 )
 
 func main() {
-	if err := fang.Execute(context.Background(), cmd.RootCmd()); err != nil {
+	if err := fang.Execute(
+		context.Background(),
+		cmd.RootCmd(),
+		fang.WithVersion(version.Version),
+	); err != nil {
 		os.Exit(1)
 	}
 }
