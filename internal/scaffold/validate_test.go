@@ -148,6 +148,109 @@ func TestProjectValidate_ErrorFormat(t *testing.T) {
 	}
 }
 
+// TestIsValidLicense covers the CR-002 whitelist: mit / apache-2.0 / none
+// are accepted, everything else is rejected.
+func TestIsValidLicense(t *testing.T) {
+	cases := []struct {
+		input string
+		want  bool
+	}{
+		// valid (already normalized)
+		{"mit", true},
+		{"apache-2.0", true},
+		{"none", true},
+
+		// valid after case normalization
+		{"MIT", true},
+		{"Apache-2.0", true},
+		{"NONE", true},
+
+		// invalid (typos, unsupported values)
+		{"gpl", false},
+		{"mt", false},     // typo for mit
+		{"bsd", false},
+		{"unlicense", false},
+		{"", false},
+		{" mit", false},   // whitespace — must not silently match
+		{"mit ", false},
+	}
+	for _, c := range cases {
+		t.Run(c.input, func(t *testing.T) {
+			if got := IsValidLicense(c.input); got != c.want {
+				t.Errorf("IsValidLicense(%q) = %v, want %v", c.input, got, c.want)
+			}
+		})
+	}
+}
+
+// TestProjectValidate_LicenseField covers the CR-002 license validation
+// branch in Project.Validate:
+//   - empty / default (mit) succeeds
+//   - case-insensitive normalization in resolve.go produces "mit"
+//   - explicitly invalid values produce a descriptive error
+func TestProjectValidate_LicenseField(t *testing.T) {
+	tmp := t.TempDir()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir tmp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(cwd) })
+
+	valid := []string{"mit", "apache-2.0", "none"}
+	for _, lic := range valid {
+		t.Run("valid/"+lic, func(t *testing.T) {
+			name := "spin-license-ok-" + randStr(t)
+			p := &Project{Name: name, License: lic}
+			if err := p.Validate(); err != nil {
+				t.Errorf("Validate(license=%q) = %v, want nil", lic, err)
+			}
+		})
+	}
+
+	invalid := []string{"gpl", "mt", "bsd", "unlicense"}
+	for _, lic := range invalid {
+		t.Run("invalid/"+lic, func(t *testing.T) {
+			name := "spin-license-bad-" + randStr(t)
+			p := &Project{Name: name, License: lic}
+			err := p.Validate()
+			if err == nil {
+				t.Fatalf("Validate(license=%q) = nil, want error", lic)
+			}
+			for _, want := range []string{lic, "mit", "apache-2.0", "none"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("error %q missing %q", err.Error(), want)
+				}
+			}
+		})
+	}
+}
+
+// TestResolveFlags_LicenseNormalization covers the resolve.go side of
+// CR-002: --license MIT (uppercase) must be normalized to "mit" before
+// being stored on the Project.
+func TestResolveFlags_LicenseNormalization(t *testing.T) {
+	cases := []struct {
+		flag string
+		want string
+	}{
+		{"MIT", "mit"},
+		{"Apache-2.0", "apache-2.0"},
+		{"NONE", "none"},
+		{"mit", "mit"},
+	}
+	for _, c := range cases {
+		t.Run(c.flag, func(t *testing.T) {
+			p := runResolveCmd(t, "myapp", "--tui", "--bubbletea", "--license", c.flag)
+			if p.License != c.want {
+				t.Errorf("p.License = %q, want %q (after --license %s)", p.License, c.want, c.flag)
+			}
+		})
+	}
+}
+
 // randStr returns a 6-char lowercase alpha suffix unique per test call.
 // Uses uint32 to avoid negative int overflow from non-ASCII test names
 // (e.g. "TestX/case_with_unicode").

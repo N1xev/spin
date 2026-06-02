@@ -36,6 +36,25 @@ var reservedGoWords = map[string]bool{
 	"golang":  true,
 }
 
+// validLicenses is the set of supported --license values. CR-002: the
+// flag used to be free-form, which meant a typo like --license mt
+// silently emitted no LICENSE file. The walker only matches
+// LICENSE-<active>.tmpl case-insensitively, so without an explicit
+// whitelist a bad value would never reach the error path.
+var validLicenses = map[string]bool{
+	"mit":        true,
+	"apache-2.0": true,
+	"none":       true,
+}
+
+// IsValidLicense reports whether s is one of the supported --license
+// values. The check is case-insensitive after lowercase normalization
+// (the walker is already case-insensitive on filenames, so callers may
+// pass "MIT" or "Apache-2.0" and get the right result).
+func IsValidLicense(s string) bool {
+	return validLicenses[strings.ToLower(s)]
+}
+
 // IsValidGoModuleSegment reports whether s is acceptable as a project name
 // (i.e. a Go module path segment, the directory name, and the binary name).
 //
@@ -64,7 +83,9 @@ func IsValidGoModuleSegment(s string) bool {
 // Validate enforces the SCAF-02 and SCAF-08 constraints on a Project:
 //
 //  1. Project.Name must satisfy IsValidGoModuleSegment.
-//  2. ./<Project.Name>/ must not already exist; if it does, --force must
+//  2. Project.License must be one of the supported values
+//     (mit, apache-2.0, none). CR-002.
+//  3. ./<Project.Name>/ must not already exist; if it does, --force must
 //     be set to proceed.
 //
 // Returns a descriptive error suitable for surfacing to the user. The
@@ -80,6 +101,14 @@ func (p *Project) Validate() error {
 				"(test, internal, cmd, go, golang, vendor, _test, tests); "+
 				"see example: spin new myapp --tui --bubbletea",
 			p.Name,
+		)
+	}
+	// CR-002: normalize case before the whitelist check so a user
+	// passing --license MIT or --license Apache-2.0 still succeeds.
+	if !IsValidLicense(p.License) {
+		return fmt.Errorf(
+			"--license %q is not supported; valid options: mit, apache-2.0, none",
+			p.License,
 		)
 	}
 

@@ -11,6 +11,7 @@ package scaffold
 
 import (
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -44,7 +45,9 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	if v, err := mustString(cmd, "license"); err != nil {
 		return nil, err
 	} else {
-		p.License = v
+		// Normalize --license to lowercase so callers can pass "MIT" or
+		// "Apache-2.0" and still match the whitelist in validate.go. CR-002.
+		p.License = strings.ToLower(v)
 	}
 	if v, err := mustString(cmd, "template"); err != nil {
 		return nil, err
