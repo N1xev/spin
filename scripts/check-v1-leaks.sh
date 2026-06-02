@@ -29,8 +29,45 @@ if [[ ! -d "$ROOT" ]]; then
 fi
 
 # Go file patterns. Sources: RESEARCH §11.1 + PITFALLS #1, #2, #3, #4.
+#
+# V1_LEAK_PATTERNS is a per-module deny-list of the charmbracelet libraries
+# that MIGRATED to charm.land/<lib>/v2. Using the github.com path for any
+# of these is a v1 leak and must be caught.
+#
+# Deliberately EXCLUDED from this list (and therefore allowed):
+#   - github.com/charmbracelet/harmonica — still on github.com; v0.2.0
+#     pre-dates the migration. See 02-RESEARCH.md §2.1.
+#   - github.com/charmbracelet/glow/v2 — the v2 line of the glow binary
+#     lives on github.com; charm.land/glow/v2 does not exist.
+#
+# The closing-quote anchor (`"`) on each pattern means a template like
+# `import "github.com/charmbracelet/harmonica"` is NOT matched (it ends
+# in `harmonica"`, not `bubbletea"`), but a bare
+# `import "github.com/charmbracelet/bubbletea"` IS matched.
+declare -a V1_LEAK_PATTERNS=(
+  'github\.com/charmbracelet/bubbletea"'
+  'github\.com/charmbracelet/bubbletea/v2"'
+  'github\.com/charmbracelet/lipgloss"'
+  'github\.com/charmbracelet/lipgloss/v2"'
+  'github\.com/charmbracelet/bubbles"'
+  'github\.com/charmbracelet/bubbles/v2"'
+  'github\.com/charmbracelet/huh"'
+  'github\.com/charmbracelet/huh/v2"'
+  'github\.com/charmbracelet/glamour"'
+  'github\.com/charmbracelet/glamour/v2"'
+  'github\.com/charmbracelet/wish"'
+  'github\.com/charmbracelet/wish/v2"'
+  'github\.com/charmbracelet/log"'
+  'github\.com/charmbracelet/log/v2"'
+  'github\.com/charmbracelet/fang"'
+  'github\.com/charmbracelet/fang/v2"'
+)
+
+# v2 API patterns (sources: RESEARCH §11.1 + PITFALLS #1, #2, #3, #4).
+# These are v1-style API calls that are removed or renamed in v2; the
+# grep matches the function call shape regardless of import path.
 declare -a GO_PATTERNS=(
-  'github\.com/charmbracelet/'
+  "${V1_LEAK_PATTERNS[@]}"
   'View\(\) string'
   'tea\.WithAltScreen'
   'tea\.WithMouseCellMotion'
