@@ -32,6 +32,8 @@ import (
 // empty (FS = empty embed.FS), so Task 2 (engine) and Task 3 (templates)
 // can land independently. renderToMap returns an error if no templates
 // are found at walk time.
+//
+//go:embed all:templates
 var FS embed.FS
 
 func init() {
@@ -203,18 +205,30 @@ func emit(p *Project, files map[string][]byte) error {
 	return nil
 }
 
-// verifyBuild runs `go build ./...` with CGO_ENABLED=0 in the generated
-// project. On non-zero exit, returns an error wrapping the failing
-// command and the verbatim stderr output (RESEARCH §7.2 — the user must
-// see WHY the build failed).
+// verifyBuild runs `go mod tidy` and `go build ./...` with CGO_ENABLED=0
+// in the generated project. On non-zero exit, returns an error wrapping
+// the failing command and the verbatim stderr output (RESEARCH §7.2 —
+// the user must see WHY the build failed).
+//
+// `go mod tidy` is run first so the generated project's go.sum is populated
+// before the build (otherwise `go build` fails with "missing go.sum entry"
+// for the charm v2 dependencies).
 func verifyBuild(p *Project) error {
 	log.Info("verifying build", "path", p.Name)
 
 	root := filepath.Join(".", p.Name)
-	cmd := exec.Command("go", "build", "./...")
-	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
-	out, err := cmd.CombinedOutput()
+
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = root
+	tidy.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := tidy.CombinedOutput(); err != nil {
+		return fmt.Errorf("`go mod tidy` failed in %s:\n%s", root, out)
+	}
+
+	build := exec.Command("go", "build", "./...")
+	build.Dir = root
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	out, err := build.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("`go build ./...` failed in %s:\n%s", root, out)
 	}
