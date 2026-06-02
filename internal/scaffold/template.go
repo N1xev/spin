@@ -89,8 +89,11 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 			}
 
 			// License gating: only render LICENSE-<active>.tmpl.
+			// Comparison is case-insensitive so templates can be named
+			// LICENSE-MIT.tmpl while p.License is the lowercase "mit".
 			if strings.HasPrefix(name, "LICENSE-") {
-				if "LICENSE-"+p.License+".tmpl" != name {
+				want := "LICENSE-" + p.License + ".tmpl"
+				if !strings.EqualFold(name, want) {
 					return nil
 				}
 			}
@@ -101,6 +104,14 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 				return fmt.Errorf("rel %s: %w", path, err)
 			}
 			outKey := strings.TrimSuffix(filepath.ToSlash(rel), ".tmpl")
+
+			// The active LICENSE file maps to the literal key "LICENSE" in
+			// the output (not "LICENSE-mit" or "LICENSE-Apache-2.0"). The
+			// file's stem encodes the license kind, but the user-facing
+			// name in the scaffolded project is just "LICENSE".
+			if strings.HasPrefix(name, "LICENSE-") {
+				outKey = "LICENSE"
+			}
 
 			raw, err := fs.ReadFile(FS, path)
 			if err != nil {
