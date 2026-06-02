@@ -251,6 +251,40 @@ func TestResolveFlags_LicenseNormalization(t *testing.T) {
 	}
 }
 
+// TestIsValidTemplateRepo covers TMPL-03's URL format gate. The
+// validation is permissive (https/http/git/git@ all accepted) but
+// rejects obviously-invalid input (empty, no scheme, ftp://,
+// file://). The git binary is the real choke point for invalid
+// URLs that pass this check.
+func TestIsValidTemplateRepo(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want bool
+	}{
+		// valid — supported schemes
+		{"https", "https://github.com/me/spin-templates", true},
+		{"http", "http://example.com/repo.git", true},
+		{"git scheme", "git://github.com/me/repo.git", true},
+		{"ssh-agent", "git@github.com:me/spin-templates.git", true},
+
+		// invalid
+		{"empty", "", false},
+		{"no scheme", "not-a-url", false},
+		{"ftp rejected", "ftp://example.com/repo.git", false},
+		{"file rejected", "file:///tmp/repo", false},
+		{"relative path rejected", "github.com/me/repo", false},
+		{"whitespace rejected", " https://example.com/repo.git", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := IsValidTemplateRepo(c.url); got != c.want {
+				t.Errorf("IsValidTemplateRepo(%q) = %v, want %v", c.url, got, c.want)
+			}
+		})
+	}
+}
+
 // randStr returns a 6-char lowercase alpha suffix unique per test call.
 // Uses uint32 to avoid negative int overflow from non-ASCII test names
 // (e.g. "TestX/case_with_unicode").

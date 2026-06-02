@@ -2,6 +2,7 @@ package scaffold
 
 import (
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -235,6 +236,82 @@ func TestResolveFlags_TemplateDefault(t *testing.T) {
 	p2 := runResolveCmd(t, "myapp", "--tui", "--bubbletea", "--template", "custom")
 	if p2.Template != "custom" {
 		t.Errorf("Template = %q, want %q", p2.Template, "custom")
+	}
+}
+
+// TestResolveFlags_TemplateRepo asserts --template-repo binds to
+// p.TemplateRepo and p.ExternalDir stays empty (the latter is set
+// by runNew after the clone, not by ResolveFlags).
+func TestResolveFlags_TemplateRepo(t *testing.T) {
+	p := runResolveCmd(t, "myapp",
+		"--tui", "--bubbletea",
+		"--template-repo", "https://github.com/example/spin-templates",
+	)
+	if p.TemplateRepo != "https://github.com/example/spin-templates" {
+		t.Errorf("TemplateRepo = %q, want %q", p.TemplateRepo, "https://github.com/example/spin-templates")
+	}
+	if p.ExternalDir != "" {
+		t.Errorf("ExternalDir = %q, want \"\" (set by runNew, not ResolveFlags)", p.ExternalDir)
+	}
+
+	// Empty --template-repo is allowed (the default).
+	p2 := runResolveCmd(t, "myapp", "--tui", "--bubbletea")
+	if p2.TemplateRepo != "" {
+		t.Errorf("TemplateRepo = %q, want \"\" (default)", p2.TemplateRepo)
+	}
+}
+
+// TestResolveFlags_KeepTemplateCache asserts --keep-template-cache
+// binds to p.KeepTemplateCache.
+func TestResolveFlags_KeepTemplateCache(t *testing.T) {
+	p := runResolveCmd(t, "myapp",
+		"--tui", "--bubbletea",
+		"--template-repo", "https://github.com/example/spin-templates",
+		"--keep-template-cache",
+	)
+	if !p.KeepTemplateCache {
+		t.Error("KeepTemplateCache = false, want true")
+	}
+
+	// Default: KeepTemplateCache is false.
+	p2 := runResolveCmd(t, "myapp", "--tui", "--bubbletea")
+	if p2.KeepTemplateCache {
+		t.Error("KeepTemplateCache = true, want false (default)")
+	}
+}
+
+// TestResolveFlags_InvalidTemplateRepo asserts that obviously-invalid
+// --template-repo values are rejected at flag-parse time with an
+// ArgError. git itself would also reject these, but failing fast at
+// the CLI layer gives a clearer error message.
+func TestResolveFlags_InvalidTemplateRepo(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+	}{
+		{"not-a-url", "not-a-url"},
+		{"ftp scheme rejected", "ftp://example.com/repo.git"},
+		{"file scheme rejected", "file:///tmp/repo"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			c2 := newResolveCmd()
+			c2.SetArgs([]string{"myapp", "--tui", "--bubbletea", "--template-repo", c.url})
+			if err := c2.Execute(); err != nil {
+				t.Fatalf("cmd.Execute: %v", err)
+			}
+			_, err := ResolveFlags(c2, []string{"myapp"})
+			if err == nil {
+				t.Fatalf("ResolveFlags with --template-repo %q = nil, want error", c.url)
+			}
+			ae, ok := err.(*ArgError)
+			if !ok {
+				t.Fatalf("err type = %T, want *ArgError", err)
+			}
+			if !strings.Contains(ae.Message, "--template-repo") {
+				t.Errorf("ArgError %q does not mention --template-repo", ae.Message)
+			}
+		})
 	}
 }
 
