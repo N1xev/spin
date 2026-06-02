@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -71,8 +70,16 @@ func New(p *Project) error {
 		return fmt.Errorf("scaffold: emit: %w", err)
 	}
 
-	if err := verifyBuild(p); err != nil {
+	// Post-scaffold smoke test FIRST. A failing build must never be
+	// committed to git (otherwise a broken scaffold would be the user's
+	// first commit on a brand-new project).
+	if err := p.VerifyBuild(); err != nil {
 		return fmt.Errorf("scaffold: verify: %w", err)
+	}
+
+	// Git init + initial commit AFTER verify. Skip on --no-git.
+	if err := p.GitInit(); err != nil {
+		return fmt.Errorf("scaffold: git: %w", err)
 	}
 
 	return nil
@@ -203,37 +210,5 @@ func emit(p *Project, files map[string][]byte) error {
 			return fmt.Errorf("write %q: %w", full, err)
 		}
 	}
-	return nil
-}
-
-// verifyBuild runs `go mod tidy` and `go build ./...` with CGO_ENABLED=0
-// in the generated project. On non-zero exit, returns an error wrapping
-// the failing command and the verbatim stderr output (RESEARCH §7.2 —
-// the user must see WHY the build failed).
-//
-// `go mod tidy` is run first so the generated project's go.sum is populated
-// before the build (otherwise `go build` fails with "missing go.sum entry"
-// for the charm v2 dependencies).
-func verifyBuild(p *Project) error {
-	log.Info("verifying build", "path", p.Name)
-
-	root := filepath.Join(".", p.Name)
-
-	tidy := exec.Command("go", "mod", "tidy")
-	tidy.Dir = root
-	tidy.Env = append(os.Environ(), "CGO_ENABLED=0")
-	if out, err := tidy.CombinedOutput(); err != nil {
-		return fmt.Errorf("`go mod tidy` failed in %s:\n%s", root, out)
-	}
-
-	build := exec.Command("go", "build", "./...")
-	build.Dir = root
-	build.Env = append(os.Environ(), "CGO_ENABLED=0")
-	out, err := build.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("`go build ./...` failed in %s:\n%s", root, out)
-	}
-
-	log.Info("smoke test passed", "path", p.Name)
 	return nil
 }

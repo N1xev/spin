@@ -149,18 +149,20 @@ func TestProjectValidate_ErrorFormat(t *testing.T) {
 }
 
 // randStr returns a 6-char lowercase alpha suffix unique per test call.
+// Uses uint32 to avoid negative int overflow from non-ASCII test names
+// (e.g. "TestX/case_with_unicode").
 func randStr(t *testing.T) string {
 	t.Helper()
 	const letters = "abcdefghijklmnopqrstuvwxyz"
-	// Use the test name + nanosecond timestamp for uniqueness; not crypto.
 	name := t.Name()
-	h := 0
+	var h uint32
 	for i := 0; i < len(name); i++ {
-		h = h*31 + int(name[i])
+		h = h*31 + uint32(name[i])
 	}
 	b := make([]byte, 6)
 	for i := range b {
-		b[i] = letters[(h+i)%len(letters)]
+		b[i] = letters[h%uint32(len(letters))]
+		h = h*7 + 1
 	}
 	return string(b)
 }
