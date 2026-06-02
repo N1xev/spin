@@ -24,7 +24,11 @@ Build a Go project scaffolder that delivers the "perfect first run" promise — 
   3. Generated project contains a working `.air.toml` (using `build.entrypoint`, not deprecated `build.bin`) and a `Taskfile.yml` (or `Makefile`) with a `setup` target.
   4. `spin --help`, `spin new --help`, and every subcommand help render with fang styling (no raw cobra default output).
   5. spin rejects invalid Go module path names, refuses to overwrite an existing directory without `--force`, and reports unknown flags with a clear suggestion.
-**Plans**: TBD
+**Plans**: 4 plans in 3 waves
+  - [ ] **01-01-PLAN.md** (Wave 1): Walking Skeleton — SKELETON.md + minimal `spin new <name> --tui --bubbletea` + go build smoke test
+  - [ ] **01-02-PLAN.md** (Wave 2): Flag wiring + validation + post-scaffold hooks + git init + version
+  - [ ] **01-03-PLAN.md** (Wave 2, parallel): Full template engine + all overlays + build configs + license + README
+  - [ ] **01-04-PLAN.md** (Wave 3): CI grep suite + integration test + spin repo polish
 
 ### Phase 2: CLI Variant + Wrappers + Extended Library Coverage + External Templates
 **Goal**: User can scaffold any project variant (CLI, full TUI), add any charm library, wrap the go toolchain with one tool, and pull external templates from a git repo.
@@ -73,7 +77,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scaffolder Foundation + Core TUI Stack | 0/TBD | Not started | - |
+| 1. Scaffolder Foundation + Core TUI Stack | 0/4 | Not started | - |
 | 2. CLI Variant + Wrappers + Extended Library Coverage + External Templates | 0/TBD | Not started | - |
 | 3. Interactive Prompts (gum) + AI/AGENTS.md | 0/TBD | Not started | - |
 | 4. Post-Scaffold Health + Verification + Dogfooding | 0/TBD | Not started | - |
