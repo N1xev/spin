@@ -57,7 +57,7 @@ func TestE2EScaffold(t *testing.T) {
 	}
 	for _, want := range []string{
 		"module e2e-myapp",
-		"charm.land/bubbletea/v2 v2.0.0",
+		"charm.land/bubbletea/v2 v2.0.7",
 	} {
 		if !bytes.Contains(goMod, []byte(want)) {
 			t.Errorf("go.mod missing %q; got:\n%s", want, goMod)

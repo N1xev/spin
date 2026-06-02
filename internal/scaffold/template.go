@@ -179,6 +179,14 @@ func funcMap(p *Project) template.FuncMap {
 				return DefaultPins.Bubbles
 			case "log":
 				return DefaultPins.Log
+			case "huh":
+				return DefaultPins.Huh
+			case "glamour":
+				return DefaultPins.Glamour
+			case "wish":
+				return DefaultPins.Wish
+			case "fang":
+				return DefaultPins.Fang
 			default:
 				return ""
 			}

@@ -62,15 +62,20 @@ func TestFuncMap_HasBubbles(t *testing.T) {
 	}
 }
 
-// TestFuncMap_CharmPin asserts the verified v2 pins (RESEARCH §3).
+// TestFuncMap_CharmPin asserts the verified v2 pins (RESEARCH §2.1,
+// verified 2026-06-03 against go list -m -versions).
 func TestFuncMap_CharmPin(t *testing.T) {
 	fm := funcMap(&Project{})
 	cp := fm["charmPin"].(func(string) string)
 	cases := map[string]string{
-		"bubbletea": "v2.0.0",
-		"lipgloss":  "v2.0.0-beta.2",
-		"bubbles":   "v2.0.0",
+		"bubbletea": "v2.0.7",
+		"lipgloss":  "v2.0.3",
+		"bubbles":   "v2.1.0",
 		"log":       "v2.0.0",
+		"huh":       "v2.0.3",
+		"glamour":   "v2.0.0",
+		"wish":      "v2.0.1",
+		"fang":      "v2.0.1",
 		"unknown":   "",
 	}
 	for lib, want := range cases {
@@ -128,14 +133,15 @@ func TestRenderToMap_FullTUI(t *testing.T) {
 		}
 	}
 
-	// go.mod — conditional Go version + all 3 charm imports.
+	// go.mod — unconditional Go 1.25.0 + all 3 charm imports at the
+	// Phase 2 research §2.1 pins.
 	goMod := files["go.mod"]
 	for _, want := range []string{
 		"module github.com/example/myapp",
-		"go 1.25.0", // because --bubbles
-		"charm.land/bubbletea/v2 v2.0.0",
-		"charm.land/bubbles/v2 v2.0.0",
-		"charm.land/lipgloss/v2 v2.0.0-beta.2",
+		"go 1.25.0",
+		"charm.land/bubbletea/v2 v2.0.7",
+		"charm.land/bubbles/v2 v2.1.0",
+		"charm.land/lipgloss/v2 v2.0.3",
 	} {
 		if !bytes.Contains(goMod, []byte(want)) {
 			t.Errorf("go.mod missing %q; got:\n%s", want, goMod)
@@ -199,26 +205,39 @@ func TestRenderToMap_FullTUI(t *testing.T) {
 	}
 }
 
-// TestRenderToMap_GoVersion asserts the conditional go directive.
+// TestRenderToMap_GoVersion asserts the unconditional `go 1.25.0`
+// directive. Per RESEARCH §2.2, every charm v2 library requires
+// Go 1.25.0+ transitively; the previous `{{if hasBubbles}}` branch
+// in the template was dead code and was removed in Plan 02-01 (Task 2).
+//
+// Three sub-cases cover the reachable combinations:
+//   - bubbletea only (no bubbles): 1.25.0
+//   - bubbletea + bubbles:          1.25.0
+//   - bubbles only (implies bubbletea per ResolveFlags; same): 1.25.0
 func TestRenderToMap_GoVersion(t *testing.T) {
-	// --bubbletea only: 1.23 floor.
-	p := &Project{Name: "x", Module: "x", Type: "tui", Libs: []string{"bubbletea"}, License: "none", Year: 2026, SpinVer: "0.1.0"}
-	files, err := p.renderToMap()
-	if err != nil {
-		t.Fatalf("renderToMap: %v", err)
+	cases := []struct {
+		name string
+		libs []string
+	}{
+		{"bubbletea_only", []string{"bubbletea"}},
+		{"bubbletea_and_bubbles", []string{"bubbletea", "bubbles"}},
+		{"bubbles_implies_bubbletea", []string{"bubbles"}},
 	}
-	if !bytes.Contains(files["go.mod"], []byte("go 1.23")) {
-		t.Errorf("expected go 1.23 without bubbles; got:\n%s", files["go.mod"])
-	}
-
-	// --bubbletea --bubbles: 1.25.0 floor.
-	p.Libs = []string{"bubbletea", "bubbles"}
-	files, err = p.renderToMap()
-	if err != nil {
-		t.Fatalf("renderToMap: %v", err)
-	}
-	if !bytes.Contains(files["go.mod"], []byte("go 1.25.0")) {
-		t.Errorf("expected go 1.25.0 with bubbles; got:\n%s", files["go.mod"])
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := &Project{Name: "x", Module: "x", Type: "tui", Libs: tc.libs, License: "none", Year: 2026, SpinVer: "0.1.0"}
+			files, err := p.renderToMap()
+			if err != nil {
+				t.Fatalf("renderToMap: %v", err)
+			}
+			if !bytes.Contains(files["go.mod"], []byte("go 1.25.0")) {
+				t.Errorf("expected go 1.25.0 (libs=%v); got:\n%s", tc.libs, files["go.mod"])
+			}
+			// The old `go 1.23` branch must never appear now.
+			if bytes.Contains(files["go.mod"], []byte("go 1.23")) {
+				t.Errorf("go.mod should not contain 'go 1.23' (libs=%v); got:\n%s", tc.libs, files["go.mod"])
+			}
+		})
 	}
 }
 

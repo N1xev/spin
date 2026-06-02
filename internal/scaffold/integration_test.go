@@ -65,22 +65,33 @@ func TestIntegrationScaffold(t *testing.T) {
 	t.Logf("OK: Phase 1 integration test passed for %s", integrationProjectName)
 }
 
-func TestIntegrationScaffold_NoBubblesGoVersion(t *testing.T) {
-	// --bubbletea only (no --bubbles) should NOT bump go directive to 1.25.0.
-	// Per RESEARCH §4 (TOOL-01/TOOL-02), only --bubbles requires Go 1.25.0.
-	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-nobubbles",
+// TestIntegrationScaffold_AlwaysGo1250 asserts that every generated
+// project emits `go 1.25.0`, regardless of whether --bubbles is set.
+// Per Phase 2 research §2.2, every charm v2 library requires Go 1.25.0+
+// transitively; the previous `{{if hasBubbles}}` branch was dead code
+// (RESOLVE: --tui implies --bubbletea, and even --bubbletea alone
+// inherits the fang v2.0.1 floor of 1.25.0). Plan 02-01 (Task 2)
+// simplified the directive to unconditional 1.25.0.
+//
+// The test name is a rename of the former
+// `TestIntegrationScaffold_NoBubblesGoVersion` (which asserted the
+// inverse — that --bubbletea without --bubbles did NOT emit 1.25.0).
+// The semantic flipped when Task 2 removed the conditional branch.
+func TestIntegrationScaffold_AlwaysGo1250(t *testing.T) {
+	// --bubbletea only: still must emit go 1.25.0 (TOOL-01/TOOL-02).
+	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-bubbletea-only",
 		[]string{"--tui", "--bubbletea"})
 
 	goMod, err := os.ReadFile(filepath.Join(projectDir, "go.mod"))
 	if err != nil {
 		t.Fatalf("read go.mod: %v", err)
 	}
-	if bytes.Contains(goMod, []byte("\ngo 1.25.0\n")) {
-		t.Errorf("go.mod has go 1.25.0 even though --bubbles was not set:\n%s", goMod)
+	if !bytes.Contains(goMod, []byte("\ngo 1.25.0\n")) {
+		t.Errorf("go.mod missing 'go 1.25.0' (always required per Plan 02-01 Task 2):\n%s", goMod)
 	}
-	// Sanity: go directive is present.
-	if !bytes.Contains(goMod, []byte("\ngo ")) {
-		t.Errorf("go.mod missing 'go' directive:\n%s", goMod)
+	// The old `go 1.23` directive must never appear now.
+	if bytes.Contains(goMod, []byte("\ngo 1.23\n")) {
+		t.Errorf("go.mod should not contain 'go 1.23' (dead branch removed in Task 2):\n%s", goMod)
 	}
 }
 
@@ -207,9 +218,9 @@ func assertGoModFullTUI(t *testing.T, projectDir string) {
 	}
 	wants := []string{
 		"module " + integrationProjectName,
-		"charm.land/bubbletea/v2 v2.0.0",
-		"charm.land/lipgloss/v2 v2.0.0", // post-tidy pin (was v2.0.0-beta.2)
-		"charm.land/bubbles/v2 v2.0.0",
+		"charm.land/bubbletea/v2 v2.0.7",
+		"charm.land/lipgloss/v2 v2.0.3", // Phase 2 research §2.1 pin
+		"charm.land/bubbles/v2 v2.1.0",
 	}
 	for _, want := range wants {
 		if !bytes.Contains(goMod, []byte(want)) {

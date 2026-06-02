@@ -53,7 +53,7 @@ func TestRenderToMapWalkingSkeleton(t *testing.T) {
 	}
 	for _, want := range []string{
 		"module myapp",
-		"go 1.23",
+		"go 1.25.0",
 		"charm.land/bubbletea/v2",
 	} {
 		if !bytes.Contains(goMod, []byte(want)) {
@@ -147,4 +147,92 @@ func keysOf(m map[string][]byte) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// TestEmit_PathTraversal asserts that emit() rejects a rendered file map
+// whose relative paths resolve outside the project root. The guard added
+// in Plan 02-01 (Task 3) is the first line of defense against a template
+// (or a buggy template helper) that interpolates `{{.Name}}` (or any
+// other user-controlled value) into a path with `..` segments.
+//
+// Sub-cases cover the three common escape shapes:
+//   - absolute `/etc/passwd` (POSIX) — `filepath.Join` strips the leading
+//     `/` and joins with root, but the clean-root check still catches the
+//     resulting path that escapes the sandbox.
+//   - `../../etc/passwd` (relative) — the canonical traversal.
+//   - `subdir/../../escape` (mixed) — the clean-then-prefix check has
+//     to handle non-trailing `..` segments correctly.
+func TestEmit_PathTraversal(t *testing.T) {
+	// Use a per-test temp dir so emit()'s `os.MkdirAll(root)` operates
+	// in a sandbox we own. Save and restore cwd.
+	tmp := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir tmp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	p := &Project{Name: "myapp", Module: "myapp"}
+
+	cases := []struct {
+		name    string
+		rel     string
+		content []byte
+	}{
+		{"absolute_unix", "../../../etc/passwd", []byte("nope")},
+		{"relative_traversal", "../../escape.txt", []byte("nope")},
+		{"mixed_traversal", "a/b/../../../escape.txt", []byte("nope")},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			files := map[string][]byte{tc.rel: tc.content}
+			err := emit(p, files)
+			if err == nil {
+				t.Fatalf("emit(%q): expected error for traversal; got nil", tc.rel)
+			}
+			if !strings.Contains(err.Error(), "path traversal") {
+				t.Errorf("emit(%q): expected 'path traversal' in error; got: %v", tc.rel, err)
+			}
+		})
+	}
+}
+
+// TestEmit_HappyPath is a positive control: a relative path that stays
+// inside the project root is accepted. Pairs with TestEmit_PathTraversal
+// so the guard is verified to allow legitimate writes too.
+func TestEmit_HappyPath(t *testing.T) {
+	tmp := t.TempDir()
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatalf("chdir tmp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(origDir) })
+
+	p := &Project{Name: "myapp", Module: "myapp"}
+	files := map[string][]byte{
+		"go.mod":                  []byte("module myapp\n"),
+		"internal/ui/styles.go":   []byte("package ui\n"),
+		"a/b/c/deep.txt":          []byte("deep\n"),
+	}
+	if err := emit(p, files); err != nil {
+		t.Fatalf("emit: unexpected error for in-root paths: %v", err)
+	}
+
+	for rel, want := range files {
+		got, err := os.ReadFile(filepath.Join("myapp", rel))
+		if err != nil {
+			t.Errorf("read %q: %v", rel, err)
+			continue
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%q: content = %q, want %q", rel, got, want)
+		}
+	}
 }
