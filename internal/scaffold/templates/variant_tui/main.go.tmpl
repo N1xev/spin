@@ -14,6 +14,14 @@ import (
 {{- if or (hasLipgloss .) (hasBubbles .)}}
 	"{{.Module}}/internal/ui"
 {{- end}}
+{{- if hasLog .}}
+	"charm.land/log/v2"
+{{- end}}
+{{- if hasHarmonica .}}
+	"time"
+
+	"github.com/charmbracelet/harmonica"
+{{- end}}
 )
 
 type model struct {
@@ -25,6 +33,9 @@ type model struct {
 {{- end}}
 	count    int
 	quitting bool
+{{- if hasHarmonica .}}
+	springPos float64
+{{- end}}
 }
 
 {{ if hasBubbles . -}}
@@ -54,6 +65,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			m.count--
 			return m, nil
+{{- if hasHuh .}}
+		case "?":
+			_ = huhExample()
+			return m, nil
+{{- end}}
+{{- if hasGlamour .}}
+		case "g":
+			if rendered, err := glamourExample(); err == nil {
+				fmt.Fprintln(os.Stderr, rendered)
+			}
+			return m, nil
+{{- end}}
+{{- if hasHarmonica .}}
+		case "s":
+			return m, harmonicaExample()
+{{- end}}
 		}
 {{- if hasLipgloss .}}
 	case tea.WindowSizeMsg:
@@ -65,6 +92,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+{{- end}}
+{{- if hasHarmonica .}}
+	case harmonicaTickMsg:
+		m.springPos = msg.pos
+		return m, nil
 {{- end}}
 	}
 	return m, nil
@@ -85,10 +117,16 @@ func (m model) View() tea.View {
 {{- else}}
 	body = "{{title .Name}}\n" + body
 {{- end}}
+{{- if hasHarmonica .}}
+	body = body + fmt.Sprintf("\nSpring: %.2f\n", m.springPos)
+{{- end}}
 	return tea.NewView(body)
 }
 
 func main() {
+{{- if hasLog .}}
+	logSetup()
+{{- end}}
 {{- if hasBubbles .}}
 	s := spinner.New(spinner.WithSpinner(spinner.Dot))
 {{- end}}
@@ -102,7 +140,23 @@ func main() {
 	}
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
+{{- if hasLog .}}
+		log.Error("program failed", "err", err)
+{{- else}}
 		fmt.Fprintln(os.Stderr, err)
+{{- end}}
 		os.Exit(1)
 	}
 }
+{{ if hasWish . -}}
+// --wish enabled: wish is wired in lib/wish/wish.go. To expose an
+// `ssh` subcommand in the TUI variant, extend the cobra root above to
+// add a `wish.ServeCmd` (or call wishExample() directly from a custom
+// RunE). v1 ships only the lib overlay; subcommand wiring is a follow-on.
+{{- end}}
+{{ if hasGlow . -}}
+// --glow enabled: glow is a binary, not a Go import. After `task setup`
+// installs glow, run `glow README.md` to preview the markdown in the
+// terminal. The lib/glow/README.glow.md.tmpl file is a sample that
+// glow renders well.
+{{- end}}
