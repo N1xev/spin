@@ -85,13 +85,37 @@ func (p *Project) GitInit() error {
 }
 
 // isUnknownFlagErr returns true if the git error output indicates that
-// the -b flag is not recognized (git < 2.28). The check is conservative
-// (looks for "unknown" or "unrecognized" + "b") so false positives are
-// rare; we still fall back gracefully.
+// the given short flag is not recognized (git < 2.28 returns "unknown
+// switch"; git >= 2.28 but older minor versions returned "unknown
+// option"; some distros use "unrecognized option" / "unrecognized
+// switch"). The check matches every known wording + the specific
+// short flag so false positives on unrelated git errors are rare. WR-004
+// widened the matcher to cover the "unknown switch" / "unrecognized
+// switch" wordings that older git emits, and to accept the flag in
+// either the `-b` (with dash) or `b` (backtick-wrapped bare) form.
 func isUnknownFlagErr(out []byte, shortFlag string) bool {
 	s := string(out)
-	return strings.Contains(s, "unknown option") && strings.Contains(s, "-"+shortFlag) ||
-		strings.Contains(s, "unrecognized") && strings.Contains(s, "-"+shortFlag)
+	// Real git errors quote the flag with backticks, sometimes with a
+	// leading dash (`-b') and sometimes without (`b'). Match both.
+	hasFlag := strings.Contains(s, "-"+shortFlag) || strings.Contains(s, "`"+shortFlag)
+	if !hasFlag {
+		return false
+	}
+	// Each clause matches a known wording. WR-004 added "unknown switch"
+	// and "unrecognized switch" — older git and some distro patches use
+	// "switch" instead of "option" when rejecting a short flag.
+	clauses := []string{
+		"unknown option",   // git 1.x / 2.x older wording
+		"unknown switch",   // git 2.x older wording (WR-004 fix)
+		"unrecognized option",
+		"unrecognized switch",
+	}
+	for _, c := range clauses {
+		if strings.Contains(s, c) {
+			return true
+		}
+	}
+	return false
 }
 
 // isNotFoundErr returns true if err indicates "executable file not found
