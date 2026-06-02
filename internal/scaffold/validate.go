@@ -56,20 +56,22 @@ func IsValidLicense(s string) bool {
 }
 
 // IsValidTemplateRepo reports whether s is an acceptable --template-repo
-// URL (TMPL-03). Permissive: we accept https://, http://, git://, and
-// git@ (for ssh-agent URLs); the actual choke point is git itself, which
-// returns its own error if the URL is unreachable or not a git repo.
+// URL (TMPL-03). Permissive: we accept any of https://, http://, git://,
+// file://, and git@ (for ssh-agent URLs). git itself is the real choke
+// point — an unreachable URL or a non-git path returns a meaningful
+// error from the clone step.
 //
 // Rejected:
 //
 //   - empty string
-//   - schemes other than http(s)/git (e.g. ftp://, file://)
-//   - strings that don't look like a URL at all (no scheme prefix)
+//   - schemes that git does not support (e.g. ftp://)
+//   - strings that don't look like a URL at all (no scheme prefix and
+//     no git@ prefix)
 //
-// file:// is intentionally rejected because the recommended workflow is
-// to push the template repo to a remote and clone via the remote URL.
-// Local debugging can use `git clone` manually and then point the
-// embedded template's _base/ contents into a local working copy.
+// file:// is accepted because it's a standard git protocol (useful for
+// local development and the smoke tests). The recommended workflow for
+// distributed templates is still to push to a remote and clone via
+// https://, but we don't force that.
 func IsValidTemplateRepo(s string) bool {
 	if s == "" {
 		return false
@@ -78,11 +80,14 @@ func IsValidTemplateRepo(s string) bool {
 	if strings.HasPrefix(s, "git@") {
 		return true
 	}
-	// Standard schemes. We use prefix matching instead of url.Parse
-	// because url.Parse accepts relative paths and we want to reject
-	// those. The scheme check is enough to catch the common typos
-	// (--template-repo not-a-url, --template-repo foo/bar).
-	if strings.HasPrefix(s, "https://") || strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "git://") {
+	// Standard schemes git supports. We use prefix matching instead
+	// of url.Parse because url.Parse accepts relative paths and we
+	// want to reject those. The scheme check is enough to catch the
+	// common typos (--template-repo not-a-url, --template-repo foo/bar).
+	if strings.HasPrefix(s, "https://") ||
+		strings.HasPrefix(s, "http://") ||
+		strings.HasPrefix(s, "git://") ||
+		strings.HasPrefix(s, "file://") {
 		return true
 	}
 	return false

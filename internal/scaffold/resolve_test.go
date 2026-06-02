@@ -291,7 +291,6 @@ func TestResolveFlags_InvalidTemplateRepo(t *testing.T) {
 	}{
 		{"not-a-url", "not-a-url"},
 		{"ftp scheme rejected", "ftp://example.com/repo.git"},
-		{"file scheme rejected", "file:///tmp/repo"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

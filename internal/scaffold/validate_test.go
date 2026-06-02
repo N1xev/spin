@@ -252,10 +252,10 @@ func TestResolveFlags_LicenseNormalization(t *testing.T) {
 }
 
 // TestIsValidTemplateRepo covers TMPL-03's URL format gate. The
-// validation is permissive (https/http/git/git@ all accepted) but
-// rejects obviously-invalid input (empty, no scheme, ftp://,
-// file://). The git binary is the real choke point for invalid
-// URLs that pass this check.
+// validation is permissive (any git-supported protocol accepted) but
+// rejects obviously-invalid input (empty, no scheme, ftp://). The git
+// binary is the real choke point for invalid URLs that pass this
+// check.
 func TestIsValidTemplateRepo(t *testing.T) {
 	cases := []struct {
 		name string
@@ -267,12 +267,12 @@ func TestIsValidTemplateRepo(t *testing.T) {
 		{"http", "http://example.com/repo.git", true},
 		{"git scheme", "git://github.com/me/repo.git", true},
 		{"ssh-agent", "git@github.com:me/spin-templates.git", true},
+		{"file scheme (local dev + smoke tests)", "file:///tmp/repo", true},
 
 		// invalid
 		{"empty", "", false},
 		{"no scheme", "not-a-url", false},
 		{"ftp rejected", "ftp://example.com/repo.git", false},
-		{"file rejected", "file:///tmp/repo", false},
 		{"relative path rejected", "github.com/me/repo", false},
 		{"whitespace rejected", " https://example.com/repo.git", false},
 	}

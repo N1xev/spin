@@ -69,14 +69,31 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 	fm := funcMap(p)
 	fsys := currentFS(p.ExternalDir)
 
+	// The embedded FS (//go:embed all:templates) starts at "templates/";
+	// an external repo (os.DirFS(externalDir)) starts at the repo root.
+	// The overlay layer names ("_base", "variant_tui", "lib/<lib>") are
+	// the same in both cases — only the root prefix differs.
+	rootPrefix := "templates/"
+	if p.ExternalDir != "" {
+		rootPrefix = ""
+	}
+
 	for _, layer := range p.overlayOrder() {
-		root := "templates/" + layer
+		root := rootPrefix + layer
 		err := fs.WalkDir(fsys, root, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				// Missing layer directory is not fatal — variant_tui may be
 				// absent for an empty project, etc. The Walking Skeleton
 				// was the same way. Return nil to continue.
-				if strings.Contains(walkErr.Error(), "file does not exist") {
+				//
+				// The error wording differs by FS source: embed.FS uses
+				// "file does not exist", os.DirFS results use the OS stat
+				// wording ("no such file or directory"). Match both so
+				// external repos (which typically have only _base/ and
+				// no variant_tui) don't blow up.
+				msg := walkErr.Error()
+				if strings.Contains(msg, "file does not exist") ||
+					strings.Contains(msg, "no such file or directory") {
 					return nil
 				}
 				return fmt.Errorf("walk %s: %w", path, walkErr)
