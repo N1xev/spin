@@ -28,19 +28,37 @@ import (
 //go:embed all:templates
 var FS embed.FS
 
-func init() {
+// InitLogger configures the charm/log v2 default logger for scaffolder
+// output: writes to stderr at InfoLevel. Callers may invoke this
+// directly if they want scaffold-style logging without going through
+// New (e.g. from a custom entrypoint). New itself calls InitLogger on
+// entry, so most callers don't need to. WR-002 moved this from a
+// package-level init() so importing the scaffold package has no
+// side effects.
+func InitLogger() {
 	log.SetDefault(log.NewWithOptions(os.Stderr, log.Options{Level: log.InfoLevel}))
 }
 
 // New is the main scaffolder entrypoint.
 //
 // Steps:
+//  0. Configure the default logger (stderr, InfoLevel). This is the
+//     first thing New() does so importing this package has no side
+//     effects — WR-002 moved this out of a package-level init() so
+//     tests that import scaffold do not silently override the global
+//     log default.
 //  1. Validate the Project (name regex + existing-dir check, with --force).
 //  2. Call p.renderToMap() to walk the embed FS in overlay order.
 //  3. Call emit(p, files) to write the files to ./<name>/.
 //  4. Call p.VerifyBuild() to run `go build ./...` with CGO_ENABLED=0.
 //  5. Call p.GitInit() to make the initial commit (skipped with --no-git).
 func New(p *Project) error {
+	// Configure the default logger on entry, not at package init. This
+	// keeps the scaffold package side-effect-free on import. Tests and
+	// other tools that import scaffold retain their own log default
+	// unless they call New (or InitLogger explicitly).
+	InitLogger()
+
 	if p == nil || p.Name == "" {
 		return fmt.Errorf("scaffold: project name is required")
 	}
