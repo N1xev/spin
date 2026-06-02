@@ -1,0 +1,24 @@
+# Binaries
+/spin
+/bin/
+*.exe
+
+# Test artifacts
+*.test
+*.out
+coverage.txt
+
+# Build output
+/tmp/
+/dist/
+
+# IDE / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# Test scratch dirs (integration tests use t.TempDir() which auto-cleans, but defensive)
+/scaffold-test-*/
+/e2e-*/
