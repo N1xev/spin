@@ -67,10 +67,11 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 
 	out := map[string][]byte{}
 	fm := funcMap(p)
+	fsys := currentFS(p.ExternalDir)
 
 	for _, layer := range p.overlayOrder() {
 		root := "templates/" + layer
-		err := fs.WalkDir(FS, root, func(path string, d fs.DirEntry, walkErr error) error {
+		err := fs.WalkDir(fsys, root, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				// Missing layer directory is not fatal — variant_tui may be
 				// absent for an empty project, etc. The Walking Skeleton
@@ -113,7 +114,7 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 				outKey = "LICENSE"
 			}
 
-			raw, err := fs.ReadFile(FS, path)
+			raw, err := fs.ReadFile(fsys, path)
 			if err != nil {
 				return fmt.Errorf("read %s: %w", path, err)
 			}
@@ -169,6 +170,13 @@ func funcMap(p *Project) template.FuncMap {
 		},
 		"hasCobra": func(p2 *Project) bool { return p2.Cobra },
 		"hasFang":  func(p2 *Project) bool { return p2.Fang },
+		"hasHuh":       func(p2 *Project) bool { return p2.Huh },
+		"hasGlamour":   func(p2 *Project) bool { return p2.Glamour },
+		"hasGlow":      func(p2 *Project) bool { return p2.Glow },
+		"hasWish":      func(p2 *Project) bool { return p2.Wish },
+		"hasLog":       func(p2 *Project) bool { return p2.Log },
+		"hasHarmonica": func(p2 *Project) bool { return p2.Harmonica },
+		"hasViper":     func(p2 *Project) bool { return p2.Viper },
 		"charmPin": func(lib string) string {
 			switch lib {
 			case "bubbletea":
@@ -187,6 +195,12 @@ func funcMap(p *Project) template.FuncMap {
 				return DefaultPins.Wish
 			case "fang":
 				return DefaultPins.Fang
+			case "viper":
+				return DefaultPins.Viper
+			case "harmonica":
+				return DefaultLegacyPins.Harmonica
+			case "glow":
+				return DefaultLegacyPins.Glow
 			default:
 				return ""
 			}

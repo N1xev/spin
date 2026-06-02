@@ -47,6 +47,12 @@ type CharmPins struct {
 	// Fang is the v2 styled cobra wrapper. Latest stable: v2.0.1.
 	// Used by the --cli variant for root-cobra execution.
 	Fang string
+
+	// Viper is the optional config-file library (github.com/spf13/viper).
+	// Latest stable: v1.20.1. Not a charm v2 lib, but lives on the same
+	// struct so the template engine can resolve it from charmPin("viper").
+	// Per CLAUDE.md, Viper is opt-in (--viper).
+	Viper string
 }
 
 // LegacyCharmPins tracks libraries that have NOT migrated to charm.land/
@@ -79,6 +85,7 @@ var DefaultPins = CharmPins{
 	Wish:      "v2.0.1",
 	Log:       "v2.0.0",
 	Fang:      "v2.0.1",
+	Viper:     "v1.20.1",
 }
 
 // DefaultLegacyPins is the package-level pin set for the
