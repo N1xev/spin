@@ -139,17 +139,73 @@ Deferred — not in current roadmap.
 
 ## Traceability
 
-<!-- Populated by roadmap creation -->
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| _To be mapped by roadmapper_ | | |
+| SCAF-01 | Phase 1 | Pending |
+| SCAF-02 | Phase 1 | Pending |
+| SCAF-03 | Phase 1 | Pending |
+| SCAF-04 | Phase 1 | Pending |
+| SCAF-05 | Phase 1 | Pending |
+| SCAF-06 | Phase 1 | Pending |
+| SCAF-07 | Phase 1 | Pending |
+| SCAF-08 | Phase 1 | Pending |
+| FLAG-01 | Phase 1 | Pending |
+| FLAG-02 | Phase 1 | Pending |
+| FLAG-03 | Phase 1 | Pending |
+| FLAG-04 | Phase 1 | Pending |
+| FLAG-05 | Phase 1 | Pending |
+| FLAG-06 | Phase 1 | Pending |
+| FLAG-07 | Phase 2 | Pending |
+| FLAG-08 | Phase 2 | Pending |
+| FLAG-09 | Phase 2 | Pending |
+| FLAG-10 | Phase 2 | Pending |
+| FLAG-11 | Phase 2 | Pending |
+| FLAG-12 | Phase 2 | Pending |
+| FLAG-13 | Phase 1 | Pending |
+| FLAG-14 | Phase 1 | Pending |
+| FLAG-15 | Phase 1 | Pending |
+| FLAG-16 | Phase 1 | Pending |
+| FLAG-17 | Phase 1 | Pending |
+| FLAG-18 | Phase 1 | Pending |
+| TMPL-01 | Phase 1 | Pending |
+| TMPL-02 | Phase 2 | Pending |
+| TMPL-03 | Phase 2 | Pending |
+| TMPL-04 | Phase 1 | Pending |
+| TMPL-05 | Phase 1 | Pending |
+| TMPL-06 | Phase 1 | Pending |
+| TMPL-07 | Phase 1 | Pending |
+| AI-01 | Phase 3 | Pending |
+| AI-02 | Phase 3 | Pending |
+| AI-03 | Phase 3 | Pending |
+| AI-04 | Phase 3 | Pending |
+| WRAP-01 | Phase 2 | Pending |
+| WRAP-02 | Phase 2 | Pending |
+| WRAP-03 | Phase 2 | Pending |
+| WRAP-04 | Phase 2 | Pending |
+| WRAP-05 | Phase 2 | Pending |
+| WRAP-06 | Phase 2 | Pending |
+| WRAP-07 | Phase 2 | Pending |
+| WRAP-08 | Phase 2 | Pending |
+| INT-01 | Phase 3 | Pending |
+| INT-02 | Phase 3 | Pending |
+| INT-03 | Phase 3 | Pending |
+| INT-04 | Phase 3 | Pending |
+| INT-05 | Phase 3 | Pending |
+| TOOL-01 | Phase 1 | Pending |
+| TOOL-02 | Phase 1 | Pending |
+| TOOL-03 | Phase 1 | Pending |
+| TOOL-04 | Phase 1 | Pending |
+| TOOL-05 | Phase 1 | Pending |
+| HLTH-01 | Phase 4 | Pending |
+| HLTH-02 | Phase 4 | Pending |
+| HLTH-03 | Phase 4 | Pending |
+| HLTH-04 | Phase 4 | Pending |
 
 **Coverage:**
-- v1 requirements: 49 total
-- Mapped to phases: TBD
-- Unmapped: TBD
+- v1 requirements: 59 total
+- Mapped to phases: 59/59
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 after initial definition*
+*Last updated: 2026-06-02 after roadmap creation*
