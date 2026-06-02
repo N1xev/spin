@@ -1,6 +1,5 @@
-// bubbletea v2 wiring injected by spin
-// In the Walking Skeleton, the variant_tui overlay contains the bubbletea
-// Update/View/Init logic in main.go. Plan 03 introduces the proper pattern
-// where lib/<lib>.go.tmpl injects code via define blocks or by writing
-// to internal/ui/ instead of replacing main.go wholesale.
+// bubbletea v2 wiring is in variant_tui/main.go.tmpl via conditional
+// template blocks (the hasBubbletea helper gates the wiring). This file is
+// a placeholder so the overlay walker emits a bubbletea.go in the
+// scaffolded project root; the generated main.go does not import it.
 package main

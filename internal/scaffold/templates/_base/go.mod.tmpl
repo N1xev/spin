@@ -1,7 +1,15 @@
 module {{.Module}}
 
-go 1.23
+go {{if hasBubbles .}}1.25.0{{else}}1.23{{end}}
 
 require (
-	charm.land/bubbletea/v2 v2.0.0
+{{- if hasBubbletea .}}
+	charm.land/bubbletea/v2 {{charmPin "bubbletea"}}
+{{- end}}
+{{- if hasBubbles .}}
+	charm.land/bubbles/v2 {{charmPin "bubbles"}}
+{{- end}}
+{{- if hasLipgloss .}}
+	charm.land/lipgloss/v2 {{charmPin "lipgloss"}}
+{{- end}}
 )
