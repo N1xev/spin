@@ -51,20 +51,9 @@ func (p *Project) overlayOrder() []string {
 // to rendered bytes. The .tmpl extension is stripped from output keys.
 // Last-write-wins on identical relative output paths.
 //
-// Type validation: --type=cli and --type=all return a "Phase 2" error
-// because their variant templates are placeholders that don't compile yet.
 // License gating: LICENSE-<X>.tmpl files render only when License matches
 // X. License="none" suppresses all LICENSE files.
 func (p *Project) renderToMap() (map[string][]byte, error) {
-	// Type validation per open decision §15.6. Phase 2 replaces this branch
-	// with real template content for --cli and --all variants.
-	if p.Type == "cli" || p.Type == "all" {
-		return nil, fmt.Errorf(
-			"--type=%s: this variant ships in Phase 2; use --tui --bubbletea (and optionally --bubbles, --lipgloss) instead",
-			p.Type,
-		)
-	}
-
 	out := map[string][]byte{}
 	fm := funcMap(p)
 	fsys := currentFS(p.ExternalDir)

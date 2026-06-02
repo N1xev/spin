@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -313,27 +312,60 @@ func TestRenderToMap_WithLipgloss_RealStylesFile(t *testing.T) {
 	}
 }
 
-// TestRenderToMap_TypeCLIRejected asserts --type=cli returns a Phase 2 error.
-func TestRenderToMap_TypeCLIRejected(t *testing.T) {
-	p := &Project{Name: "x", Module: "x", Type: "cli", Libs: []string{}, License: "none", Year: 2026, SpinVer: "0.1.0"}
-	_, err := p.renderToMap()
-	if err == nil {
-		t.Fatal("expected error for Type=cli")
+// TestRenderToMap_TypeCLI asserts --type=cli now renders successfully
+// (Plan 02-03 replaced the Phase 1 placeholder with real template content).
+func TestRenderToMap_TypeCLI(t *testing.T) {
+	p := &Project{
+		Name: "x", Module: "x", Type: "cli",
+		Cobra: true, Fang: true, Viper: true,
+		License: "none", Year: 2026, SpinVer: "0.1.0",
 	}
-	if !strings.Contains(err.Error(), "Phase 2") {
-		t.Errorf("expected 'Phase 2' in error; got: %v", err)
+	files, err := p.renderToMap()
+	if err != nil {
+		t.Fatalf("renderToMap with Type=cli failed: %v", err)
+	}
+	main, ok := files["main.go"]
+	if !ok {
+		t.Fatal("main.go missing for Type=cli")
+	}
+	for _, want := range []string{
+		"package main",
+		"cobra.Command",
+		"fang.Execute",
+		"config.Bind", // --viper wiring
+	} {
+		if !bytes.Contains(main, []byte(want)) {
+			t.Errorf("main.go missing %q for Type=cli; got:\n%s", want, main)
+		}
 	}
 }
 
-// TestRenderToMap_TypeAllRejected asserts --type=all returns a Phase 2 error.
-func TestRenderToMap_TypeAllRejected(t *testing.T) {
-	p := &Project{Name: "x", Module: "x", Type: "all", Libs: []string{}, License: "none", Year: 2026, SpinVer: "0.1.0"}
-	_, err := p.renderToMap()
-	if err == nil {
-		t.Fatal("expected error for Type=all")
+// TestRenderToMap_TypeAll asserts --type=all now renders successfully
+// with both a tui subcommand (bubbletea) and a hello subcommand (CLI).
+func TestRenderToMap_TypeAll(t *testing.T) {
+	p := &Project{
+		Name: "x", Module: "x", Type: "all",
+		Libs: []string{"bubbletea"},
+		Cobra: true, Fang: true,
+		License: "none", Year: 2026, SpinVer: "0.1.0",
 	}
-	if !strings.Contains(err.Error(), "Phase 2") {
-		t.Errorf("expected 'Phase 2' in error; got: %v", err)
+	files, err := p.renderToMap()
+	if err != nil {
+		t.Fatalf("renderToMap with Type=all failed: %v", err)
+	}
+	main, ok := files["main.go"]
+	if !ok {
+		t.Fatal("main.go missing for Type=all")
+	}
+	for _, want := range []string{
+		"package main",
+		"tea.NewProgram",
+		"tuiCmd",
+		"helloCmd",
+	} {
+		if !bytes.Contains(main, []byte(want)) {
+			t.Errorf("main.go missing %q for Type=all; got:\n%s", want, main)
+		}
 	}
 }
 
