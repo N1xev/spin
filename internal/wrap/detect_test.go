@@ -1,6 +1,8 @@
 package wrap
 
 import (
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -123,7 +125,7 @@ func readAll(r interface{ Read(p []byte) (int, error) }, buf *strings.Builder) e
 			buf.Write(tmp[:n])
 		}
 		if err != nil {
-			if err.Error() == "EOF" {
+			if errors.Is(err, io.EOF) {
 				return nil
 			}
 			return err
