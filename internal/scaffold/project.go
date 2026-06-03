@@ -12,6 +12,8 @@
 // engine and flag binding don't churn when later phases add content.
 package scaffold
 
+import "sort"
+
 // Project is the single source of truth for scaffold inputs.
 //
 // TMPL-07 fields (per PROJECT.md / RESEARCH §4.4): Name, Module, Type, Libs,
@@ -131,4 +133,46 @@ type Project struct {
 
 	// AI is the AGENTS.md / AI assistant opt-in (Phase 3).
 	AI bool
+}
+
+// AllLibs returns the unified library set: every entry in p.Libs plus
+// every bool set in the boolFlagOverlayMap (Cobra, Fang, Viper, Huh,
+// Glamour, Glow, Wish, Log, Harmonica), deduplicated and sorted
+// alphabetically. Use this anywhere a "complete library list" is
+// needed: the AGENTS.md template, the prompt default-selection, and
+// the overlay walker's order.
+//
+// Pitfall 4 from 03-RESEARCH.md documents the bug this method fixes:
+// p.Libs and the Phase 2 bools were two parallel sources of truth.
+// A user with `--huh` (and no --huh in p.Libs) would get an AGENTS.md
+// that omitted the Huh section, and vice versa. AllLibs derives the
+// union so there's exactly one place to ask "what libs does this
+// project include?".
+//
+// Returns a fresh slice; safe to mutate. The result is empty (not
+// nil) for a zero *Project, which is the easier invariant for
+// templates (no need to nil-check before ranging).
+//
+// Note for maintainers: this method is the canonical "libs for
+// prompting" view. overlayOrder in template.go is intentionally kept
+// on its own implementation in this plan (refactoring overlayOrder
+// to use AllLibs is a low-risk change but was deferred to avoid
+// coupling this plan to TOOL-05 invariants).
+func (p *Project) AllLibs() []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, lib := range p.Libs {
+		if !seen[lib] {
+			seen[lib] = true
+			out = append(out, lib)
+		}
+	}
+	for lib, active := range p.boolFlagOverlayMap() {
+		if active && !seen[lib] {
+			seen[lib] = true
+			out = append(out, lib)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
