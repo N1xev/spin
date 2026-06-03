@@ -5,6 +5,7 @@ go 1.25.8
 require (
 	charm.land/fang/v2 v2.0.1
 	charm.land/log/v2 v2.0.0
+	github.com/mattn/go-isatty v0.0.22
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	golang.org/x/mod v0.36.0
@@ -24,7 +25,6 @@ require (
 	github.com/go-logfmt/logfmt v0.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
-	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/muesli/mango v0.1.0 // indirect
