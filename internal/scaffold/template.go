@@ -71,17 +71,16 @@ func (p *Project) overlayOrder() []string {
 // be walked when the corresponding bool flag is set. Keys match the
 // templates/lib/<name>/ directory names; values are the bool fields on
 // Project. Kept in declaration order so the overlay walk is stable.
+//
+// Plan 02-05: only the glow overlay (binary install hint README) remains
+// as a per-lib overlay. All other charm library wiring is inlined in the
+// variant_*/internal/{app,cmd,ui,config}/*.go.tmpl files as
+// `if has<Lib> .` blocks, so no lib/* overlay directory is needed for
+// huh, wish, glamour, harmonica, bubbles, bubbletea, cobra, fang, log,
+// lipgloss, viper, ansi, modifiers, or runewidth.
 func (p *Project) boolFlagOverlayMap() map[string]bool {
 	return map[string]bool{
-		"cobra":     p.Cobra,
-		"fang":      p.Fang,
-		"viper":     p.Viper,
-		"huh":       p.Huh,
-		"glamour":   p.Glamour,
-		"glow":      p.Glow,
-		"wish":      p.Wish,
-		"log":       p.Log,
-		"harmonica": p.Harmonica,
+		"glow": p.Glow,
 	}
 }
 
