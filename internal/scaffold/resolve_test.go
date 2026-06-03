@@ -259,6 +259,16 @@ func TestResolveFlags_TemplateRepo(t *testing.T) {
 	if p2.TemplateRepo != "" {
 		t.Errorf("TemplateRepo = %q, want \"\" (default)", p2.TemplateRepo)
 	}
+
+	// WR-010: explicitly passing --template-repo "" (cobra string flag
+	// with empty argument) is treated as the default — the result
+	// TemplateRepo is "" and CloneTemplateRepo is never called.
+	// The guard lives in cmd/new.go: `if p.TemplateRepo != ""` before
+	// the clone. This test pins the contract.
+	p3 := runResolveCmd(t, "myapp", "--tui", "--bubbletea", "--template-repo", "")
+	if p3.TemplateRepo != "" {
+		t.Errorf("TemplateRepo = %q, want \"\" (explicit empty = default)", p3.TemplateRepo)
+	}
 }
 
 // TestResolveFlags_KeepTemplateCache asserts --keep-template-cache
@@ -291,6 +301,8 @@ func TestResolveFlags_InvalidTemplateRepo(t *testing.T) {
 	}{
 		{"not-a-url", "not-a-url"},
 		{"ftp scheme rejected", "ftp://example.com/repo.git"},
+		// CR-004: leading-dash path rejected.
+		{"leading-dash path", "https://example.com/-evil"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -312,6 +324,70 @@ func TestResolveFlags_InvalidTemplateRepo(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestResolveFlags_VariantAutoDefaults covers the WR-003 / CR-002 / CR-003
+// cluster: variant flags must auto-default their underlying libs so
+// the generated project always builds.
+//
+//	--all   -> Bubbletea=true, Cobra=true, Fang=true
+//	--cli   -> Cobra=true, Fang=true (no Bubbletea)
+//	--tui   -> Bubbletea=true (no Cobra/Fang; the TUI variant does not
+//	           import cobra+fang in main.go.tmpl)
+//
+// These are the unit-level boundaries that keep the cluster fix
+// honest. The integration tests (scaffold_e2e_test.go) verify the
+// generated project actually builds.
+func TestResolveFlags_VariantAutoDefaults(t *testing.T) {
+	t.Run("--all auto-defaults Bubbletea+Cobra+Fang", func(t *testing.T) {
+		p := runResolveCmd(t, "myapp", "--all")
+		if p.Type != "all" {
+			t.Errorf("Type = %q, want %q", p.Type, "all")
+		}
+		if !containsString(p.Libs, "bubbletea") {
+			t.Errorf("Libs = %v, want contains %q", p.Libs, "bubbletea")
+		}
+		if !p.Cobra {
+			t.Error("Cobra = false, want true (--all must auto-set Cobra)")
+		}
+		if !p.Fang {
+			t.Error("Fang = false, want true (--all must auto-set Fang)")
+		}
+	})
+
+	t.Run("--cli auto-defaults Cobra+Fang without Bubbletea", func(t *testing.T) {
+		p := runResolveCmd(t, "myapp", "--cli")
+		if p.Type != "cli" {
+			t.Errorf("Type = %q, want %q", p.Type, "cli")
+		}
+		if !p.Cobra {
+			t.Error("Cobra = false, want true (--cli must auto-set Cobra)")
+		}
+		if !p.Fang {
+			t.Error("Fang = false, want true (--cli must auto-set Fang)")
+		}
+		if containsString(p.Libs, "bubbletea") {
+			t.Errorf("Libs = %v, must NOT contain %q for --cli (no TUI scaffold)",
+				p.Libs, "bubbletea")
+		}
+	})
+
+	t.Run("--tui auto-defaults Bubbletea without Cobra/Fang", func(t *testing.T) {
+		p := runResolveCmd(t, "myapp", "--tui")
+		if p.Type != "tui" {
+			t.Errorf("Type = %q, want %q", p.Type, "tui")
+		}
+		if !containsString(p.Libs, "bubbletea") {
+			t.Errorf("Libs = %v, want contains %q (--tui must auto-set bubbletea)",
+				p.Libs, "bubbletea")
+		}
+		if p.Cobra {
+			t.Error("Cobra = true, want false (--tui must not set Cobra)")
+		}
+		if p.Fang {
+			t.Error("Fang = true, want false (--tui must not set Fang)")
+		}
+	})
 }
 
 // equalSorted compares two slices after sorting both. Empty and nil are

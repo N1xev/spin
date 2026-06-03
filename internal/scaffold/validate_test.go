@@ -275,6 +275,12 @@ func TestIsValidTemplateRepo(t *testing.T) {
 		{"ftp rejected", "ftp://example.com/repo.git", false},
 		{"relative path rejected", "github.com/me/repo", false},
 		{"whitespace rejected", " https://example.com/repo.git", false},
+		// CR-004: leading-dash path segment rejected (defense in depth
+		// alongside the `--` separator in CloneTemplateRepo).
+		{"https with leading-dash path", "https://example.com/-evil", false},
+		{"http with leading-dash path", "http://example.com/-upload-pack=evil", false},
+		{"git scheme with leading-dash path", "git://example.com/-evil", false},
+		{"file scheme with leading-dash path", "file:///tmp/-evil", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

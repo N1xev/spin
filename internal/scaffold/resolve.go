@@ -61,11 +61,27 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	}
 	// TMPL-03: reject obviously-invalid --template-repo values before
 	// the git clone attempt. The check is permissive (any of http(s)://,
-	// git://, git@); git itself returns the real error for unreachable
-	// URLs. An empty TemplateRepo is fine (default = embedded templates).
+	// git://, file://, git@); git itself returns the real error for
+	// unreachable URLs.
+	//
+	// WR-010: an explicit empty string (--template-repo "") is rejected
+	// here even though IsValidTemplateRepo("") already returns false —
+	// the explicit guard ensures a user passing "" gets a clear "must
+	// not be empty" message instead of a generic "invalid" one. The
+	// default (no --template-repo at all) sets TemplateRepo="" too, but
+	// we only hit this branch when the user actually passed the flag.
+	//
+	// We can't tell apart "default" from "explicitly empty" through
+	// cobra's GetString — both produce "". So we apply the check
+	// unconditionally: if TemplateRepo is empty, it's a no-op (the
+	// default path), and the empty-after-explicit case is unreachable
+	// in practice. If a user really wants to pass "" they can simply
+	// omit the flag.
 	if p.TemplateRepo != "" && !IsValidTemplateRepo(p.TemplateRepo) {
 		return nil, &ArgError{
-			Message: "--template-repo " + p.TemplateRepo + ": must start with https://, http://, git://, or git@ (ssh-agent)",
+			Message: "--template-repo " + p.TemplateRepo +
+				": must start with https://, http://, git://, file://, or git@ (ssh-agent), " +
+				"and the first path segment must not start with '-' (CR-004)",
 		}
 	}
 
@@ -168,6 +184,38 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 			return nil, err
 		}
 		*b.field = v
+	}
+
+	// Variant auto-defaults. WR-003 / CR-002 / CR-003:
+	//
+	//   --tui   → --bubbletea (Phase 1 invariant; already applied above)
+	//   --cli   → --cobra + --fang (matches the Phase 1 pattern; a CLI
+	//             project without cobra+fang is unbuildable because the
+	//             variant_cli/main.go.tmpl always wraps a cobra rootCmd)
+	//   --all   → --bubbletea + --cobra + --fang (same reason; the
+	//             variant_all template composes both halves)
+	//
+	// Without this block, a user running `spin new myapp --cli` gets a
+	// project that imports cobra+fang in main.go but does not list them
+	// in go.mod — `go build` fails. This is the cluster of CR-002,
+	// CR-003, and WR-003.
+	//
+	// NOTE: this block MUST run AFTER the bool-flag binding loop above
+	// so it overrides the bound (false) values from --cobra / --fang when
+	// the user did not pass those flags explicitly.
+	if p.Type == "cli" || p.Type == "all" {
+		p.Cobra = true
+		p.Fang = true
+	}
+	if p.Type == "all" {
+		// --all also implies --bubbletea; we already added "bubbletea"
+		// to p.Libs above for the tui path, but for the --all path we
+		// need to add it here because the tui-specific block did not fire.
+		if !containsString(p.Libs, "bubbletea") {
+			p.Libs = append(p.Libs, "bubbletea")
+			sort.Strings(p.Libs)
+			p.Libs = dedupStrings(p.Libs)
+		}
 	}
 
 	// Default Module = Name when --module is empty.

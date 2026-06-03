@@ -67,6 +67,10 @@ func IsValidLicense(s string) bool {
 //   - schemes that git does not support (e.g. ftp://)
 //   - strings that don't look like a URL at all (no scheme prefix and
 //     no git@ prefix)
+//   - URLs whose first non-scheme path segment starts with `-` (CR-004):
+//     even with the `--` separator in CloneTemplateRepo, a leading-dash
+//     path is almost certainly a typo or an attack and is rejected at
+//     the validator too as defense-in-depth.
 //
 // file:// is accepted because it's a standard git protocol (useful for
 // local development and the smoke tests). The recommended workflow for
@@ -84,13 +88,45 @@ func IsValidTemplateRepo(s string) bool {
 	// of url.Parse because url.Parse accepts relative paths and we
 	// want to reject those. The scheme check is enough to catch the
 	// common typos (--template-repo not-a-url, --template-repo foo/bar).
-	if strings.HasPrefix(s, "https://") ||
-		strings.HasPrefix(s, "http://") ||
-		strings.HasPrefix(s, "git://") ||
-		strings.HasPrefix(s, "file://") {
+	var scheme string
+	switch {
+	case strings.HasPrefix(s, "https://"):
+		scheme = "https://"
+	case strings.HasPrefix(s, "http://"):
+		scheme = "http://"
+	case strings.HasPrefix(s, "git://"):
+		scheme = "git://"
+	case strings.HasPrefix(s, "file://"):
+		scheme = "file://"
+	default:
+		return false
+	}
+	// CR-004: defense-in-depth — reject URLs whose first path segment
+	// starts with `-` (e.g. "https://x.com/-evil"). Git's `--` separator
+	// in CloneTemplateRepo is the primary mitigation; this is the
+	// validator-side belt to that suspenders.
+	//
+	// Logic: find the host (up to the first `/`, `?`, `#`, or end of
+	// string), then look at the first character of the path. A path
+	// starting with `-` is almost certainly a typo or an attack.
+	rest := strings.TrimPrefix(s, scheme)
+	// Skip leading slashes (file:///path -> path).
+	rest = strings.TrimLeft(rest, "/")
+	if rest == "" {
+		// Scheme with no host is malformed.
+		return false
+	}
+	// Find the path separator (end of host).
+	pathStart := strings.IndexAny(rest, "/?#")
+	if pathStart < 0 {
+		// No path — just a host. Nothing to check on the path side.
 		return true
 	}
-	return false
+	// First char of the path must not be `-`. (Empty path is fine.)
+	if pathStart+1 < len(rest) && rest[pathStart+1] == '-' {
+		return false
+	}
+	return true
 }
 
 // IsValidGoModuleSegment reports whether s is acceptable as a project name
