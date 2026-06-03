@@ -7,13 +7,14 @@ import (
 	"charm.land/log/v2"
 	"github.com/spf13/cobra"
 
+	"github.com/example/spin/internal/prompt"
 	"github.com/example/spin/internal/scaffold"
 )
 
 var newCmd = &cobra.Command{
 	Use:           "new <name>",
 	Short:         "Scaffold a new charmbracelet project",
-	Args:          cobra.ExactArgs(1),
+	Args:          cobra.MaximumNArgs(1),
 	RunE:          runNew,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -62,6 +63,17 @@ func init() {
 	pf.Bool("no-git", false, "skip git init + initial commit")
 	pf.Bool("no-verify", false, "skip post-scaffold go build ./... smoke test")
 	pf.Bool("quiet", false, "minimal scaffolder output")
+	// Phase 3: --no-interactive disables the prompt layer entirely. The
+	// alias spellings --yes and --batch are separate flags that all
+	// bind to the same p.NoInteractive field (UI-SPEC Locked Decision
+	// #5). pflag v1.0.6 does not support multi-char flag aliases (only
+	// single-letter Shorthand), so the three CLI spellings are wired
+	// individually in resolve.go. ResolveFlags reads "no-interactive"
+	// as the canonical name; --yes / --batch are bound to the same
+	// field for the alias UX.
+	pf.Bool("no-interactive", false, "disable interactive prompts (alias: --yes, --batch)")
+	pf.Bool("yes", false, "alias for --no-interactive")
+	pf.Bool("batch", false, "alias for --no-interactive")
 
 	// Forward-compat flags (Phase 2). Flag binding only; template content
 	// lands in the corresponding phase. See Project struct field comments.
@@ -100,6 +112,17 @@ func runNew(cmd *cobra.Command, args []string) error {
 	p, err := scaffold.ResolveFlags(cmd, args)
 	if err != nil {
 		return err
+	}
+	// Phase 3: prompt layer. Fill is a no-op in Plan 01; Plans 02/03
+	// wire the huh and gum backends. The chokepoint is established
+	// here so downstream code can wire against it without churn.
+	// p.NoInteractive is read inside Fill as a final guard: if the
+	// user passed --no-interactive / --yes / --batch, skip the call
+	// even when the env/TTY/CI guard would otherwise let prompts fire.
+	if !p.NoInteractive {
+		if err := prompt.Fill(p); err != nil {
+			return err
+		}
 	}
 	if err := p.Validate(); err != nil {
 		return err

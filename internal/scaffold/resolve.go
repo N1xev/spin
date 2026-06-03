@@ -115,6 +115,26 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	} else {
 		p.Quiet = v
 	}
+	if v, err := mustBool(cmd, "no-interactive"); err != nil {
+		return nil, err
+	} else {
+		p.NoInteractive = v
+	}
+	// UI-SPEC Locked Decision #5: --yes and --batch are aliases for
+	// --no-interactive. pflag v1.0.6 doesn't support multi-char flag
+	// aliases (only single-letter Shorthand), so we register all three
+	// as separate flags and OR them into p.NoInteractive. If any one
+	// is set, the prompt layer is disabled.
+	if v, err := mustBool(cmd, "yes"); err != nil {
+		return nil, err
+	} else if v {
+		p.NoInteractive = true
+	}
+	if v, err := mustBool(cmd, "batch"); err != nil {
+		return nil, err
+	} else if v {
+		p.NoInteractive = true
+	}
 	if v, err := mustBool(cmd, "keep-template-cache"); err != nil {
 		return nil, err
 	} else {
