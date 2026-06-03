@@ -8,9 +8,15 @@ import (
 	"fmt"
 	"os"
 
+{{- if hasBubbletea .}}
 	"charm.land/bubbletea/v2"
-	"charm.land/fang/v2"
+{{- end}}
+{{- if hasCobra .}}
 	"github.com/spf13/cobra"
+{{- end}}
+{{- if hasFang .}}
+	"charm.land/fang/v2"
+{{- end}}
 {{- if hasViper .}}
 	"{{.Module}}/internal/config"
 {{- end}}

@@ -24,8 +24,17 @@ func init() {
 
 	pf := newCmd.PersistentFlags()
 
-	// Top-level project-type flags (one of --tui / --cli / --all).
-	// --tui is the default; --cli and --all are forward-compat (Phase 2 templates).
+	// Project variant matrix (--tui / --cli / --all):
+	//   --tui   is the default; scaffolds a single bubbletea program.
+	//           --bubbletea is auto-enabled.
+	//   --cli   scaffolds a cobra+fang CLI. --cobra and --fang are
+	//           auto-enabled (CR-002).
+	//   --all   scaffolds a single binary with both halves. --bubbletea,
+	//           --cobra, and --fang are all auto-enabled (CR-003).
+	//
+	// Library flags (--bubbletea, --bubbles, --lipgloss, --cobra, --fang,
+	// --viper, --huh, --glamour, --glow, --wish, --log, --harmonica)
+	// layer in extra charm v2 deps on top of the chosen variant.
 	pf.Bool("tui", false, "TUI project variant (default if no --cli)")
 	pf.Bool("cli", false, "CLI project variant (Phase 2 templates)")
 	pf.Bool("all", false, "TUI + CLI combo variant (Phase 2 templates)")

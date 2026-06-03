@@ -123,14 +123,15 @@ func (m model) View() tea.View {
 	return tea.NewView(body)
 }
 
-func main() {
-{{- if hasLog .}}
-	logSetup()
-{{- end}}
+// initialModel returns a fresh model. The lib/wish overlay (and any
+// future per-connection handler) calls this to construct a new
+// bubbletea program state, so the model's setup logic must live here
+// rather than being inlined into main.
+func initialModel() model {
 {{- if hasBubbles .}}
 	s := spinner.New(spinner.WithSpinner(spinner.Dot))
 {{- end}}
-	m := model{
+	return model{
 {{- if hasBubbles .}}
 		spinner: s,
 {{- end}}
@@ -138,7 +139,25 @@ func main() {
 		styles: ui.NewStyles(80),
 {{- end}}
 	}
-	p := tea.NewProgram(m)
+}
+
+func main() {
+{{- if hasLog .}}
+	logSetup()
+{{- end}}
+{{- if hasWish .}}
+	// --wish enabled: dispatch on the first CLI arg. Without subcommands,
+	// the default is the TUI; with `ssh`, we hand off to the wish server
+	// defined in lib/wish/wish.go.
+	if len(os.Args) > 1 && os.Args[1] == "ssh" {
+		if err := wishExample(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+{{- end}}
+	p := tea.NewProgram(initialModel())
 	if _, err := p.Run(); err != nil {
 {{- if hasLog .}}
 		log.Error("program failed", "err", err)
@@ -148,12 +167,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-{{ if hasWish . -}}
-// --wish enabled: wish is wired in lib/wish/wish.go. To expose an
-// `ssh` subcommand in the TUI variant, extend the cobra root above to
-// add a `wish.ServeCmd` (or call wishExample() directly from a custom
-// RunE). v1 ships only the lib overlay; subcommand wiring is a follow-on.
-{{- end}}
 {{ if hasGlow . -}}
 // --glow enabled: glow is a binary, not a Go import. After `task setup`
 // installs glow, run `glow README.md` to preview the markdown in the

@@ -8,12 +8,21 @@ import (
 	"fmt"
 	"os"
 
-	"charm.land/fang/v2"
+{{- if hasCobra .}}
 	"github.com/spf13/cobra"
+{{- end}}
+{{- if hasFang .}}
+	"charm.land/fang/v2"
+{{- end}}
 {{- if hasViper .}}
 	"{{.Module}}/internal/config"
 {{- end}}
 )
+
+{{ if hasViper . -}}
+// --log-level is registered as a persistent flag in init(); config.Bind
+// in PersistentPreRunE wires it through viper for downstream use.
+{{- end }}
 
 var rootCmd = &cobra.Command{
 	Use:   "{{.Name}}",
