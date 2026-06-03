@@ -63,6 +63,14 @@ func Test() error {
 // for "is this at least 1.24?". If the comparison ever needs to
 // handle pre-release tags like "1.24rc1", swap in golang.org/x/mod/semver.
 func goVersionLessThan(want string) bool {
-	v := strings.TrimPrefix(runtime.Version(), "go")
+	return goVersionLessThanWithVersion(runtime.Version(), want)
+}
+
+// goVersionLessThanWithVersion is the parameterized form used by
+// tests: callers pass a full "goX.Y.Z" string so the comparison
+// can be exercised without actually rebuilding with a different
+// toolchain.
+func goVersionLessThanWithVersion(current, want string) bool {
+	v := strings.TrimPrefix(current, "go")
 	return v < want
 }
