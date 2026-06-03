@@ -17,11 +17,6 @@ import (
 {{- if hasLog .}}
 	"charm.land/log/v2"
 {{- end}}
-{{- if hasHarmonica .}}
-	"time"
-
-	"github.com/charmbracelet/harmonica"
-{{- end}}
 )
 
 type model struct {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"os"
 
-	"github.com/spf13/cobra"
 	"charm.land/log/v2"
+	"github.com/spf13/cobra"
 
 	"github.com/example/spin/internal/scaffold"
 )

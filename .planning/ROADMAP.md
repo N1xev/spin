@@ -6,8 +6,8 @@ Build a Go project scaffolder that delivers the "perfect first run" promise — 
 
 ## Phases
 
-- [ ] **Phase 1: Scaffolder Foundation + Core TUI Stack** - One-command runnable TUI project (the "perfect first run" MVP)
-- [ ] **Phase 2: CLI Variant + Wrappers + Extended Library Coverage + External Templates** - All variants, all charm libs, toolchain wrappers, --template-repo
+- [x] **Phase 1: Scaffolder Foundation + Core TUI Stack** - One-command runnable TUI project (the "perfect first run" MVP) (completed 2026-06-02)
+- [x] **Phase 2: CLI Variant + Wrappers + Extended Library Coverage + External Templates** - All variants, all charm libs, toolchain wrappers, --template-repo (completed 2026-06-03)
 - [ ] **Phase 3: Interactive Prompts (gum) + AI/AGENTS.md** - Prompts when flags missing, AGENTS.md opt-in
 - [ ] **Phase 4: Post-Scaffold Health + Verification + Dogfooding** - spin doctor/add/update + CI grep suite + CGO matrix
 
@@ -26,9 +26,9 @@ Build a Go project scaffolder that delivers the "perfect first run" promise — 
   5. spin rejects invalid Go module path names, refuses to overwrite an existing directory without `--force`, and reports unknown flags with a clear suggestion.
 **Plans**: 4 plans in 3 waves
   - [x] **01-01-PLAN.md** (Wave 1): Walking Skeleton — SKELETON.md + minimal `spin new <name> --tui --bubbletea` + go build smoke test
-  - [ ] **01-02-PLAN.md** (Wave 2): Flag wiring + validation + post-scaffold hooks + git init + version
-  - [ ] **01-03-PLAN.md** (Wave 2, parallel): Full template engine + all overlays + build configs + license + README
-  - [ ] **01-04-PLAN.md** (Wave 3): CI grep suite + integration test + spin repo polish
+  - [x] **01-02-PLAN.md** (Wave 2): Flag wiring + validation + post-scaffold hooks + git init + version
+  - [x] **01-03-PLAN.md** (Wave 2, parallel): Full template engine + all overlays + build configs + license + README
+  - [x] **01-04-PLAN.md** (Wave 3): CI grep suite + integration test + spin repo polish
 
 ### Phase 2: CLI Variant + Wrappers + Extended Library Coverage + External Templates
 **Goal**: User can scaffold any project variant (CLI, full TUI), add any charm library, wrap the go toolchain with one tool, and pull external templates from a git repo.
@@ -77,7 +77,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Scaffolder Foundation + Core TUI Stack | 1/4 | In Progress|  |
-| 2. CLI Variant + Wrappers + Extended Library Coverage + External Templates | 0/TBD | Not started | - |
+| 1. Scaffolder Foundation + Core TUI Stack | 4/4 | Complete   | 2026-06-02 |
+| 2. CLI Variant + Wrappers + Extended Library Coverage + External Templates | 4/4 | Complete   | 2026-06-03 |
 | 3. Interactive Prompts (gum) + AI/AGENTS.md | 0/TBD | Not started | - |
 | 4. Post-Scaffold Health + Verification + Dogfooding | 0/TBD | Not started | - |

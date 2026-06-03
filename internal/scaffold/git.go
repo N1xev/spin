@@ -105,8 +105,8 @@ func isUnknownFlagErr(out []byte, shortFlag string) bool {
 	// and "unrecognized switch" — older git and some distro patches use
 	// "switch" instead of "option" when rejecting a short flag.
 	clauses := []string{
-		"unknown option",   // git 1.x / 2.x older wording
-		"unknown switch",   // git 2.x older wording (WR-004 fix)
+		"unknown option", // git 1.x / 2.x older wording
+		"unknown switch", // git 2.x older wording (WR-004 fix)
 		"unrecognized option",
 		"unrecognized switch",
 	}

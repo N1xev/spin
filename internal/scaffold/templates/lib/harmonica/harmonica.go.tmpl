@@ -5,6 +5,7 @@ package main
 import (
 	"time"
 
+	"charm.land/bubbletea/v2"
 	"github.com/charmbracelet/harmonica"
 )
 
@@ -18,15 +19,11 @@ import (
 func harmonicaExample() tea.Cmd {
 	const fps = 60
 	const target = 100.0
-	const frames = 60
 	spring := harmonica.NewSpring(harmonica.FPS(fps), 6.0, 0.5)
-	pos := 0.0
-	vel := 0.0
+	pos, vel := 0.0, 0.0
 	return tea.Tick(time.Second/fps, func(time.Time) tea.Msg {
-		if frames <= 0 {
-			return nil
-		}
-		return harmonicaTickMsg{pos: spring.Update(pos, vel, target)}
+		pos, vel = spring.Update(pos, vel, target)
+		return harmonicaTickMsg{pos: pos}
 	})
 }
 

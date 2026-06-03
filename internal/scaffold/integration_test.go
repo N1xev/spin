@@ -6,14 +6,14 @@
 //
 //  1. The full TUI scaffold (--tui --bubbletea --bubbles --lipgloss):
 //     - go.mod has the expected module name, charm.land/*/v2 pins, and
-//       no `github.com/charmbracelet/` paths
+//     no `github.com/charmbracelet/` paths
 //     - main.go is v2 (tea.View, tea.KeyPressMsg, tea.NewProgram) and
-//       does NOT contain v1 patterns (View() string, tea.WithAltScreen,
-//       lipgloss.NewRenderer)
+//     does NOT contain v1 patterns (View() string, tea.WithAltScreen,
+//     lipgloss.NewRenderer)
 //     - internal/ui/styles.go has real lipgloss v2 styles (NewStyle)
 //     - .air.toml uses build.entrypoint, NOT build.bin
 //     - Taskfile.yml has the `setup:` target wiring gofumpt + goimports +
-//       air + prism installs
+//     air + prism installs
 //     - LICENSE contains "MIT License" and the current year
 //     - README.md has "## Next steps" and "## Prerequisites"
 //     - .gitignore contains tmp/ and bin/
@@ -97,9 +97,9 @@ func TestIntegrationScaffold_AlwaysGo1250(t *testing.T) {
 
 func TestIntegrationScaffold_LicenseVariants(t *testing.T) {
 	cases := []struct {
-		flag      string
-		mustHave  []string // substrings expected in the LICENSE file
-		mustNot   []string // substrings expected to be absent
+		flag       string
+		mustHave   []string // substrings expected in the LICENSE file
+		mustNot    []string // substrings expected to be absent
 		fileAbsent bool     // true when no LICENSE file should be emitted
 	}{
 		{
@@ -273,8 +273,8 @@ func assertMainGoV2(t *testing.T, projectDir string) {
 		}
 	}
 	banned := []string{
-		"View() string",       // v1 View signature (TOOL-03)
-		"tea.WithAltScreen",   // v1 program option (removed in v2)
+		"View() string",        // v1 View signature (TOOL-03)
+		"tea.WithAltScreen",    // v1 program option (removed in v2)
 		"lipgloss.NewRenderer", // v1 Renderer type (removed in v2)
 	}
 	for _, b := range banned {
