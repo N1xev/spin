@@ -12,10 +12,11 @@
 //     mapping (exit 130 on cancellation, per UI-SPEC §"Cancellation /
 //     cleanup").
 //
-// In Plan 01 this package ships the contract surface only — Fill is a
-// documented no-op, and ShouldPrompt delegates to IsInteractive (in
-// detect.go). Plans 02 and 03 wire the huh v2 and gum backends into Fill
-// respectively.
+// In Plan 01 this package ships the contract surface only — Fill was
+// a documented no-op, and ShouldPrompt delegates to IsInteractive (in
+// detect.go). Plan 02 wires the huh v2 in-process backend
+// (fillWithHuh in huh.go); Plan 03 will add a resolveBackend() call
+// in Fill that picks backendGum when gum is on $PATH.
 package prompt
 
 import (
@@ -72,16 +73,15 @@ func ShouldPrompt() bool {
 // If the user cancels (Ctrl-C, Esc, empty-after-retry), Fill returns a
 // *Canceled error; the caller exits 130.
 //
-// Plan 02 wires the huh backend; Plan 03 wires the gum backend. In
-// Plan 01 the body is a documented no-op that returns nil when prompting
-// is allowed — the chokepoint is established so the rest of the system
-// can wire against it without churning when the backends land.
+// Plan 02 wires the huh v2 in-process backend (fillWithHuh in huh.go).
+// Plan 03 will insert a resolveBackend() call here that picks
+// backendGum when gum is on $PATH; for now, always use huh.
 func Fill(p *scaffold.Project) error {
 	if !ShouldPrompt() {
 		return nil
 	}
-	// Plan 02 wires the huh backend; Plan 03 wires the gum backend.
-	// For Plan 01 the chokepoint is established but no prompts fire.
-	_ = p
-	return nil
+	if p == nil {
+		return nil
+	}
+	return fillWithHuh(p)
 }
