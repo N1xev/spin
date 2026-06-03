@@ -32,6 +32,9 @@ func newResolveCmd() *cobra.Command {
 	pf.Bool("no-git", false, "skip git init")
 	pf.Bool("no-verify", false, "skip post-scaffold go build")
 	pf.Bool("quiet", false, "minimal output")
+	pf.Bool("no-interactive", false, "disable interactive prompts")
+	pf.Bool("yes", false, "alias for --no-interactive")
+	pf.Bool("batch", false, "alias for --no-interactive")
 
 	// Forward-compat (Phase 2/3/4) — flag binding only; no template content yet.
 	pf.Bool("cobra", false, "add cobra (Phase 2)")
@@ -201,6 +204,48 @@ func TestResolveFlags_AllBoolsBind(t *testing.T) {
 			t.Errorf("%s = false, want true (flag must bind to struct field)", c.name)
 		}
 	}
+}
+
+// TestResolveFlags_NoInteractiveAliases asserts that the three CLI
+// spellings for "disable prompts" all bind to p.NoInteractive:
+//
+//	--no-interactive   (canonical, UI-SPEC Locked Decision #5)
+//	--yes              (common shorthand)
+//	--batch            (CI / scripted shorthand)
+//
+// All three are equivalent; whichever the user passes, the prompt
+// layer is disabled in cmd/new.go's runNew.
+//
+// Default: NoInteractive is false (the user did not pass any of the
+// three flags).
+func TestResolveFlags_NoInteractiveAliases(t *testing.T) {
+	t.Run("default NoInteractive is false", func(t *testing.T) {
+		p := runResolveCmd(t, "myapp", "--tui", "--bubbletea")
+		if p.NoInteractive {
+			t.Error("NoInteractive = true, want false (default)")
+		}
+	})
+
+	t.Run("--no-interactive sets NoInteractive", func(t *testing.T) {
+		p := runResolveCmd(t, "myapp", "--tui", "--bubbletea", "--no-interactive")
+		if !p.NoInteractive {
+			t.Error("NoInteractive = false, want true (--no-interactive)")
+		}
+	})
+
+	t.Run("--yes alias sets NoInteractive", func(t *testing.T) {
+		p := runResolveCmd(t, "myapp", "--tui", "--bubbletea", "--yes")
+		if !p.NoInteractive {
+			t.Error("NoInteractive = false, want true (--yes is an alias)")
+		}
+	})
+
+	t.Run("--batch alias sets NoInteractive", func(t *testing.T) {
+		p := runResolveCmd(t, "myapp", "--tui", "--bubbletea", "--batch")
+		if !p.NoInteractive {
+			t.Error("NoInteractive = false, want true (--batch is an alias)")
+		}
+	})
 }
 
 // TestResolveFlags_TUIImpliesBubbletea is the CR-001 regression test.

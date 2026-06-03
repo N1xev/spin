@@ -5,7 +5,10 @@ go 1.25.8
 require (
 	charm.land/fang/v2 v2.0.1
 	charm.land/log/v2 v2.0.0
+	github.com/mattn/go-isatty v0.0.22
 	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
+	golang.org/x/mod v0.36.0
 )
 
 require (
@@ -29,10 +32,8 @@ require (
 	github.com/muesli/mango-pflag v0.1.0 // indirect
 	github.com/muesli/roff v0.1.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
-	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.24.0 // indirect

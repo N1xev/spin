@@ -87,6 +87,15 @@ type Project struct {
 	// Quiet reduces scaffolder output (charm/log v2 levels).
 	Quiet bool
 
+	// NoInteractive disables interactive prompts (--no-interactive /
+	// --yes / --batch). Populated by ResolveFlags from --no-interactive;
+	// the alias spellings (--yes, --batch) bind to the same flag via
+	// pflag Aliases (UI-SPEC §"Trigger logic" #3, Locked Decision #5).
+	// Read in cmd/new.go's runNew before calling prompt.Fill — Fill
+	// itself does NOT consult this field; the chokepoint split keeps
+	// the three-layer guard (env/TTY/CI) independent of flag plumbing.
+	NoInteractive bool
+
 	// Year is the current year (used in generated LICENSE / README footers).
 	Year int
 
