@@ -3,6 +3,7 @@ package wrap
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -88,27 +89,12 @@ func containsTool(buf, name string) bool {
 	return containsString(buf, name+" not found")
 }
 
-// containsString is a thin alias to strings.Contains that we keep
-// here to avoid an extra import in the test file.
+// containsString is a thin alias to strings.Contains for the
+// test-file's call sites; it makes grep'ing for "string contains
+// hint" intent easy. WR-008 removed the local indexOf reimplementation
+// now that "strings" is imported here.
 func containsString(haystack, needle string) bool {
-	return indexOf(haystack, needle) >= 0
-}
-
-// indexOf is a no-allocation strings.Index replacement for tests.
-// We avoid importing "strings" twice across the package.
-func indexOf(haystack, needle string) int {
-	if len(needle) == 0 {
-		return 0
-	}
-	if len(needle) > len(haystack) {
-		return -1
-	}
-	for i := 0; i+len(needle) <= len(haystack); i++ {
-		if haystack[i:i+len(needle)] == needle {
-			return i
-		}
-	}
-	return -1
+	return strings.Index(haystack, needle) >= 0
 }
 
 // readPipe reads everything from r into a string.
