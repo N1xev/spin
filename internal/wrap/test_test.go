@@ -104,6 +104,11 @@ func TestGoVersionLessThan(t *testing.T) {
 		{"go1.25.0", "1.24", false},
 		{"go1.24.5", "1.24", false},
 		{"go1.23.9", "1.24", true},
+		// WR-001: multi-digit minors — lexicographic "<" would return
+		// false here; semver.Compare must return true.
+		{"go1.9.0", "1.10", true},
+		{"go1.10.0", "1.9", false},
+		{"go1.9.0", "1.9", false},
 	}
 	for _, c := range cases {
 		t.Run(c.current, func(t *testing.T) {

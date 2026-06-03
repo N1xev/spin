@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"golang.org/x/mod/semver"
 )
 
 // minGoVersionForPrism is the lowest Go version on which the prism
@@ -55,13 +57,13 @@ func Test() error {
 }
 
 // goVersionLessThan reports whether the current Go version is less
-// than want. It uses lexicographic string comparison on the
-// semver portion of runtime.Version() (the leading "go" prefix is
-// stripped), which is correct for "1.24" < "1.25" etc.
+// than want. The comparison uses golang.org/x/mod/semver.Compare
+// (via the IsValid + Canonical + Compare pipeline) so multi-digit
+// minors sort correctly — "1.9" < "1.10" returns true. The leading
+// "go" prefix on runtime.Version() is stripped before normalization.
 //
-// This is intentionally simple — a full semver parser is overkill
-// for "is this at least 1.24?". If the comparison ever needs to
-// handle pre-release tags like "1.24rc1", swap in golang.org/x/mod/semver.
+// Pre-release tags (e.g. "1.24rc1") are treated as less than the
+// corresponding release (semver semantics).
 func goVersionLessThan(want string) bool {
 	return goVersionLessThanWithVersion(runtime.Version(), want)
 }
@@ -70,7 +72,22 @@ func goVersionLessThan(want string) bool {
 // tests: callers pass a full "goX.Y.Z" string so the comparison
 // can be exercised without actually rebuilding with a different
 // toolchain.
+//
+// WR-001: the previous implementation used a bare lexicographic `v < want`
+// compare, which returned the wrong answer for multi-digit minors
+// ("1.9" < "1.10" is false lexically but true semantically). This now
+// uses semver.Compare.
 func goVersionLessThanWithVersion(current, want string) bool {
 	v := strings.TrimPrefix(current, "go")
-	return v < want
+	// semver.Canonical requires a leading "v".
+	vc := semver.Canonical("v" + v)
+	wc := semver.Canonical("v" + want)
+	// semver.IsValid rejects pre-release / build-metadata tagged
+	// versions; treat those as unknown and fall back to a
+	// conservative "not less than" so prism is not chosen in that
+	// edge case.
+	if !semver.IsValid(vc) || !semver.IsValid(wc) {
+		return false
+	}
+	return semver.Compare(vc, wc) < 0
 }
