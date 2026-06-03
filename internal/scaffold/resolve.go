@@ -84,6 +84,15 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 				"and the first path segment must not start with '-' (CR-004)",
 		}
 	}
+	// WR-010: distinguish "user passed --template-repo" (Changed=true)
+	// from "default empty value" (Changed=false). An explicit "" is a
+	// user error — they intended to point at a repo and pointed at
+	// nothing. Reject with a clear message.
+	if p.TemplateRepo == "" && cmd.Flags().Changed("template-repo") {
+		return nil, &ArgError{
+			Message: "--template-repo must not be empty (omit the flag to use the embedded templates)",
+		}
+	}
 
 	// Bool flags — behavior flags
 	if v, err := mustBool(cmd, "force"); err != nil {

@@ -67,6 +67,17 @@ func runResolveCmd(t *testing.T, name string, flags ...string) *Project {
 	return p
 }
 
+func runResolveCmdErr(t *testing.T, name string, flags ...string) error {
+	t.Helper()
+	c := newResolveCmd()
+	c.SetArgs(append([]string{name}, flags...))
+	if err := c.Execute(); err != nil {
+		return err
+	}
+	_, err := ResolveFlags(c, []string{name})
+	return err
+}
+
 func TestResolveFlags_Default(t *testing.T) {
 	p := runResolveCmd(t, "myapp", "--tui", "--bubbletea")
 
@@ -260,14 +271,16 @@ func TestResolveFlags_TemplateRepo(t *testing.T) {
 		t.Errorf("TemplateRepo = %q, want \"\" (default)", p2.TemplateRepo)
 	}
 
-	// WR-010: explicitly passing --template-repo "" (cobra string flag
-	// with empty argument) is treated as the default — the result
-	// TemplateRepo is "" and CloneTemplateRepo is never called.
-	// The guard lives in cmd/new.go: `if p.TemplateRepo != ""` before
-	// the clone. This test pins the contract.
-	p3 := runResolveCmd(t, "myapp", "--tui", "--bubbletea", "--template-repo", "")
-	if p3.TemplateRepo != "" {
-		t.Errorf("TemplateRepo = %q, want \"\" (explicit empty = default)", p3.TemplateRepo)
+	// WR-010: explicitly passing --template-repo "" is a user error —
+	// the user intended to point at a repo and pointed at nothing.
+	// cobra's Changed flag distinguishes "default" (untouched) from
+	// "explicit empty" (flag set to ""), so we reject the latter with
+	// a clear "must not be empty" message.
+	err := runResolveCmdErr(t, "myapp", "--tui", "--bubbletea", "--template-repo", "")
+	if err == nil {
+		t.Error("ResolveFlags([\"--template-repo\", \"\"]) = nil, want ArgError")
+	} else if !strings.Contains(err.Error(), "must not be empty") {
+		t.Errorf("ResolveFlags err = %q, want it to mention \"must not be empty\"", err.Error())
 	}
 }
 
