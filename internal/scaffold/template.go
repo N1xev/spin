@@ -90,6 +90,14 @@ func (p *Project) boolFlagOverlayMap() map[string]bool {
 // to rendered bytes. The .tmpl extension is stripped from output keys.
 // Last-write-wins on identical relative output paths.
 //
+// Output-path placeholder substitution: after the .tmpl suffix is
+// stripped, every occurrence of `_name_` in the relative output path is
+// replaced with p.Name. This lets templates live at paths like
+// `cmd/_name_/main.go.tmpl` and render to `cmd/myapp/main.go`. The
+// underscore form is preferred over `<name>` because `<>` are valid in
+// filenames but harder to type in editors; the walker convention is
+// documented here so template authors can find it.
+//
 // License gating: LICENSE-<X>.tmpl files render only when License matches
 // X. License="none" suppresses all LICENSE files.
 func (p *Project) renderToMap() (map[string][]byte, error) {
@@ -150,6 +158,16 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 				return fmt.Errorf("rel %s: %w", path, err)
 			}
 			outKey := strings.TrimSuffix(filepath.ToSlash(rel), ".tmpl")
+
+			// Substitute the `_name_` placeholder in the output path with
+			// p.Name. This is a PATH-level substitution (not a template
+			// substitution) so the walker can locate templates at paths
+			// like `cmd/_name_/main.go.tmpl` and emit `cmd/myapp/main.go`.
+			// See the function comment for the rationale and the `_name_`
+			// vs `<name>` choice.
+			if p.Name != "" {
+				outKey = strings.ReplaceAll(outKey, "_name_", p.Name)
+			}
 
 			// The active LICENSE file maps to the literal key "LICENSE" in
 			// the output (not "LICENSE-mit" or "LICENSE-Apache-2.0"). The

@@ -445,3 +445,77 @@ func TestRenderToMap_FullTUI_BuildsAndCompiles(t *testing.T) {
 		t.Fatalf("go test ./... failed in %s:\n%s", projectDir, out)
 	}
 }
+
+// TestRenderToMap_NameSubstitution pins the `_name_` -> p.Name path-level
+// substitution: a template at `cmd/_name_/main.go.tmpl` (or any path with
+// the `_name_` token) must render to `cmd/<p.Name>/main.go` in the
+// output map. The walker convention is documented in renderToMap's
+// comment; this test pins it.
+//
+// The test uses t.TempDir + ExternalDir to build a tiny template tree
+// at `_base/cmd/_name_/main.go.tmpl` so we can assert the substitution
+// primitive without depending on the production embed (which doesn't
+// ship a `cmd/_name_/main.go.tmpl` until Task 2 lands).
+//
+// TestIntegrationScaffold_NameInPath (integration_test.go) covers the
+// end-to-end case where a scaffold emits `cmd/myapp/main.go`.
+//
+// Edge case pinned: if p.Name happens to be literally `_name_`, the
+// substitution is a no-op because strings.ReplaceAll is called exactly
+// once (no double-substitution, no infinite loop).
+func TestRenderToMap_NameSubstitution(t *testing.T) {
+	// Build a temp template tree: _base/cmd/_name_/main.go.tmpl.
+	tmp := t.TempDir()
+	mustMkdirAll(t, tmp, "_base/cmd/_name_")
+	if err := os.WriteFile(
+		filepath.Join(tmp, "_base", "cmd", "_name_", "main.go.tmpl"),
+		[]byte("package main\n// name={{.Name}}\n"),
+		0o644,
+	); err != nil {
+		t.Fatalf("write main.go.tmpl: %v", err)
+	}
+
+	cases := []struct {
+		projectName string
+		wantKey     string
+	}{
+		{"myapp", "cmd/myapp/main.go"},
+		{"weird-name_123", "cmd/weird-name_123/main.go"},
+		{"_name_", "cmd/_name_/main.go"}, // no-op edge case
+	}
+	for _, tc := range cases {
+		t.Run(tc.projectName, func(t *testing.T) {
+			p := &Project{
+				Name:        tc.projectName,
+				Module:      tc.projectName,
+				Year:        2026,
+				SpinVer:     "0.1.0",
+				ExternalDir: tmp,
+				// Type="" skips variant_*; we just want _base.
+			}
+			files, err := p.renderToMap()
+			if err != nil {
+				t.Fatalf("renderToMap: %v", err)
+			}
+			got, ok := files[tc.wantKey]
+			if !ok {
+				keys := make([]string, 0, len(files))
+				for k := range files {
+					keys = append(keys, k)
+				}
+				t.Fatalf("expected key %q in output map; got keys: %v", tc.wantKey, keys)
+			}
+			if !bytes.Contains(got, []byte("package main")) {
+				t.Errorf("rendered %q missing 'package main': %s", tc.wantKey, got)
+			}
+		})
+	}
+}
+
+func mustMkdirAll(t *testing.T, root, rel string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, rel), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", rel, err)
+	}
+}
+
