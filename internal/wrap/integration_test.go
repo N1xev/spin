@@ -26,7 +26,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // integrationProjectName is the project name used in the scaffold
@@ -77,24 +76,6 @@ func scaffoldMinimalProject(t *testing.T, workDir, name string) string {
 	return projectDir
 }
 
-// chdirTo changes the working directory to dir and registers a
-// Cleanup hook to restore the original cwd when the test ends.
-// This is the standard pattern for tests that need a project-relative
-// working directory; t.Chdir is the built-in (Go 1.24+) alternative
-// for one-off chdirs, but here we share the chdir across subtests
-// so manual Save/Restore is clearer.
-func chdirTo(t *testing.T, dir string) {
-	t.Helper()
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(dir); err != nil {
-		t.Fatalf("chdir %s: %v", dir, err)
-	}
-	t.Cleanup(func() { _ = os.Chdir(cwd) })
-}
-
 // runSpinCmd execs the spin binary at binPath with the given
 // subcommand + args in a fresh tempdir. It returns stdout, stderr,
 // and the exit error.
@@ -139,7 +120,7 @@ func TestWrapperBuild_ProducesBinary(t *testing.T) {
 	binPath := buildSpin(t)
 	workDir := t.TempDir()
 	projectDir := scaffoldMinimalProject(t, workDir, integrationProjectName)
-	chdirTo(t, projectDir)
+	t.Chdir(projectDir)
 
 	cmd := exec.Command(binPath, "build")
 	cmd.Dir = projectDir
@@ -168,7 +149,7 @@ func TestWrapperTest_GoTestFallback(t *testing.T) {
 	binPath := buildSpin(t)
 	workDir := t.TempDir()
 	projectDir := scaffoldMinimalProject(t, workDir, integrationProjectName)
-	chdirTo(t, projectDir)
+	t.Chdir(projectDir)
 
 	cmd := exec.Command(binPath, "test")
 	cmd.Dir = projectDir
@@ -199,7 +180,7 @@ func TestWrapperVet_GoVet(t *testing.T) {
 	binPath := buildSpin(t)
 	workDir := t.TempDir()
 	projectDir := scaffoldMinimalProject(t, workDir, integrationProjectName)
-	chdirTo(t, projectDir)
+	t.Chdir(projectDir)
 
 	cmd := exec.Command(binPath, "vet")
 	cmd.Dir = projectDir
@@ -224,7 +205,7 @@ func TestWrapperFmt_NoStrict(t *testing.T) {
 	binPath := buildSpin(t)
 	workDir := t.TempDir()
 	projectDir := scaffoldMinimalProject(t, workDir, integrationProjectName)
-	chdirTo(t, projectDir)
+	t.Chdir(projectDir)
 
 	cmd := exec.Command(binPath, "fmt", "--no-strict")
 	cmd.Dir = projectDir
@@ -279,6 +260,5 @@ func findRepoRoot(t *testing.T) string {
 	}
 }
 
-// _ = time.Second // keep "time" import live in case future tests
-// need to set a command timeout.
-var _ = time.Second
+// (intentionally no code follows — WR-006 removed the `var _ = time.Second`
+// placeholder and the "time" import.)
