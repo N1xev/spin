@@ -2,12 +2,13 @@ package scaffold
 
 import (
 	"context"
-	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestCloneTemplateRepo_MissingBase asserts that CloneTemplateRepo
@@ -99,8 +100,7 @@ func TestCloneTemplateRepo_GitFailure(t *testing.T) {
 	// Verify the tempdir was cleaned up. We can't know the exact path
 	// the function used (it was inside the failure path), but the
 	// OS tempdir should NOT contain a leftover spin-template-* dir
-	// from this test. We use errors.Is for the not-found check.
-	_ = errors.Is // silence unused import linter; used in other tests
+	// from this test.
 	entries, _ := os.ReadDir(os.TempDir())
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "spin-template-") {
@@ -111,5 +111,88 @@ func TestCloneTemplateRepo_GitFailure(t *testing.T) {
 			// leftover entries from prior runs.
 			t.Logf("found leftover spin-template-* entry: %s (may be from a prior run)", e.Name())
 		}
+	}
+}
+
+// TestCloneTemplateRepo_Timeout asserts CR-005: a slow/dead remote
+// causes the scaffolder to give up after CloneTemplateRepoTimeout
+// with a clear "timed out after Xs" error, instead of hanging
+// indefinitely.
+//
+// We can't reuse the production 60s ceiling here (test would take
+// 60s to run), so the test temporarily lowers the constant to
+// 200ms. This is the same kind of "test the boundary, not the
+// number" pattern: what matters is that CloneTemplateRepo honors
+// the context deadline.
+//
+// Skipped if `git` is not on $PATH.
+//
+// Mechanism: a raw TCP listener that accepts the connection
+// (so git's TCP handshake completes) but never sends a single
+// byte. `git clone` blocks waiting for the HTTP response; the
+// context deadline fires; exec.CommandContext sends SIGKILL
+// (via cmd.Cancel) and the I/O pipes are force-closed by
+// cmd.WaitDelay, so CombinedOutput returns. The test asserts
+// the error message names the timeout and the call returns
+// in well under 10s.
+//
+// We use a raw TCP listener instead of httptest.NewServer
+// because httptest keeps the connection in a state that
+// blocks Server.Close — the server waits for active connections
+// to finish, and git's half-open TCP state doesn't trigger
+// the server-side r.Context().Done() path promptly.
+func TestCloneTemplateRepo_Timeout(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on $PATH; skipping CloneTemplateRepo timeout test")
+	}
+
+	// Raw TCP listener: accept, then never write. We use the
+	// listener's context (cancellable on cleanup) to break the
+	// accept loop.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+
+	stopAccept := make(chan struct{})
+	t.Cleanup(func() { close(stopAccept) })
+
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			// Hold the connection open until the listener closes
+			// or the stopAccept channel fires. Never write.
+			go func(c net.Conn) {
+				defer c.Close()
+				select {
+				case <-stopAccept:
+				case <-time.After(30 * time.Second):
+				}
+			}(conn)
+		}
+	}()
+
+	// Temporarily lower the timeout so the test finishes in ~200ms.
+	orig := CloneTemplateRepoTimeout
+	CloneTemplateRepoTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { CloneTemplateRepoTimeout = orig })
+
+	url := "http://" + ln.Addr().String() + "/repo.git"
+	start := time.Now()
+	_, err = CloneTemplateRepo(context.Background(), url)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("CloneTemplateRepo against hanging server = nil, want timeout error")
+	}
+	if !strings.Contains(err.Error(), "timed out after") {
+		t.Errorf("error %q does not mention 'timed out after'", err.Error())
+	}
+	// Should be roughly the timeout duration, well under 10s.
+	if elapsed > 10*time.Second {
+		t.Errorf("CloneTemplateRepo took %s; expected ~200ms", elapsed)
 	}
 }
