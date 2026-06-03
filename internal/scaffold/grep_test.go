@@ -180,3 +180,194 @@ func mustAbs(t *testing.T, rel string) string {
 	}
 	return abs
 }
+
+// --------------------------------------------------------------------
+// Plan 02-04: tests for the new CI grep scripts (check-air-bin.sh,
+// check-taskfile-setup.sh). These run alongside the check-v1-leaks
+// tests above and share the mustAbs + runGrep helpers.
+// --------------------------------------------------------------------
+
+// runGrepScript invokes any of the 3 check-*.sh scripts (which all
+// share the same `<project-dir>` argv contract) and returns stdout,
+// stderr, and the exit error.
+func runGrepScript(t *testing.T, scriptName, target string) (string, string, error) {
+	t.Helper()
+	script := mustAbs(t, "../../scripts/"+scriptName)
+	cmd := exec.Command("bash", script, target)
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	return stdout.String(), stderr.String(), err
+}
+
+// TestGrepAirBin_TemplatesAreClean is the positive baseline: the
+// embedded template tree's .air.toml.tmpl (if any) uses the modern
+// entrypoint form. This is a regression catch for the split grep
+// script — if a future template change reintroduces `bin = "tmp/main"`,
+// this test fails before the script is even exercised on user projects.
+func TestGrepAirBin_TemplatesAreClean(t *testing.T) {
+	target := mustAbs(t, templatesRel)
+	stdout, stderr, err := runGrepScript(t, "check-air-bin.sh", target)
+	if err != nil {
+		t.Fatalf("check-air-bin.sh failed on templates: %v\nstdout: %s\nstderr: %s",
+			err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "OK:") {
+		t.Errorf("expected 'OK:' line in stdout, got: %q", stdout)
+	}
+}
+
+// TestGrepAirBin_CatchesDeprecated ensures a synthetic .air.toml
+// with the legacy `bin = "tmp/main"` form makes the script exit
+// non-zero and report the offending line. Companion to the
+// deprecated-air test in check-v1-leaks.sh — covers the standalone
+// air script's behavior, which is the new split-out script.
+func TestGrepAirBin_CatchesDeprecated(t *testing.T) {
+	dir := t.TempDir()
+	air := `root = "."
+[build]
+  bin = "tmp/main"
+  cmd = "go build -o ./tmp/main ."
+`
+	if err := os.WriteFile(filepath.Join(dir, ".air.toml"), []byte(air), 0o644); err != nil {
+		t.Fatalf("write .air.toml: %v", err)
+	}
+
+	stdout, stderr, err := runGrepScript(t, "check-air-bin.sh", dir)
+	if err == nil {
+		t.Fatalf("check-air-bin.sh should have FAILED on deprecated air config; got exit 0\nstdout: %s\nstderr: %s",
+			stdout, stderr)
+	}
+	if !strings.Contains(stderr, "deprecated air pattern") {
+		t.Errorf("expected stderr to mention deprecated air pattern; got: %q", stderr)
+	}
+	if !strings.Contains(stderr, "entrypoint") {
+		t.Errorf("expected stderr hint to mention modern 'entrypoint' form; got: %q", stderr)
+	}
+}
+
+// TestGrepAirBin_AllowsModern ensures a synthetic .air.toml with
+// the modern `build.entrypoint` form passes the script cleanly.
+// Positive control: pin the contract that `entrypoint` is the
+// accepted modern form.
+func TestGrepAirBin_AllowsModern(t *testing.T) {
+	dir := t.TempDir()
+	air := `root = "."
+[build]
+  entrypoint = ["./tmp/main"]
+  cmd = "go build -o ./tmp/main ."
+`
+	if err := os.WriteFile(filepath.Join(dir, ".air.toml"), []byte(air), 0o644); err != nil {
+		t.Fatalf("write .air.toml: %v", err)
+	}
+
+	stdout, stderr, err := runGrepScript(t, "check-air-bin.sh", dir)
+	if err != nil {
+		t.Fatalf("check-air-bin.sh should have PASSED on modern air config; got: %v\nstdout: %s\nstderr: %s",
+			err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "OK:") {
+		t.Errorf("expected 'OK:' in stdout; got: %q", stdout)
+	}
+}
+
+// TestGrepTaskfileSetup_TemplatesAreClean is the positive baseline
+// for the new Taskfile-setup script: the embedded template's
+// Taskfile.yml.tmpl has the `setup:` target with all 4 installs.
+func TestGrepTaskfileSetup_TemplatesAreClean(t *testing.T) {
+	target := mustAbs(t, templatesRel)
+	stdout, stderr, err := runGrepScript(t, "check-taskfile-setup.sh", target)
+	if err != nil {
+		t.Fatalf("check-taskfile-setup.sh failed on templates: %v\nstdout: %s\nstderr: %s",
+			err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "OK:") {
+		t.Errorf("expected 'OK:' line in stdout, got: %q", stdout)
+	}
+}
+
+// TestGrepTaskfileSetup_CatchesMissing ensures a Taskfile.yml with
+// NO `setup:` target at all makes the script exit non-zero and
+// report the missing target.
+func TestGrepTaskfileSetup_CatchesMissing(t *testing.T) {
+	dir := t.TempDir()
+	tf := `version: '3'
+
+tasks:
+  build:
+    cmds:
+      - go build -o ./bin/foo .
+`
+	if err := os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte(tf), 0o644); err != nil {
+		t.Fatalf("write Taskfile.yml: %v", err)
+	}
+
+	stdout, stderr, err := runGrepScript(t, "check-taskfile-setup.sh", dir)
+	if err == nil {
+		t.Fatalf("check-taskfile-setup.sh should have FAILED on missing setup: target; got exit 0\nstdout: %s\nstderr: %s",
+			stdout, stderr)
+	}
+	if !strings.Contains(stderr, "setup:") {
+		t.Errorf("expected stderr to mention 'setup:'; got: %q", stderr)
+	}
+}
+
+// TestGrepTaskfileSetup_CatchesMissingInstall ensures a Taskfile.yml
+// with a `setup:` target but missing the gofumpt install makes the
+// script exit non-zero with a precise error.
+func TestGrepTaskfileSetup_CatchesMissingInstall(t *testing.T) {
+	dir := t.TempDir()
+	tf := `version: '3'
+
+tasks:
+  setup:
+    desc: Install dev tools (partial)
+    cmds:
+      - go install golang.org/x/tools/cmd/goimports@latest
+      - go install github.com/air-verse/air@latest
+      - go install go.dalton.dog/prism@latest
+`
+	if err := os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte(tf), 0o644); err != nil {
+		t.Fatalf("write Taskfile.yml: %v", err)
+	}
+
+	stdout, stderr, err := runGrepScript(t, "check-taskfile-setup.sh", dir)
+	if err == nil {
+		t.Fatalf("check-taskfile-setup.sh should have FAILED on missing gofumpt install; got exit 0\nstdout: %s\nstderr: %s",
+			stdout, stderr)
+	}
+	if !strings.Contains(stderr, "gofumpt") {
+		t.Errorf("expected stderr to mention gofumpt; got: %q", stderr)
+	}
+}
+
+// TestGrepTaskfileSetup_AllowsComplete is the positive control:
+// a Taskfile.yml with the full setup: target (all 4 installs)
+// passes the script.
+func TestGrepTaskfileSetup_AllowsComplete(t *testing.T) {
+	dir := t.TempDir()
+	tf := `version: '3'
+
+tasks:
+  setup:
+    desc: Install dev tools
+    cmds:
+      - go install mvdan.cc/gofumpt@latest
+      - go install golang.org/x/tools/cmd/goimports@latest
+      - go install github.com/air-verse/air@latest
+      - go install go.dalton.dog/prism@latest
+`
+	if err := os.WriteFile(filepath.Join(dir, "Taskfile.yml"), []byte(tf), 0o644); err != nil {
+		t.Fatalf("write Taskfile.yml: %v", err)
+	}
+
+	stdout, stderr, err := runGrepScript(t, "check-taskfile-setup.sh", dir)
+	if err != nil {
+		t.Fatalf("check-taskfile-setup.sh should have PASSED on complete setup: target; got: %v\nstdout: %s\nstderr: %s",
+			err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "OK:") {
+		t.Errorf("expected 'OK:' in stdout; got: %q", stdout)
+	}
+}
