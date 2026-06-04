@@ -31,7 +31,11 @@ func teaHandler(sess ssh.Session) (tea.Model, []tea.ProgramOption) {
 	// A trivial echo model so the connection shows something on
 	// connect. Replace with a real bubbletea Model for a real app.
 	m := simpleSSHModel{name: sess.User()}
-	return m, []tea.ProgramOption{tea.WithAltScreen()}
+	// bubbletea v2 has no WithAltScreen program option — AltScreen is
+	// a field on the tea.View returned by View(). Returning an empty
+	// ProgramOption slice gives the default behavior (full screen on
+	// connect, the SSH client handles redraw).
+	return m, nil
 }
 
 type simpleSSHModel struct {
