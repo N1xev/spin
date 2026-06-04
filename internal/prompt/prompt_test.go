@@ -53,9 +53,8 @@ func TestFill_NilProject(t *testing.T) {
 }
 
 // TestCanceledErrorIs asserts that *prompt.Canceled matches ErrCanceled
-// via errors.Is. This is the contract that main.go depends on for
-// exit-code mapping (errors.As also relies on this Unwrap-free
-// Is-method match — see main.go's branch in Plan 01 Task 4).
+// via errors.Is. This is the contract that main depends on for
+// exit-code mapping.
 func TestCanceledErrorIs(t *testing.T) {
 	c := &prompt.Canceled{Reason: "user pressed Ctrl-C"}
 	if got := c.Error(); got != "spin: user pressed Ctrl-C" {

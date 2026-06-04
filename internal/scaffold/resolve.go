@@ -1,12 +1,4 @@
 // Package scaffold: ResolveFlags binds cobra command flags to a *Project.
-//
-// The single place where CLI flag strings become Project struct
-// fields. Enforces the cross-field invariants from RESEARCH §5.2
-// (e.g. --bubbles implies --bubbletea) and populates the derived
-// fields (Year, SpinVer, Module defaulting to Name).
-//
-// ResolveFlags does NOT validate. Call p.Validate() after ResolveFlags
-// to enforce name-regex and existing-directory checks.
 package scaffold
 
 import (
@@ -19,6 +11,8 @@ import (
 	"github.com/example/spin/internal/version"
 )
 
+// ResolveFlags constructs a *Project from the cobra command's flags
+// and positional args. It does not validate; call p.Validate afterwards.
 func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	if len(args) < 1 {
 		return nil, &ArgError{Message: "missing project name (positional argument)"}
@@ -31,8 +25,8 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	} else {
 		p.Module = v
 	}
-	// Normalize --license to lowercase so callers can pass "MIT" or
-	// "Apache-2.0" and still match the whitelist in validate.go (CR-002).
+	// Lowercase the license so "MIT" and "Apache-2.0" match the
+	// whitelist in validate.go.
 	if v, err := mustString(cmd, "license"); err != nil {
 		return nil, err
 	} else {
@@ -48,14 +42,11 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	} else {
 		p.TemplateRepo = v
 	}
-	// TMPL-03: reject obviously-invalid --template-repo values before
-	// the git clone attempt. WR-010: an explicit empty string (--template-repo "")
-	// is also rejected — the default no-op path leaves TemplateRepo="".
 	if p.TemplateRepo != "" && !IsValidTemplateRepo(p.TemplateRepo) {
 		return nil, &ArgError{
 			Message: "--template-repo " + p.TemplateRepo +
 				": must start with https://, http://, git://, file://, or git@ (ssh-agent), " +
-				"and the first path segment must not start with '-' (CR-004)",
+				"and the first path segment must not start with '-'",
 		}
 	}
 	if p.TemplateRepo == "" && cmd.Flags().Changed("template-repo") {
@@ -89,10 +80,8 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	} else {
 		p.NoInteractive = v
 	}
-	// UI-SPEC Locked Decision #5: --yes and --batch are aliases for
-	// --no-interactive. pflag v1.0.6 doesn't support multi-char
-	// aliases, so we register all three as separate flags and OR them
-	// into p.NoInteractive.
+	// pflag v1.0.6 has no long-form alias API, so --yes and --batch
+	// are registered separately and OR'd into p.NoInteractive.
 	if v, err := mustBool(cmd, "yes"); err != nil {
 		return nil, err
 	} else if v {
@@ -124,10 +113,6 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 		}
 	}
 
-	// --bubbles implies --bubbletea (RESEARCH §5.2).
-	// --tui implies --bubbletea: a TUI project without bubbletea
-	// has no program loop, so variant_tui/main.go.tmpl would emit an
-	// import for a module that go.mod does not require (CR-001).
 	libs := []string{}
 	if b, _ := cmd.Flags().GetBool("bubbletea"); b {
 		libs = append(libs, "bubbletea")
@@ -138,6 +123,9 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	if b, _ := cmd.Flags().GetBool("lipgloss"); b {
 		libs = append(libs, "lipgloss")
 	}
+	// --bubbles implies --bubbletea. --tui implies --bubbletea: a
+	// TUI variant without bubbletea would import a module the go.mod
+	// does not require.
 	if containsString(libs, "bubbles") && !containsString(libs, "bubbletea") {
 		libs = append(libs, "bubbletea")
 	}
@@ -170,29 +158,22 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 		}
 		*b.field = v
 	}
-	// --agents is an alias for --ai (UI-SPEC Locked Decision #5).
-	// pflag v1.0.6 doesn't expose Flag.Aliases for long-form aliases,
-	// so we register both as separate flags and OR them into p.AI.
+	// --agents is a long-form alias for --ai.
 	if v, err := mustBool(cmd, "agents"); err != nil {
 		return nil, err
 	} else if v {
 		p.AI = true
 	}
 
-	// Variant auto-defaults (CR-002, CR-003, WR-003):
-	//   --cli  → --cobra + --fang (variant_cli/main.go.tmpl always
-	//            wraps a cobra rootCmd)
-	//   --all  → --bubbletea + --cobra + --fang (variant_all composes
-	//            both halves)
-	// Without this block, a user running `spin new myapp --cli` gets
-	// a project that imports cobra+fang in main.go but does not list
-	// them in go.mod — `go build` fails.
+	// Variant auto-defaults: --cli implies --cobra + --fang (the
+	// variant_cli template always wraps a cobra rootCmd); --all
+	// implies --bubbletea + --cobra + --fang. Without these, a user
+	// running `spin new myapp --cli` gets a project that imports
+	// cobra+fang in main.go but does not list them in go.mod, and
+	// `go build` fails.
 	//
-	// Respect explicit user negation: --cobra=false / --fang=false
-	// (pflag's negation syntax) is honored via cmd.Flags().Changed().
-	// Same for --bubbletea=false and --bubbles=false (--bubbles
-	// implies --bubbletea, so honoring either negation suppresses the
-	// --all auto-add).
+	// Explicit user negation via --cobra=false is honored through
+	// cmd.Flags().Changed(), so users can still opt out.
 	if p.Type == "cli" || p.Type == "all" {
 		if !cmd.Flags().Changed("cobra") {
 			p.Cobra = true
@@ -221,10 +202,8 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	return p, nil
 }
 
-// mustString returns the value of a string flag or an error if the
-// flag is not registered. All Plan 02 flags are registered in init()
-// so this should never error in production; the error path exists
-// for tests that build a partial command.
+// mustString returns the value of a string flag, or an error if the
+// flag is not registered.
 func mustString(cmd *cobra.Command, name string) (string, error) {
 	if cmd.Flags().Lookup(name) == nil && cmd.PersistentFlags().Lookup(name) == nil {
 		return "", &FlagError{Flag: name, Message: "not registered"}
@@ -236,6 +215,8 @@ func mustString(cmd *cobra.Command, name string) (string, error) {
 	return v, err
 }
 
+// mustBool returns the value of a bool flag, or an error if the flag
+// is not registered.
 func mustBool(cmd *cobra.Command, name string) (bool, error) {
 	if cmd.Flags().Lookup(name) == nil && cmd.PersistentFlags().Lookup(name) == nil {
 		return false, &FlagError{Flag: name, Message: "not registered"}
@@ -268,12 +249,14 @@ func containsString(s []string, v string) bool {
 	return false
 }
 
+// ArgError reports a problem with the positional arguments.
 type ArgError struct {
 	Message string
 }
 
 func (e *ArgError) Error() string { return "scaffold: " + e.Message }
 
+// FlagError reports a problem with a specific flag.
 type FlagError struct {
 	Flag    string
 	Message string

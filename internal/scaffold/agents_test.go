@@ -10,8 +10,8 @@ import (
 
 // TestAGENTSmd_MarkerOnLine1 asserts the file begins with the version
 // marker on the very first line, with no blank line above. The marker
-// is the "owned-by-spin" signal that lets future `spin update` (Phase
-// 4) identify and refresh spin-generated files.
+// is the "owned-by-spin" signal that lets a future `spin update`
+// identify and refresh spin-generated files.
 func TestAGENTSmd_MarkerOnLine1(t *testing.T) {
 	p := &Project{
 		Name:    "myapp",
@@ -84,8 +84,7 @@ func TestAGENTSmd_SortedLibs(t *testing.T) {
 }
 
 // TestAGENTSmd_Determinism renders the same project twice and asserts
-// the bytes are identical. This is the load-bearing contract from
-// UI-SPEC §"Determinism contract": two scaffolds with the same flags
+// the bytes are identical: two scaffolds with the same flags must
 // produce byte-identical output.
 func TestAGENTSmd_Determinism(t *testing.T) {
 	p := &Project{
@@ -140,8 +139,8 @@ func TestAGENTSmd_NotEmittedWithoutAI(t *testing.T) {
 }
 
 // TestAGENTSmd_NoANSI asserts the rendered AGENTS.md contains no ANSI
-// escape codes, no lipgloss styles, no hex colors. Plain GitHub-flavored
-// Markdown, per UI-SPEC §"What AGENTS.md MUST NOT contain".
+// escape codes, no lipgloss styles, no hex colors. Plain
+// GitHub-flavored Markdown only.
 func TestAGENTSmd_NoANSI(t *testing.T) {
 	p := &Project{
 		Name:    "myapp",
@@ -180,9 +179,9 @@ func TestAGENTSmd_NoANSI(t *testing.T) {
 }
 
 // TestCharmLibInfo_AllThirteen asserts charmLibInfo returns a non-empty
-// module string for every key in the UI-SPEC §"Library lookup table
-// (canonical)". A missing entry would mean a regression in the lookup
-// table (e.g. a typo in the switch case).
+// module string for every key in the library lookup table. A missing
+// entry would mean a regression in the lookup table (e.g. a typo
+// in the switch case).
 func TestCharmLibInfo_AllThirteen(t *testing.T) {
 	fm := funcMap(&Project{AI: true})
 	fn, ok := fm["charmLibInfo"].(func(string, string) string)

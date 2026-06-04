@@ -1,30 +1,13 @@
-// Package prompt — Library catalog (INT-05 / Plan 02).
-//
-// Single source of truth for the 11 charm libraries `spin new` can
-// scaffold. Both huh v2 and gum backends consume it to populate the
-// multi-select, pre-select variant defaults (LibsForType), and
-// mirror the multi-select answer into p.Libs + per-lib bool fields.
-//
-// Order is alphabetical so iteration is deterministic across runs
-// (UI-SPEC §"Surface B / Determinism contract").
-//
-// ansi and runewidth are excluded: scaffolder-only, not user-facing
-// in the generated project.
+// Package prompt: library catalog.
 package prompt
 
-// Library describes one entry in the charm-library catalog. The fields
-// are the canonical contract for both prompt backends and the AGENTS.md
-// template renderer.
+// Library describes one entry in the charm-library catalog.
 type Library struct {
-	Name string
+	Name    string
 	Display string
 	// DefaultFor is the variant this lib auto-on for: "tui" | "cli" | "all" | "".
-	// "all" is handled specially by LibsForType: any lib whose DefaultFor
-	// is "tui" or "cli" is also returned for "all".
 	DefaultFor string
-	// AlwaysOn means the user cannot un-select the lib (forced-on for some
-	// variant). Strict enforcement is deferred; huh form uses this as a
-	// "cannot be un-selected" hint only.
+	// AlwaysOn means the lib is forced on for its DefaultFor variant.
 	AlwaysOn bool
 }
 
@@ -45,9 +28,8 @@ var LibCatalog = []Library{
 }
 
 // LibsForType returns the default library Names for the given project
-// variant. "all" returns the union of tui and cli defaults so a combined
-// TUI+CLI project gets both halves' forced libs. Result follows catalog
-// order; callers may mutate the returned slice.
+// variant. "all" returns the union of tui and cli defaults. The
+// result is in catalog order; callers may mutate the returned slice.
 func LibsForType(typ string) []string {
 	var out []string
 	for _, lib := range LibCatalog {
@@ -65,18 +47,14 @@ func LibsForType(typ string) []string {
 	return out
 }
 
-// DefaultLibsFor is a convenience alias for LibsForType. Exists for
-// call-site readability ("DefaultLibsFor(tui)" reads more naturally
-// when the question is "what are the defaults?").
+// DefaultLibsFor is a convenience alias for LibsForType.
 func DefaultLibsFor(typ string) []string {
 	return LibsForType(typ)
 }
 
-// libBoolMirror maps each catalog Name to the *bool field on
-// *scaffold.Project that the multi-select answer must mirror. Single
-// source of truth for "update BOTH p.Libs and the bool field" write-back
-// (Pitfall 6 in 03-RESEARCH.md). Libs without a per-lib bool (bubbletea,
-// bubbles, lipgloss) are deliberately absent: those live in p.Libs only.
+// libBoolMirror maps catalog Name → Go field name on *scaffold.Project.
+// Libraries without a per-lib bool (bubbletea, bubbles, lipgloss) are
+// absent; they live in p.Libs only.
 var libBoolMirror = map[string]string{
 	"cobra":     "Cobra",
 	"fang":      "Fang",

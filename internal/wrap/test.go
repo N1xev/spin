@@ -61,8 +61,8 @@ func goVersionLessThanWithVersion(current, want string) bool {
 	// semver.Canonical requires a leading "v".
 	vc := semver.Canonical("v" + v)
 	wc := semver.Canonical("v" + want)
-	// WR-001: pre-release / build-metadata versions are treated as
-	// unknown — fall back to a conservative "not less than" so prism
+	// Pre-release / build-metadata versions are treated as unknown
+	// here — fall back to a conservative "not less than" so prism
 	// is not chosen in that edge case.
 	if !semver.IsValid(vc) || !semver.IsValid(wc) {
 		return false

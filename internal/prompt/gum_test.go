@@ -1,17 +1,10 @@
-// Package prompt tests — gum shell-out backend (Plan 03).
+// White-box tests for the gum shell-out backend.
 //
 // These tests verify the gum widget wrappers pass the correct
 // arguments to deps.Runner. The runner is supplied via the Deps
 // struct (no package-level mutable seam), so no real os/exec call
 // is made. The test runner has no TTY and no gum binary; Deps is
 // the only way the package's subprocess machinery gets exercised.
-//
-// Per 03-03-PLAN.md Task 3, the assertions cover:
-//   - arg construction for each widget (choose, multi-select, input,
-//     confirm)
-//   - default-value / --selected / --default plumbing
-//   - fillWithGumDeps's write-back to *scaffold.Project
-//   - *Canceled propagation from a stubbed Runner
 //
 // Tests build a Deps with a stub Runner and call fillWithGumDeps /
 // gumChoose / gumMultiSelect / gumInput / gumConfirm directly. The
@@ -64,9 +57,8 @@ func captureRunner(calls *[]gumCall, answer string, err error) Deps {
 }
 
 // TestGumChoose_Args asserts gumChoose builds the canonical arg
-// list per RESEARCH Example 1: `choose --header H --selected N
-// a b c` where N is 1-based (gum's documented convention; the
-// plan passes defaultIdx+1).
+// list: `choose --header H --selected N a b c` where N is 1-based
+// (gum's documented convention; the wrapper passes defaultIdx+1).
 func TestGumChoose_Args(t *testing.T) {
 	var calls []gumCall
 	deps := captureRunner(&calls, "stub", nil)
@@ -97,9 +89,8 @@ func TestGumChoose_DefaultIndex(t *testing.T) {
 }
 
 // TestGumMultiSelect_Args asserts gumMultiSelect builds the
-// canonical arg list per RESEARCH Example 2: `choose --no-limit
-// --header H a b c` with the options as positional args after the
-// header.
+// canonical arg list: `choose --no-limit --header H a b c` with
+// the options as positional args after the header.
 func TestGumMultiSelect_Args(t *testing.T) {
 	var calls []gumCall
 	// Stub returns "a\nb" so the wrapper splits and returns ["a","b"].
@@ -119,7 +110,7 @@ func TestGumMultiSelect_Args(t *testing.T) {
 
 // TestGumMultiSelect_EmptyReturnsNil asserts that an empty stdout
 // (the user confirmed with no selection) returns nil, not an empty
-// slice. This is the contract documented in the plan.
+// slice.
 func TestGumMultiSelect_EmptyReturnsNil(t *testing.T) {
 	var calls []gumCall
 	deps := captureRunner(&calls, "", nil)
@@ -133,8 +124,7 @@ func TestGumMultiSelect_EmptyReturnsNil(t *testing.T) {
 }
 
 // TestGumInput_Args asserts gumInput builds the canonical arg
-// list per RESEARCH Example 3: `input --header H --placeholder P
-// [--value V]`.
+// list: `input --header H --placeholder P [--value V]`.
 func TestGumInput_Args(t *testing.T) {
 	cases := []struct {
 		name         string
@@ -173,8 +163,8 @@ func TestGumInput_Args(t *testing.T) {
 }
 
 // TestGumConfirm_Args asserts gumConfirm builds the canonical arg
-// list per RESEARCH Example 4: `confirm --default=<bool> <prompt>`.
-// Also asserts the bool return maps "Yes" → true, "No" → false.
+// list: `confirm --default=<bool> <prompt>`. Also asserts the bool
+// return maps "Yes" → true, "No" → false.
 func TestGumConfirm_Args(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -278,9 +268,8 @@ func sequenceDeps(t *testing.T, answers []string) (Deps, *[]gumCall) {
 // proves the write-back is correct end-to-end without spawning
 // a single real gum subprocess.
 func TestFillWithGum_WritesBackToProject(t *testing.T) {
-	// 8 answers, one per UI-SPEC step, in order.
-	// Each answer is the gum "user-facing" string the wrapper maps
-	// back to the machine key.
+	// 8 answers, one per step, in order. Each answer is the gum
+	// "user-facing" string the wrapper maps back to the machine key.
 	answers := []string{
 		"TUI — terminal app with bubbletea", // askType → "tui"
 		"myapp",                             // askName → "myapp"
@@ -340,13 +329,12 @@ func TestFillWithGum_SkipsSetFields(t *testing.T) {
 	}
 
 	// Template is set to a NON-default value so askGumTemplate's
-	// skip predicate (`Template != "tui-bubbletea"`) fires. The
-	// default value re-asks per UI-SPEC.
+	// skip predicate (`Template != "tui-bubbletea"`) fires.
 	//
 	// License is set to "apache-2.0" (non-default) so askGumLicense's
 	// skip predicate (`License != "mit"`) fires. Setting License="mit"
-	// re-asks per UI-SPEC (the user must be able to confirm the
-	// default), so the test would have an extra Runner call.
+	// re-asks (the user must be able to confirm the default), so the
+	// test would have an extra Runner call.
 	p := &scaffold.Project{
 		Type:         "tui",
 		Name:         "myapp",
@@ -393,10 +381,8 @@ func TestFillWithGum_SkipsSetFields(t *testing.T) {
 
 // TestFillWithGum_CancelPropagates asserts that a *Canceled error
 // from a stubbed Runner propagates up to fillWithGumDeps wrapped
-// with a step-specific reason (e.g., "user canceled at project
-// type selection"). The caller's errors.As(*Canceled) check
-// (in main.go) can still match it via the Is method and map
-// to exit code 130.
+// with a step-specific reason. The caller's errors.As(*Canceled)
+// check can still match it via the Is method and map to exit 130.
 func TestFillWithGum_CancelPropagates(t *testing.T) {
 	inner := &Canceled{Reason: "inner test cancel"}
 	deps := Deps{
@@ -422,7 +408,7 @@ func TestFillWithGum_CancelPropagates(t *testing.T) {
 }
 
 // TestTemplateOptionsForType_Variants asserts the template options
-// match UI-SPEC §"Copywriting Contract" for each variant.
+// for each variant.
 func TestTemplateOptionsForType_Variants(t *testing.T) {
 	cases := []struct {
 		variant string
@@ -453,10 +439,10 @@ func TestTemplateOptionsForType_Variants(t *testing.T) {
 }
 
 // TestTypeDisplayToKey_AllLabels asserts the reverse-lookup map
-// covers all three UI-SPEC labels exactly. A regression in the
-// labels (a typo, a missing entry) would silently default to
-// "" in askGumType and surface as a confusing "ask type:
-// unexpected answer" error.
+// covers all three labels exactly. A regression in the labels
+// (a typo, a missing entry) would silently default to "" in
+// askGumType and surface as a confusing "ask type: unexpected
+// answer" error.
 func TestTypeDisplayToKey_AllLabels(t *testing.T) {
 	wantKeys := map[string]string{
 		"TUI — terminal app with bubbletea":          "tui",

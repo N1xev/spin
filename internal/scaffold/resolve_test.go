@@ -26,7 +26,7 @@ func newResolveCmd() *cobra.Command {
 	pf.String("module", "", "module path override")
 	pf.String("license", "mit", "license type: mit, apache-2.0, none")
 	pf.String("template", "tui-bubbletea", "template name")
-	pf.String("template-repo", "", "external template git URL (TMPL-03)")
+	pf.String("template-repo", "", "external template git URL")
 	pf.Bool("keep-template-cache", false, "retain cloned template on disk")
 	pf.Bool("force", false, "overwrite existing directory")
 	pf.Bool("no-git", false, "skip git init")
@@ -206,7 +206,7 @@ func TestResolveFlags_AllBoolsBind(t *testing.T) {
 // TestResolveFlags_NoInteractiveAliases asserts that the three CLI
 // spellings for "disable prompts" all bind to p.NoInteractive:
 //
-//	--no-interactive   (canonical, UI-SPEC Locked Decision #5)
+//	--no-interactive   (canonical)
 //	--yes              (common shorthand)
 //	--batch            (CI / scripted shorthand)
 //
@@ -245,7 +245,8 @@ func TestResolveFlags_NoInteractiveAliases(t *testing.T) {
 	})
 }
 
-// TestResolveFlags_TUIImpliesBubbletea is the CR-001 regression test.
+// TestResolveFlags_TUIImpliesBubbletea is the regression test that
+// --tui implies --bubbletea.
 // --tui alone (no --bubbletea flag) must still produce a project whose
 // Libs includes "bubbletea" so variant_tui/main.go.tmpl's bubbletea
 // import lines up with go.mod's require block.
@@ -314,11 +315,11 @@ func TestResolveFlags_TemplateRepo(t *testing.T) {
 		t.Errorf("TemplateRepo = %q, want \"\" (default)", p2.TemplateRepo)
 	}
 
-	// WR-010: explicitly passing --template-repo "" is a user error —
-	// the user intended to point at a repo and pointed at nothing.
-	// cobra's Changed flag distinguishes "default" (untouched) from
-	// "explicit empty" (flag set to ""), so we reject the latter with
-	// a clear "must not be empty" message.
+	// Explicitly passing --template-repo "" is a user error — the
+	// user intended to point at a repo and pointed at nothing. cobra's
+	// Changed flag distinguishes "default" (untouched) from "explicit
+	// empty" (flag set to ""), so we reject the latter with a clear
+	// "must not be empty" message.
 	err := runResolveCmdErr(t, "myapp", "--tui", "--bubbletea", "--template-repo", "")
 	if err == nil {
 		t.Error("ResolveFlags([\"--template-repo\", \"\"]) = nil, want ArgError")
@@ -358,7 +359,7 @@ func TestResolveFlags_InvalidTemplateRepo(t *testing.T) {
 	}{
 		{"not-a-url", "not-a-url"},
 		{"ftp scheme rejected", "ftp://example.com/repo.git"},
-		// CR-004: leading-dash path rejected.
+		// Leading-dash path rejected.
 		{"leading-dash path", "https://example.com/-evil"},
 	}
 	for _, c := range cases {
@@ -383,7 +384,7 @@ func TestResolveFlags_InvalidTemplateRepo(t *testing.T) {
 	}
 }
 
-// TestResolveFlags_VariantAutoDefaults covers the WR-003 / CR-002 / CR-003
+// TestResolveFlags_VariantAutoDefaults covers the variant auto-default
 // cluster: variant flags must auto-default their underlying libs so
 // the generated project always builds.
 //

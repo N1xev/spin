@@ -91,8 +91,7 @@ func containsTool(buf, name string) bool {
 
 // containsString is a thin alias to strings.Contains for the
 // test-file's call sites; it makes grep'ing for "string contains
-// hint" intent easy. WR-008 removed the local indexOf reimplementation
-// now that "strings" is imported here.
+// hint" intent easy.
 func containsString(haystack, needle string) bool {
 	return strings.Index(haystack, needle) >= 0
 }

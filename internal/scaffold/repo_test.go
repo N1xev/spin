@@ -114,7 +114,7 @@ func TestCloneTemplateRepo_GitFailure(t *testing.T) {
 	}
 }
 
-// TestCloneTemplateRepo_Timeout asserts CR-005: a slow/dead remote
+// TestCloneTemplateRepo_Timeout asserts that a slow/dead remote
 // causes the scaffolder to give up after CloneTemplateRepoTimeout
 // with a clear "timed out after Xs" error, instead of hanging
 // indefinitely.

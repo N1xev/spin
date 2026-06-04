@@ -1,14 +1,10 @@
-// Package prompt tests — Library catalog.
+// Package prompt tests for the library catalog.
 //
-// These tests assert the catalog invariants from 03-02-PLAN.md Task 1:
+// These tests assert the catalog invariants:
 //   - LibCatalog has no duplicate Name values
 //   - LibCatalog is sorted alphabetically by Name (deterministic order)
 //   - LibsForType returns the correct defaults for each variant
 //   - DefaultLibsFor matches LibsForType
-//
-// The catalog is the single source of truth for both prompt backends
-// (huh in Plan 02, gum in Plan 03) and the AGENTS.md template (Plan 04);
-// a regression here breaks all three.
 
 package prompt_test
 
@@ -34,13 +30,9 @@ func TestLibCatalog_UniqueNames(t *testing.T) {
 }
 
 // TestLibCatalog_Sorted asserts that LibCatalog is sorted alphabetically
-// by Name. The sort is required for the deterministic-output contract
-// (UI-SPEC §"Surface B / Determinism contract"): the multi-select
-// option order and the AGENTS.md library section order must both be
-// stable across runs.
-//
-// If a future maintainer appends a new entry out of order, this test
-// fails with a clear message naming the offender.
+// by Name. The sort is required for the deterministic-output contract:
+// the multi-select option order and the AGENTS.md library section
+// order must both be stable across runs.
 func TestLibCatalog_Sorted(t *testing.T) {
 	names := make([]string, len(prompt.LibCatalog))
 	for i, lib := range prompt.LibCatalog {
@@ -56,12 +48,10 @@ func TestLibCatalog_Sorted(t *testing.T) {
 	}
 }
 
-// TestLibsForType asserts the variant-specific default library list
-// matches the UI-SPEC §"Prompt sequence" defaults (table column
-// "Default"):
+// TestLibsForType asserts the variant-specific default library list:
 //
-//   - tui: bubbletea (auto-on for TUI per Phase 1 invariant)
-//   - cli: cobra, fang (auto-on for CLI per CR-002)
+//   - tui: bubbletea
+//   - cli: cobra, fang
 //   - all: all three (the union of tui and cli defaults)
 //
 // The "all" case is the special case in LibsForType: a lib whose

@@ -1,7 +1,6 @@
-// gum shell-out backend. Shells out to `gum` subprocesses for
-// choose / input / confirm / multi-select. huh backend (huh.go) is
-// the in-process fallback; the two produce identical observable
-// behavior (same 8 steps, same write-back, same cancel semantics).
+// gum shell-out backend. Shells out to `gum` for choose / input /
+// confirm / multi-select. The huh backend (huh.go) is the in-process
+// fallback; both produce the same observable behavior.
 package prompt
 
 import (
@@ -20,10 +19,9 @@ import (
 	"github.com/example/spin/internal/scaffold"
 )
 
-// gumRunCapture is the single os/exec call site for gum. ctx is set
-// by fillWithGumDeps (5-min timeout); cancel forces the pipes closed
-// so the parent Read returns instead of blocking on a dead child
-// (same shape as internal/scaffold/repo.go git clone).
+// gumRunCapture is the single os/exec call site for gum. The context
+// is set by fillWithGumDeps; cancel forces the pipes closed so the
+// parent Read returns instead of blocking on a dead child.
 func gumRunCapture(ctx context.Context, args ...string) (string, error) {
 	if len(args) == 0 {
 		return "", errors.New("gum: no subcommand")
@@ -42,7 +40,6 @@ func gumRunCapture(ctx context.Context, args ...string) (string, error) {
 	cmd.WaitDelay = 100 * time.Millisecond
 
 	if err := cmd.Run(); err != nil {
-		// Parent ctx expired → deliberate kill → exit 130.
 		if ctx.Err() != nil {
 			return "", &Canceled{Reason: "gum canceled"}
 		}
@@ -51,17 +48,15 @@ func gumRunCapture(ctx context.Context, args ...string) (string, error) {
 	return strings.TrimRight(stdout.String(), "\n"), nil
 }
 
-// gum --selected is 1-based; we translate 0-based Go defaultIdx.
+// gum --selected is 1-based; the wrapper translates 0-based Go defaultIdx.
 func gumChoose(ctx context.Context, deps Deps, header string, options []string, defaultIdx int) (string, error) {
 	args := []string{"choose", "--header", header, "--selected", strconv.Itoa(defaultIdx + 1)}
 	args = append(args, options...)
 	return deps.Runner(ctx, args...)
 }
 
-// gum's `choose --no-limit` has no pre-selection CLI flag, so the
-// wrapper signature has no preSelected parameter. Pre-selection in
-// huh is done at the options-builder layer; gum just shows the
-// full list and the user's selection is authoritative.
+// gumMultiSelect runs `gum choose --no-limit`. There is no pre-selection
+// CLI flag; the user's selection is authoritative.
 func gumMultiSelect(ctx context.Context, deps Deps, header string, options []string) ([]string, error) {
 	args := []string{"choose", "--no-limit", "--header", header}
 	args = append(args, options...)
@@ -83,7 +78,7 @@ func gumInput(ctx context.Context, deps Deps, header, placeholder, defaultValue 
 	return deps.Runner(ctx, args...)
 }
 
-// gum prints "Yes"/"No" on stdout; exit 0 either way.
+// gumConfirm returns true when gum printed "Yes" on stdout.
 func gumConfirm(ctx context.Context, deps Deps, prompt string, defaultYes bool) (bool, error) {
 	args := []string{"confirm", "--default=" + strconv.FormatBool(defaultYes), prompt}
 	out, err := deps.Runner(ctx, args...)
@@ -121,7 +116,6 @@ func runGumSteps(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	return nil
 }
 
-// User-facing labels from UI-SPEC §Copywriting Contract.
 var typeDisplayToKey = map[string]string{
 	"TUI — terminal app with bubbletea":          "tui",
 	"CLI — command-line tool with cobra + fang":  "cli",
@@ -197,9 +191,9 @@ func askGumModule(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	return nil
 }
 
-// Mirror picks into p.Libs (sorted) and the per-lib bool fields.
-// Two parallel sources of truth must stay in sync — see Pitfall 4
-// in 03-RESEARCH.md.
+// askGumLibs mirrors the multi-select answer into p.Libs (sorted) and
+// the per-lib bool fields. libBoolMirror is the source of truth for
+// which names map to which bool fields.
 func askGumLibs(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	options := make([]string, 0, len(LibCatalog))
 	displayToName := make(map[string]string, len(LibCatalog))
@@ -283,8 +277,6 @@ func askGumTemplate(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	return nil
 }
 
-// Track the user's last invalid input in `last` so the final error
-// reports what they typed, not the empty p.TemplateRepo.
 func askGumTemplateRepo(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	if p.TemplateRepo != "" {
 		return nil

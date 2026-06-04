@@ -7,8 +7,8 @@ import (
 	"os"
 )
 
-// templateFS is the minimum-method subset required by the template
-// walker. Both embed.FS (Go 1.16+) and os.DirFS results satisfy it.
+// templateFS is the interface the template walker requires: fs.FS
+// plus ReadDir and ReadFile. Both embed.FS and os.DirFS results satisfy it.
 type templateFS interface {
 	fs.FS
 	fs.ReadDirFS
@@ -16,9 +16,10 @@ type templateFS interface {
 }
 
 // currentFS returns the FS the walker should read from. The type
-// assertion to templateFS is a compile-time guard: if os.DirFS's result
-// ever stops satisfying one of the three interface methods, the panic
-// surfaces here rather than as a nil-method call deep in fs.WalkDir.
+// assertion to templateFS is a compile-time guard: if os.DirFS's
+// result ever stops satisfying one of the three interface methods,
+// the failure surfaces here rather than as a nil-method call deep
+// in fs.WalkDir.
 func currentFS(externalDir string) templateFS {
 	if externalDir == "" {
 		return any(FS).(templateFS)

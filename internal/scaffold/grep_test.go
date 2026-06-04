@@ -1,14 +1,13 @@
-// Tests for scripts/check-v1-leaks.sh — the CI grep suite that catches
-// v1 charmbracelet API leaks in generated projects (TOOL-03 + RESEARCH §11).
+// Tests for the CI grep suite that catches v1 charmbracelet API leaks
+// in generated projects.
 //
-// The tests invoke the bash script via os/exec against three targets:
+// The tests invoke the bash scripts via os/exec against three targets:
 //
 //  1. The embedded ./internal/scaffold/templates tree (clean baseline).
 //  2. A temp dir with a v1 import path injected (must exit non-zero).
 //  3. A temp dir with a deprecated .air.toml `build.bin` key (must exit non-zero).
 //
-// The test depends on `bash` being on $PATH. Linux/macOS only for Phase 1;
-// Windows users can rewrite the script in Go (per RESEARCH §11.2).
+// The test depends on `bash` being on $PATH. Linux/macOS only.
 package scaffold
 
 import (
@@ -104,13 +103,9 @@ func TestGrepV1Leaks_CatchesDeprecatedAir(t *testing.T) {
 }
 
 // TestGrepV1Leaks_AllowsHarmonica is a positive-control test for the
-// per-module deny-list added in Plan 02-01 (Task 4). The pre-Task-4
-// script blanket-banned `github.com/charmbracelet/`, which falsely
-// flagged the legitimate current path `github.com/charmbracelet/harmonica`
-// (harmonica has not migrated to charm.land per RESEARCH §2.1).
-//
-// This test pins that regression: a project that imports harmonica MUST
-// pass the grep suite.
+// per-module deny-list. The script must allow the current
+// `github.com/charmbracelet/harmonica` path (harmonica has not
+// migrated to charm.land).
 func TestGrepV1Leaks_AllowsHarmonica(t *testing.T) {
 	dir := t.TempDir()
 	src := `package myapp
@@ -153,9 +148,9 @@ func mustAbs(t *testing.T, rel string) string {
 }
 
 // --------------------------------------------------------------------
-// Plan 02-04: tests for the new CI grep scripts (check-air-bin.sh,
+// Tests for the CI grep scripts (check-air-bin.sh,
 // check-taskfile-setup.sh). These run alongside the check-v1-leaks
-// tests above and share the mustAbs + runGrep helpers.
+// tests above and share the mustAbs + runGrepScript helpers.
 // --------------------------------------------------------------------
 
 // runGrepScript invokes any of the 3 check-*.sh scripts (which all

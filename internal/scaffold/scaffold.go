@@ -1,11 +1,4 @@
-// Package scaffold implements the spin scaffolder.
-//
-// The Walking Skeleton shipped the minimum: New() accepts a *Project,
-// renders the embedded template tree, writes files to ./<name>/,
-// and runs a post-scaffold `go build ./...` smoke test with
-// CGO_ENABLED=0. The overlay engine (p.renderToMap in template.go)
-// composes _base → variant_<type> → lib/<name>/ in last-write-wins
-// order.
+// Package scaffold renders and writes a new Go project tree.
 package scaffold
 
 import (
@@ -18,28 +11,22 @@ import (
 	"charm.land/log/v2"
 )
 
-// `all:` is required (RESEARCH §4.1) so hidden files like .air.toml
-// and .gitignore are included; a `*` glob silently skips them.
+// FS holds the embedded template tree. The `all:` prefix is required
+// so hidden files like .air.toml and .gitignore are included.
 //
 //go:embed all:templates
 var FS embed.FS
 
-// InitLogger configures the charm/log v2 default logger (stderr,
-// InfoLevel). Moved from a package-level init() so importing the
-// scaffold package has no side effects (WR-002).
+// InitLogger configures the default charm/log v2 logger. It is
+// exported because the package uses init() in the past, which is no
+// longer desired (so importing scaffold has no side effects).
 func InitLogger() {
 	log.SetDefault(log.NewWithOptions(os.Stderr, log.Options{Level: log.InfoLevel}))
 }
 
-// New is the main scaffolder entrypoint. Caller must call
-// p.Validate() BEFORE New — New does not re-validate.
-//
-// Steps:
-//  0. Configure the default logger.
-//  1. renderToMap walks the embed FS in overlay order.
-//  2. emit writes the files to ./<name>/.
-//  3. VerifyBuild runs `go build ./...` with CGO_ENABLED=0.
-//  4. GitInit makes the initial commit (skipped with --no-git).
+// New scaffolds the project described by p into ./p.Name/, runs the
+// post-scaffold build verification, and (unless --no-git) makes the
+// initial commit. The caller must call p.Validate() before New.
 func New(p *Project) error {
 	InitLogger()
 	if p == nil || p.Name == "" {
@@ -53,9 +40,8 @@ func New(p *Project) error {
 	if err := emit(p, files); err != nil {
 		return fmt.Errorf("scaffold: emit: %w", err)
 	}
-	// Post-scaffold smoke test FIRST — a failing build must never
-	// be committed (otherwise a broken scaffold would be the user's
-	// first commit on a brand-new project).
+	// Build first so a broken scaffold never lands as the user's
+	// first commit on a brand-new project.
 	if err := p.VerifyBuild(); err != nil {
 		return fmt.Errorf("scaffold: verify: %w", err)
 	}
@@ -65,14 +51,9 @@ func New(p *Project) error {
 	return nil
 }
 
-// emit writes the rendered files to ./<name>/ preserving relative
-// paths. All files are 0644.
-//
-// Path-traversal guard: every rendered rel path is resolved against
-// the project root and verified to remain inside it. A template that
-// renders `{{.Name}}` to `../../etc/passwd` is rejected before any
-// filesystem write. cleanRoot carries the trailing separator so a
-// candidate path equal to cleanRoot fails the prefix check.
+// emit writes the rendered files to ./p.Name/, refusing any rel path
+// that resolves outside the project root. cleanRoot carries a trailing
+// separator so a candidate equal to cleanRoot fails the prefix check.
 func emit(p *Project, files map[string][]byte) error {
 	root := filepath.Join(".", p.Name)
 	cleanRoot := filepath.Clean(root) + string(filepath.Separator)

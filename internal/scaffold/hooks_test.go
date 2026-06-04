@@ -84,7 +84,7 @@ func TestVerifyBuild_Failing(t *testing.T) {
 	if err == nil {
 		t.Fatal("VerifyBuild on broken project: got nil, want error")
 	}
-	// The error must surface the go command's output (RESEARCH §7.2).
+	// The error must surface the go command's output.
 	if !strings.Contains(err.Error(), name) {
 		t.Errorf("error %q does not name the project %q", err.Error(), name)
 	}

@@ -260,5 +260,4 @@ func findRepoRoot(t *testing.T) string {
 	}
 }
 
-// (intentionally no code follows — WR-006 removed the `var _ = time.Second`
-// placeholder and the "time" import.)
+// (intentionally no code follows — the file ends here.)

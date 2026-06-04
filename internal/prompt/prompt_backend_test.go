@@ -1,14 +1,11 @@
-// Package prompt tests — backend resolution and dispatch (Plan 03).
+// White-box tests for backend resolution and dispatch.
 //
-// The testable surface for backend dispatch is small in this plan:
-// the test runner is non-TTY, so `Fill` always short-circuits to nil
-// at ShouldPrompt(). The Plan 02 tests of `TestFill_NilProject` and
-// `TestFill_NoInteractiveReturns` remain the load-bearing coverage
-// for the Fill chokepoint; this plan adds `TestResolveBackend_*` as
-// unit tests on resolveBackend() directly (no TTY required, no
-// Fill call).
+// The testable surface for backend dispatch is small: the test
+// runner is non-TTY, so `Fill` always short-circuits to nil at
+// ShouldPrompt(). These tests cover resolveBackend() directly
+// (no TTY required, no Fill call).
 //
-// resolveBackend is package-private, so this test file is `package
+// resolveBackend is package-private, so this file is `package
 // prompt` (white-box) to access it. Tests construct a Deps with
 // stubbed LookPath and VersionCheck and pass it to resolveBackend —
 // no package-level state is mutated, so t.Parallel() is safe.
@@ -75,9 +72,7 @@ func TestResolveBackend_GumWhenAvailableAndHealthy(t *testing.T) {
 
 // TestResolveBackend_HuhWhenGumBroken asserts that resolveBackend
 // returns backendHuh when gum is on $PATH but `gum --version` fails
-// (RESEARCH §Pitfall 3: a corrupt install should not break the
-// scaffolder). This is the must-have truth from the plan's
-// <must_haves> block.
+// (a corrupt install should not break the scaffolder).
 func TestResolveBackend_HuhWhenGumBroken(t *testing.T) {
 	t.Setenv("SPIN_USE_HUH", "")
 	deps := Deps{
@@ -93,8 +88,7 @@ func TestResolveBackend_HuhWhenGumBroken(t *testing.T) {
 }
 
 // TestBackendString asserts the String() mapping used in the Debug
-// log line per UI-SPEC §"gum vs huh decision": `"prompt backend"
-// backend=gum` or `backend=huh`.
+// log line: `"prompt backend" backend=gum` or `backend=huh`.
 func TestBackendString(t *testing.T) {
 	cases := map[backend]string{
 		backendGum:  "gum",

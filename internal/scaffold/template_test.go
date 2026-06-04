@@ -10,10 +10,9 @@ import (
 )
 
 // TestOverlayOrder_TUI asserts the simplest overlay order: --tui --bubbletea
-// produces 2 layers in _base -> variant_tui order. The lib/* overlays for
-// bubbletea/bubbles/lipgloss etc. are no longer needed (Plan 02-05
-// restructured the templates to inline library wiring as `if has<Lib> .`
-// blocks within the variant files).
+// produces 2 layers in _base -> variant_tui order. The lib/* overlays
+// for bubbletea/bubbles/lipgloss etc. were restructured to inline
+// library wiring as `if has<Lib> .` blocks within the variant files.
 func TestOverlayOrder_TUI(t *testing.T) {
 	p := &Project{Type: "tui", Libs: []string{"bubbletea"}}
 	got := p.overlayOrder()
@@ -66,8 +65,8 @@ func TestFuncMap_HasBubbles(t *testing.T) {
 	}
 }
 
-// TestFuncMap_CharmPin asserts the verified v2 pins (RESEARCH §2.1,
-// verified 2026-06-03 against go list -m -versions).
+// TestFuncMap_CharmPin asserts the verified v2 pins for the charm
+// libraries spin scaffolds.
 func TestFuncMap_CharmPin(t *testing.T) {
 	fm := funcMap(&Project{})
 	cp := fm["charmPin"].(func(string) string)
@@ -108,9 +107,8 @@ func TestFuncMap_BasicHelpers(t *testing.T) {
 }
 
 // TestRenderToMap_FullTUI scaffolds the full --tui --bubbletea --bubbles
-// --lipgloss combination and asserts the rendered map contains all expected
-// files with all expected content. This is Plan 03's main acceptance test
-// for the template engine.
+// --lipgloss combination and asserts the rendered map contains all
+// expected files with all expected content.
 func TestRenderToMap_FullTUI(t *testing.T) {
 	p := &Project{
 		Name:    "myapp",
@@ -126,9 +124,9 @@ func TestRenderToMap_FullTUI(t *testing.T) {
 		t.Fatalf("renderToMap: %v", err)
 	}
 
-	// Required keys — Plan 02-05 restructured layout. main.go is at
-	// `cmd/<name>/main.go` (canonical Go path), and the TUI logic lives
-	// in `internal/app/{app,update,view,keys}.go` instead of one big
+	// Required keys. main.go is at `cmd/<name>/main.go` (canonical
+	// Go path), and the TUI logic lives in
+	// `internal/app/{app,update,view,keys}.go` instead of one big
 	// root main.go.
 	for _, name := range []string{
 		"go.mod", "cmd/myapp/main.go", "README.md", ".gitignore",
@@ -227,9 +225,7 @@ func TestRenderToMap_FullTUI(t *testing.T) {
 }
 
 // TestRenderToMap_GoVersion asserts the unconditional `go 1.25.0`
-// directive. Per RESEARCH §2.2, every charm v2 library requires
-// Go 1.25.0+ transitively; the previous `{{if hasBubbles}}` branch
-// in the template was dead code and was removed in Plan 02-01 (Task 2).
+// directive. Every charm v2 library requires Go 1.25.0+ transitively.
 //
 // Three sub-cases cover the reachable combinations:
 //   - bubbletea only (no bubbles): 1.25.0
@@ -294,12 +290,11 @@ func TestRenderToMap_ApacheLicense(t *testing.T) {
 }
 
 // TestRenderToMap_NoLipgloss_StillHasStylesFile asserts that
-// internal/ui/styles.go is always present in TUI variant (Plan 02-05:
-// the variant provides the styles file directly instead of via the
-// lib/lipgloss overlay). Without --lipgloss, the file still exists
-// but contains no `lipgloss.NewStyle` call (because the template gates
-// the import + the type on hasLipgloss). With --lipgloss, it contains
-// the real lipgloss v2 styles.
+// internal/ui/styles.go is always present in TUI variant: the
+// variant provides the styles file directly. Without --lipgloss, the
+// file still exists but contains no `lipgloss.NewStyle` call (the
+// template gates the import + the type on hasLipgloss). With
+// --lipgloss, it contains the real lipgloss v2 styles.
 //
 // Note: the old "no-op default" comment-based assertion is gone; the
 // restructured template is conditional inside the file body rather
@@ -353,9 +348,8 @@ func TestRenderToMap_WithLipgloss_RealStylesFile(t *testing.T) {
 	}
 }
 
-// TestRenderToMap_TypeCLI asserts --type=cli now renders successfully
-// (Plan 02-03 replaced the Phase 1 placeholder with real template content;
-// Plan 02-05 restructured it into cmd/<name>/main.go + internal/cmd/root.go).
+// TestRenderToMap_TypeCLI asserts --type=cli renders successfully:
+// cmd/<name>/main.go + internal/cmd/root.go.
 func TestRenderToMap_TypeCLI(t *testing.T) {
 	p := &Project{
 		Name: "x", Module: "x", Type: "cli",
@@ -366,8 +360,8 @@ func TestRenderToMap_TypeCLI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("renderToMap with Type=cli failed: %v", err)
 	}
-	// Plan 02-05: main.go is at cmd/<name>/main.go (thin), and
-	// the cobra subcommand + fang.Execute + config.Bind live in
+	// main.go is at cmd/<name>/main.go (thin), and the cobra
+	// subcommand + fang.Execute + config.Bind live in
 	// internal/cmd/root.go.tmpl.
 	main, ok := files["cmd/x/main.go"]
 	if !ok {
@@ -397,10 +391,10 @@ func TestRenderToMap_TypeCLI(t *testing.T) {
 	}
 }
 
-// TestRenderToMap_TypeAll asserts --type=all now renders successfully
-// with both a tui subcommand (bubbletea) and a hello subcommand (CLI).
-// Plan 02-05: main.go is the thin entry at cmd/x/main.go; the cobra
-// subcommands live in internal/cmd/.
+// TestRenderToMap_TypeAll asserts --type=all renders successfully with
+// both a tui subcommand (bubbletea) and a hello subcommand (CLI).
+// main.go is the thin entry at cmd/x/main.go; the cobra subcommands
+// live in internal/cmd/.
 func TestRenderToMap_TypeAll(t *testing.T) {
 	p := &Project{
 		Name: "x", Module: "x", Type: "all",
@@ -456,9 +450,9 @@ func TestRenderToMap_ReadmePrerequisites(t *testing.T) {
 	}
 }
 
-// TestRenderToMap_FullTUI_BuildsAndCompiles is the Plan 03 acceptance test:
-// scaffold a project to a temp dir with all 3 libs, then `go build ./...`
-// and `go test ./...` must exit 0. Skipped on -short.
+// TestRenderToMap_FullTUI_BuildsAndCompiles scaffolds a project to a
+// temp dir with all 3 libs, then `go build ./...` and `go test ./...`
+// must exit 0. Skipped on -short.
 func TestRenderToMap_FullTUI_BuildsAndCompiles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping end-to-end compile in -short mode")

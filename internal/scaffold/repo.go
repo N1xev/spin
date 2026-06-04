@@ -1,9 +1,4 @@
 // Package scaffold: external template repo cloning.
-//
-// CloneTemplateRepo clones a user-supplied git URL to a fresh tempdir
-// and validates that the tree has a `_base/` subdir (the spin overlay
-// engine's entry point). The caller owns the returned path; pass it to
-// os.RemoveAll on completion, or set p.KeepTemplateCache to retain.
 package scaffold
 
 import (
@@ -17,20 +12,15 @@ import (
 	"time"
 )
 
-// CloneTemplateRepoTimeout caps how long `git clone` may take. Declared
-// as a `var` (not const) so repo_test.go can lower it to a sub-second
-// value without hanging the suite.
+// CloneTemplateRepoTimeout caps how long a `git clone` may take. It
+// is a var (not const) so tests can lower it without hanging the suite.
 var CloneTemplateRepoTimeout = 60 * time.Second
 
-// CloneTemplateRepo clones url to a fresh tempdir and validates that
-// the result has a `_base/` subdir. On any failure the tempdir is
-// removed and the error wraps the underlying git stderr. The clone is
-// wrapped in a 60s timeout (CR-005) so a slow remote cannot freeze
-// the scaffolder.
-//
-// Requires `git` on $PATH; if missing, returns an exec.ErrNotFound-
-// wrapped error (callers use errors.Is to surface a "git not installed"
-// message).
+// CloneTemplateRepo clones url into a fresh tempdir and verifies the
+// tree contains a `_base/` subdirectory. On any failure the tempdir
+// is removed and the returned error wraps the underlying git stderr.
+// The clone is wrapped in CloneTemplateRepoTimeout so a slow remote
+// cannot freeze the scaffolder.
 func CloneTemplateRepo(ctx context.Context, url string) (string, error) {
 	tmp, err := os.MkdirTemp("", "spin-template-*")
 	if err != nil {
@@ -41,15 +31,12 @@ func CloneTemplateRepo(ctx context.Context, url string) (string, error) {
 	defer cancel()
 
 	// --depth 1 keeps the clone cheap; spin only needs HEAD. The `--`
-	// separator is defense-in-depth (CR-004): without it, a `url` like
-	// "-upload-pack=evil" would be interpreted as a flag. The
-	// validator (IsValidTemplateRepo) is the primary gate; the `--`
-	// is the belt to its suspenders.
+	// separator prevents a url beginning with `-` from being parsed
+	// as a git flag.
 	cmd := exec.CommandContext(cloneCtx, "git", "clone", "--depth", "1", "--", url, tmp)
 	cmd.Env = append(os.Environ(), gitEnv...)
-	// CR-005: when the context expires, force the I/O pipes closed
-	// so CombinedOutput's drainer goroutines return instead of
-	// blocking on Read. cmd.Cancel (Go 1.20+) is the standard way.
+	// On context expiry, force the I/O pipes closed so CombinedOutput's
+	// drainer returns instead of blocking on Read.
 	cmd.Cancel = func() error {
 		if cmd.Process == nil {
 			return nil
@@ -60,9 +47,6 @@ func CloneTemplateRepo(ctx context.Context, url string) (string, error) {
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		_ = os.RemoveAll(tmp)
-		// CR-005: surface a clear timeout error via errors.Is against
-		// context.DeadlineExceeded (exec.CommandContext propagates the
-		// ctx error as the cmd error on cancellation).
 		if errors.Is(cloneCtx.Err(), context.DeadlineExceeded) {
 			return "", fmt.Errorf(
 				"git clone timed out after %s; check the URL or your network",
@@ -72,7 +56,6 @@ func CloneTemplateRepo(ctx context.Context, url string) (string, error) {
 		return "", fmt.Errorf("git clone %s failed:\n%s", url, strings.TrimSpace(string(out)))
 	}
 
-	// Validate the cloned tree has the required entry point.
 	baseDir := filepath.Join(tmp, "_base")
 	info, err := os.Stat(baseDir)
 	if err != nil {

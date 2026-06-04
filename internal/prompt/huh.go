@@ -1,19 +1,9 @@
-// Package prompt — huh v2 in-process form backend (Plan 02 / INT-04).
+// Package prompt: huh v2 in-process form backend.
 //
-// fillWithHuh runs the 8 prompt steps from UI-SPEC §"Surface A /
-// Prompt sequence" using `charm.land/huh/v2` in-process forms. Each
-// step is a standalone function (askType, askName, ...) that
-// builds and runs a single huh form and writes the result back
-// into *scaffold.Project. Cancellation (`huh.ErrUserAborted`)
-// is mapped to *Canceled; the main boundary (main.go) maps
-// *Canceled to exit code 130.
-//
-// The gum backend (Plan 03) implements the same observable behavior
-// (same 8 steps, same field write-back to *Project, same
-// cancellation semantics) by shelling out to `gum` subprocesses.
-// Tests assert against *Project after Fill, not against widget
-// internals — see prompt_test.go and huh_test.go.
-
+// fillWithHuh runs the 8 prompt steps and writes each answer back
+// into *scaffold.Project. Cancellation is mapped to *Canceled. The
+// gum backend (gum.go) implements the same observable behavior by
+// shelling out to `gum` subprocesses.
 package prompt
 
 import (
@@ -27,22 +17,9 @@ import (
 	"github.com/example/spin/internal/scaffold"
 )
 
-// fillWithHuh runs the 8 prompt steps in UI-SPEC order, writing
-// each answer back into p in place. Returns on the first error
-// (which may be a *Canceled from a huh form abort).
-//
-// The order matches UI-SPEC §"Surface A / Prompt sequence" table:
-//  1. askType        — project variant (tui/cli/all)
-//  2. askName        — directory name (skipped if p.Name set)
-//  3. askModule      — go.mod module path (skipped if p.Module set)
-//  4. askLibs        — multi-select (always asked, pre-selected)
-//  5. askLicense     — mit / apache-2.0 / none (skipped if non-default set)
-//  6. askTemplate    — variant-specific template (skipped if non-default set)
-//  7. askTemplateRepo — optional external repo URL (skipped if p.TemplateRepo set)
-//  8. askAI          — yes/no AGENTS.md opt-in (always asked, default Yes)
-//
-// Per UI-SPEC, steps 4 and 8 always fire (with variant-specific
-// defaults pre-applied); the others are gap-fillers.
+// fillWithHuh runs the prompt steps in order. Each step is a
+// standalone function that builds a single huh form and writes the
+// answer back into p.
 func fillWithHuh(p *scaffold.Project) error {
 	steps := []struct {
 		name string
@@ -65,7 +42,7 @@ func fillWithHuh(p *scaffold.Project) error {
 	return nil
 }
 
-// askType: project variant select. Skipped if p.Type is already
+// askType asks for the project variant. Skipped if p.Type is already
 // set by a flag (--tui/--cli/--all).
 func askType(p *scaffold.Project) error {
 	if p.Type != "" {
@@ -94,10 +71,8 @@ func askType(p *scaffold.Project) error {
 	return nil
 }
 
-// askName: project name (directory + binary). Validates with
-// IsValidGoModuleSegment. Re-prompts once on failure; second
-// failure returns the "spin: project name is required" error.
-// Skipped if p.Name is already set by a positional arg.
+// askName asks for the project name (directory + binary). Re-prompts
+// once on validation failure; second failure returns an error.
 func askName(p *scaffold.Project) error {
 	if p.Name != "" {
 		return nil
@@ -106,7 +81,7 @@ func askName(p *scaffold.Project) error {
 	for attempt := 1; attempt <= 2; attempt++ {
 		n := "myapp"
 		if attempt == 2 && name != "" {
-			n = name // pre-fill with previous attempt's value
+			n = name
 		}
 		err := huh.NewInput().
 			Title("Project name").
@@ -129,9 +104,8 @@ func askName(p *scaffold.Project) error {
 	return fmt.Errorf("spin: project name is required")
 }
 
-// askModule: module path (go.mod). Defaults to p.Name. Skipped
-// if p.Module is already set to a non-default value (i.e., the
-// user passed --module with a different path).
+// askModule asks for the go.mod module path. Skipped if p.Module is
+// already set to a non-default value.
 func askModule(p *scaffold.Project) error {
 	if p.Module != "" && p.Module != p.Name {
 		return nil
@@ -143,7 +117,7 @@ func askModule(p *scaffold.Project) error {
 			initial = "github.com/<your-org>/myapp"
 		}
 	}
-	var m string = initial
+	m := initial
 	err := huh.NewInput().
 		Title("Module path").
 		Description("Used in go.mod. Press Enter to accept the default.").
@@ -158,20 +132,15 @@ func askModule(p *scaffold.Project) error {
 	}
 	module := strings.TrimSpace(m)
 	if module == "" {
-		return nil // user accepted the default
+		return nil
 	}
 	p.Module = module
 	return nil
 }
 
-// askLibs: multi-select. Pre-selects variant defaults + current
-// state (covers flag-set values like --huh). Always asked (per
-// UI-SPEC: step 4 is one of the two always-fire steps).
-//
-// Write-back: the result is mirrored into BOTH p.Libs (re-set to
-// the multi-select answer, sorted) AND the per-lib bool fields
-// (p.Cobra, p.Huh, ...). This keeps the two parallel sources of
-// truth in sync — see Pitfall 4 in 03-RESEARCH.md.
+// askLibs runs the multi-select. Pre-selects variant defaults plus
+// any flag-set values. The result is mirrored into p.Libs and the
+// per-lib bool fields.
 func askLibs(p *scaffold.Project) error {
 	pre := preSelectedLibs(p)
 	preSet := make(map[string]bool, len(pre))
@@ -199,7 +168,6 @@ func askLibs(p *scaffold.Project) error {
 	if err != nil {
 		return fmt.Errorf("ask libs: %w", err)
 	}
-	// Mirror picks back to p.Libs and the bool fields.
 	pickSet := make(map[string]bool, len(picks))
 	for _, n := range picks {
 		pickSet[n] = true
@@ -215,10 +183,7 @@ func askLibs(p *scaffold.Project) error {
 	return nil
 }
 
-// askLicenseOptions returns the three license options shown by
-// askLicense. Extracted as a package-private helper so tests can
-// assert against the canonical option list (Values: "mit",
-// "apache-2.0", "none") without needing a TTY to drive the form.
+// askLicenseOptions returns the license options shown by askLicense.
 func askLicenseOptions() []huh.Option[string] {
 	return []huh.Option[string]{
 		huh.NewOption("MIT", "mit"),
@@ -227,13 +192,7 @@ func askLicenseOptions() []huh.Option[string] {
 	}
 }
 
-// preSelectLicense returns options with the entry whose Value
-// matches license marked Selected(true). Extracted as a helper so
-// tests can verify the pre-select behavior without a TTY. The
-// huh.Option type's Selected method is a setter (returns a new
-// Option with the flag flipped), so the only way to detect the
-// mutation is to compare the returned slice's identity at the
-// matched index against the input — which is what the test does.
+// preSelectLicense marks the option whose Value matches license as selected.
 func preSelectLicense(options []huh.Option[string], license string) []huh.Option[string] {
 	for i := range options {
 		if options[i].Value == license {
@@ -243,17 +202,9 @@ func preSelectLicense(options []huh.Option[string], license string) []huh.Option
 	return options
 }
 
-// preSelectedLibs returns the lib Names that should be pre-selected
-// in the askLibs multi-select prompt. The result is the union of:
-//
-//   - LibsForType(p.Type) — the variant defaults
-//   - p.AllLibs() — the current state (covers flag-set values like
-//     --huh that aren't in the variant default)
-//
-// Deduplicated and sorted alphabetically. This is the single
-// "pre-select" decision point — both prompt backends (huh in this
-// plan, gum in Plan 03) consume the same function so the defaults
-// are consistent across implementations.
+// preSelectedLibs returns the lib Names pre-selected in the askLibs
+// multi-select: variant defaults unioned with the project's current
+// library set, deduplicated and sorted.
 func preSelectedLibs(p *scaffold.Project) []string {
 	seen := map[string]bool{}
 	out := []string{}
@@ -273,10 +224,8 @@ func preSelectedLibs(p *scaffold.Project) []string {
 	return out
 }
 
-// setBoolFieldByName sets p.<fieldName> = val. Field names are
-// the Go field names listed in libBoolMirror (e.g., "Cobra",
-// "Huh"). A small switch avoids reflect on every multi-select
-// answer (Pitfall 6 in 03-RESEARCH.md).
+// setBoolFieldByName sets p.<fieldName> = val. A small switch avoids
+// reflect on every multi-select answer.
 func setBoolFieldByName(p *scaffold.Project, fieldName string, val bool) {
 	switch fieldName {
 	case "Cobra":
@@ -298,11 +247,8 @@ func setBoolFieldByName(p *scaffold.Project, fieldName string, val bool) {
 	}
 }
 
-// askLicense: pick from mit / apache-2.0 / none. Skipped if
-// p.License is already set to a non-default value (i.e., the
-// user passed --license with something other than "mit", which
-// is the default). The "mit" default is always re-asked so the
-// user can confirm.
+// askLicense asks for the license. Skipped if p.License is already
+// set to a non-default value.
 func askLicense(p *scaffold.Project) error {
 	if p.License != "" && p.License != "mit" {
 		return nil
@@ -327,15 +273,15 @@ func askLicense(p *scaffold.Project) error {
 	return nil
 }
 
-// askTemplate: pick from variant-specific options. Skipped if
-// p.Template is already set to a non-default value.
+// askTemplate asks for the template, scoped to the active variant.
+// Skipped if p.Template is already set to a non-default value.
 func askTemplate(p *scaffold.Project) error {
 	if p.Template != "" && p.Template != "tui-bubbletea" {
 		return nil
 	}
 	options := templateOptionsFor(p.Type)
 	if len(options) == 0 {
-		return nil // no options for unknown variant
+		return nil
 	}
 	var tmpl string
 	err := huh.NewForm(
@@ -356,9 +302,8 @@ func askTemplate(p *scaffold.Project) error {
 	return nil
 }
 
-// templateOptionsFor returns the huh Options for the askTemplate
-// prompt, scoped to the active project variant. The list matches
-// UI-SPEC §"Surface A / Copywriting Contract" / Template options.
+// templateOptionsFor returns the huh Options for askTemplate, scoped
+// to the active project variant.
 func templateOptionsFor(typ string) []huh.Option[string] {
 	switch typ {
 	case "tui":
@@ -378,10 +323,8 @@ func templateOptionsFor(typ string) []huh.Option[string] {
 	return nil
 }
 
-// askTemplateRepo: optional external template URL. Empty input
-// means "skip" (use the embedded templates). Validates with
-// IsValidTemplateRepo; re-prompts once on failure. Skipped if
-// p.TemplateRepo is already set by --template-repo.
+// askTemplateRepo asks for the optional external template URL. Empty
+// input means "skip". Re-prompts once on validation failure.
 func askTemplateRepo(p *scaffold.Project) error {
 	if p.TemplateRepo != "" {
 		return nil
@@ -403,7 +346,7 @@ func askTemplateRepo(p *scaffold.Project) error {
 		}
 		repo = strings.TrimSpace(r)
 		if repo == "" {
-			return nil // skip
+			return nil
 		}
 		if scaffold.IsValidTemplateRepo(repo) {
 			p.TemplateRepo = repo
@@ -414,11 +357,9 @@ func askTemplateRepo(p *scaffold.Project) error {
 	return fmt.Errorf("spin: invalid template repo URL %q", last)
 }
 
-// askAI: yes/no confirm. Default Yes (UI-SPEC §"Copywriting
-// Contract" / AI opt-in default: Yes). Always asked; Plan 04
-// may add a --no-ai skip path.
+// askAI asks for the AGENTS.md opt-in. Default Yes.
 func askAI(p *scaffold.Project) error {
-	var ai bool = true
+	ai := true
 	err := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().

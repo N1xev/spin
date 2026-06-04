@@ -1,15 +1,4 @@
-// Template engine. Composes three overlay layers in last-write-wins
-// order:
-//
-//  1. templates/_base/         — every project gets these
-//  2. templates/variant_<type>/ — variant (tui/cli/all) main.go etc.
-//  3. templates/lib/<name>/     — per-library overlays (only lib/ai/
-//     survives after the 260604-7jt glow/modifiers removal)
-//
-// Walking the embed with fs.WalkDir (not one-level recursion) is
-// required for lib overlays that nest (lipgloss, ai). License
-// gating is by filename: LICENSE-<active>.tmpl renders for the
-// active license only; License="none" emits no LICENSE file.
+// Package scaffold: template overlay engine.
 package scaffold
 
 import (
@@ -23,8 +12,6 @@ import (
 	"text/template"
 )
 
-// charmLibInfoField dispatches on the field name. Unknown fields
-// return "" (matches charmPin contract).
 func charmLibInfoField(display, module, purpose, extending, example, field string) string {
 	switch field {
 	case "display":
@@ -41,20 +28,18 @@ func charmLibInfoField(display, module, purpose, extending, example, field strin
 	return ""
 }
 
-// overlayOrder returns layer paths in walk order (lowest precedence
-// first, last-write-wins last). Each bool-flag's lib/<name>/ is also
-// walked when the flag is set (e.g. lib/ai/ for --ai).
+// overlayOrder returns the layer paths to walk, in last-write-wins
+// order: _base, then variant_<type>, then lib/<name> for each active
+// bool flag.
 func (p *Project) overlayOrder() []string {
 	layers := []string{"_base"}
 	if p.Type != "" {
 		layers = append(layers, "variant_"+p.Type)
 	}
 	seen := map[string]bool{}
-	// p.Libs still contains names like "bubbletea" (set by
-	// ResolveFlags for the templates' has* predicates), but those
-	// no longer have lib/<name>/ overlay directories in the
-	// restructured tree. Filter against the overlay-walk set so we
-	// don't add `lib/bubbletea` and silently skip it.
+	// p.Libs may include names that no longer have a lib/<name>/
+	// overlay (e.g. "bubbletea"). Filter against the overlay set so
+	// the walker doesn't fail to find a missing directory.
 	overlayLibs := p.boolFlagOverlayMap()
 	for _, lib := range p.Libs {
 		if !overlayLibs[lib] {
@@ -73,38 +58,26 @@ func (p *Project) overlayOrder() []string {
 	return layers
 }
 
-// boolFlagOverlayMap returns the set of lib overlay names walked
-// when the corresponding bool flag is set. Keys match
-// templates/lib/<name>/ directory names. After the 260604-7jt
-// removal only "ai" survives. All other charm wiring is inlined in
-// the variant_*/internal/{app,cmd,ui,config}/*.go.tmpl files as
-// `if has<Lib> .` blocks. For the parallel "is this lib selected?"
-// predicate that includes non-overlay bools, see libBoolMap in
-// project.go — AllLibs() uses that one.
+// boolFlagOverlayMap returns the bool flags that still have a
+// lib/<name>/ overlay directory.
 func (p *Project) boolFlagOverlayMap() map[string]bool {
 	return map[string]bool{
 		"ai": p.AI,
 	}
 }
 
-// renderToMap walks the embed FS in overlay order, renders every
-// .tmpl against p, and returns rel-path → rendered bytes. Last-write-
-// wins on identical output paths.
-//
-// `_name_` substitution: after the .tmpl suffix is stripped, every
-// `_name_` in the rel path is replaced with p.Name. This lets
-// `cmd/_name_/main.go.tmpl` render to `cmd/myapp/main.go`.
-//
-// License gating: LICENSE-<active>.tmpl renders only when License
-// matches. License="none" suppresses all LICENSE files.
+// renderToMap walks the overlay tree, renders every .tmpl file against
+// p, and returns rel-path → rendered bytes. A missing layer directory
+// is not fatal. After stripping the .tmpl suffix, every `_name_` in
+// the rel path is replaced with p.Name. LICENSE-<active>.tmpl renders
+// only when License matches; License="none" emits no LICENSE file.
 func (p *Project) renderToMap() (map[string][]byte, error) {
 	out := map[string][]byte{}
 	fm := funcMap(p)
 	fsys := currentFS(p.ExternalDir)
 
-	// embed.FS starts at "templates/"; os.DirFS(externalDir) starts
-	// at the repo root. Layer names are the same in both cases;
-	// only the root prefix differs.
+	// embed.FS roots at "templates/"; os.DirFS(externalDir) roots at
+	// the directory itself. Layer names match in both cases.
 	rootPrefix := "templates/"
 	if p.ExternalDir != "" {
 		rootPrefix = ""
@@ -114,11 +87,8 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 		root := rootPrefix + layer
 		err := fs.WalkDir(fsys, root, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
-				// Missing layer directory is not fatal (variant_tui
-				// may be absent for an empty project). Match both
-				// "file does not exist" (embed) and "no such file or
-				// directory" (os.DirFS) so external repos with only
-				// _base/ don't blow up.
+				// variant_tui may not exist for an empty project; an
+				// external repo with only _base/ has no variants.
 				msg := walkErr.Error()
 				if strings.Contains(msg, "file does not exist") ||
 					strings.Contains(msg, "no such file or directory") {
@@ -148,8 +118,6 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 			if p.Name != "" {
 				outKey = strings.ReplaceAll(outKey, "_name_", p.Name)
 			}
-			// Active LICENSE file maps to "LICENSE" in the output,
-			// not "LICENSE-mit" / "LICENSE-Apache-2.0".
 			if strings.HasPrefix(name, "LICENSE-") {
 				outKey = "LICENSE"
 			}
@@ -158,7 +126,7 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 			if err != nil {
 				return fmt.Errorf("read %s: %w", path, err)
 			}
-			// FuncMap must be registered before Parse (RESEARCH §4.2).
+			// Funcs must be set before Parse, not after.
 			t, err := template.New(filepath.Base(path)).Funcs(fm).Option("missingkey=error").Parse(string(raw))
 			if err != nil {
 				return fmt.Errorf("parse %s: %w", path, err)
@@ -181,9 +149,9 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 	return out, nil
 }
 
-// funcMap wires p-bound helpers so templates can do
-// `{{hasBubbles .}}` and `{{charmPin "bubbletea"}}` without passing
-// p through every call site.
+// funcMap returns the template.FuncMap exposed to .tmpl files. The
+// has* and allLibs helpers are p-bound so templates do not need to
+// thread p through every call.
 func funcMap(p *Project) template.FuncMap {
 	return template.FuncMap{
 		"title": func(s string) string {
@@ -232,13 +200,6 @@ func funcMap(p *Project) template.FuncMap {
 			}
 			return ""
 		},
-		// charmLibInfo returns metadata for a library: "display",
-		// "module", "purpose", "extending", or "example". The 13 keys
-		// cover every library in UI-SPEC §Surface B "Library lookup
-		// table (canonical)". Module paths are pinned in code (not
-		// looked up from versions.go) because they are the long-
-		// lived canonical paths; the version pin is what charmPin
-		// resolves.
 		"charmLibInfo": func(name, field string) string {
 			switch name {
 			case "bubbletea":
@@ -309,10 +270,6 @@ func funcMap(p *Project) template.FuncMap {
 			}
 			return ""
 		},
-		// allLibs returns the project's full library set (p.Libs
-		// union the bool-flag libs, sorted) so the AGENTS.md
-		// template iterates in the same order the prompt backend
-		// used.
 		"allLibs": func(p2 *Project) []string { return p2.AllLibs() },
 		"requiresImport": func(p2 *Project, lib string) bool {
 			if slices.Contains(p2.Libs, lib) {

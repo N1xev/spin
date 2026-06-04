@@ -1,8 +1,7 @@
-// TOOL-05 integration test: scaffolds a complete Phase 1 project and
-// validates every Phase 1 acceptance criterion end-to-end.
+// End-to-end integration test for the spin scaffolder.
 //
-// This is the canonical "Phase 1 works" test. It builds the spin binary
-// from source, runs the CLI against a fresh temp directory, then validates:
+// It builds the spin binary from source, runs the CLI against a fresh
+// temp directory, then validates:
 //
 //  1. The full TUI scaffold (--tui --bubbletea --bubbles --lipgloss):
 //     - go.mod has the expected module name, charm.land/*/v2 pins, and
@@ -21,15 +20,15 @@
 //     - `go build ./...` and `go test ./...` both exit 0
 //     - the v1-leak grep suite returns 0 matches
 //
-//  2. A --tui --bubbletea scaffold (no --bubbles): go.mod's go directive
-//     is NOT bumped to 1.25.0 (TOOL-02).
+//  2. A --tui --bubbletea scaffold (no --bubbles): go.mod always
+//     emits the 1.25.0 directive.
 //
 //  3. Three license variants: --license mit, --license apache-2.0,
 //     --license none. Asserts the LICENSE file matches the flag (or is
 //     absent for `none`).
 //
-// Failure here is a Phase 1 regression. Total runtime is ~30s (dominated
-// by go mod tidy in the scaffolded project).
+// Total runtime is ~30s (dominated by go mod tidy in the scaffolded
+// project).
 package scaffold
 
 import (
@@ -63,27 +62,18 @@ func TestIntegrationScaffold(t *testing.T) {
 	assertGitInit(t, projectDir)
 	assertGoBuildAndTest(t, projectDir)
 	assertNoV1Leaks(t, projectDir, repoRootPath)
-	// Plan 03-04: --ai is now part of the canonical TOOL-05 test, so
-	// every scaffold run also exercises AGENTS.md generation.
+	// --ai is part of the canonical test, so every scaffold run also
+	// exercises AGENTS.md generation.
 	assertAGENTSmd(t, projectDir)
 
-	t.Logf("OK: Phase 1+3 integration test passed for %s", integrationProjectName)
+	t.Logf("OK: integration test passed for %s", integrationProjectName)
 }
 
 // TestIntegrationScaffold_AlwaysGo1250 asserts that every generated
 // project emits `go 1.25.0`, regardless of whether --bubbles is set.
-// Per Phase 2 research §2.2, every charm v2 library requires Go 1.25.0+
-// transitively; the previous `{{if hasBubbles}}` branch was dead code
-// (RESOLVE: --tui implies --bubbletea, and even --bubbletea alone
-// inherits the fang v2.0.1 floor of 1.25.0). Plan 02-01 (Task 2)
-// simplified the directive to unconditional 1.25.0.
-//
-// The test name is a rename of the former
-// `TestIntegrationScaffold_NoBubblesGoVersion` (which asserted the
-// inverse — that --bubbletea without --bubbles did NOT emit 1.25.0).
-// The semantic flipped when Task 2 removed the conditional branch.
+// Every charm v2 library requires Go 1.25.0+ transitively; the
+// previous `{{if hasBubbles}}` branch was dead code.
 func TestIntegrationScaffold_AlwaysGo1250(t *testing.T) {
-	// --bubbletea only: still must emit go 1.25.0 (TOOL-01/TOOL-02).
 	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-bubbletea-only",
 		[]string{"--tui", "--bubbletea"})
 
@@ -92,11 +82,10 @@ func TestIntegrationScaffold_AlwaysGo1250(t *testing.T) {
 		t.Fatalf("read go.mod: %v", err)
 	}
 	if !bytes.Contains(goMod, []byte("\ngo 1.25.0\n")) {
-		t.Errorf("go.mod missing 'go 1.25.0' (always required per Plan 02-01 Task 2):\n%s", goMod)
+		t.Errorf("go.mod missing 'go 1.25.0' (always required):\n%s", goMod)
 	}
-	// The old `go 1.23` directive must never appear now.
 	if bytes.Contains(goMod, []byte("\ngo 1.23\n")) {
-		t.Errorf("go.mod should not contain 'go 1.23' (dead branch removed in Task 2):\n%s", goMod)
+		t.Errorf("go.mod should not contain 'go 1.23':\n%s", goMod)
 	}
 }
 
@@ -235,13 +224,12 @@ func cachedRepoRoot(t *testing.T) string {
 //   - module name = project name
 //   - charm.land/bubbletea/v2 v2.0.0 (with --bubbletea)
 //   - charm.land/lipgloss/v2 (with --lipgloss; pin is upgraded by
-//     `go mod tidy` from v2.0.0-beta.2 to v2.0.0 — see Plan 03 deviation
-//     "go mod tidy upgrades the go directive and lipgloss pin")
+//     `go mod tidy` from v2.0.0-beta.2 to v2.0.0)
 //   - charm.land/bubbles/v2 v2.0.0 (with --bubbles, implies go 1.25.0)
 //   - no v1 lib paths (github.com/charmbracelet/<lib> where <lib> is a
 //     library that moved to charm.land in v2). Indirect transitive deps
 //     under github.com/charmbracelet/x/... are NOT v1 leaks — that is
-//     the current experimental namespace per CLAUDE.md tech stack.
+//     the current experimental namespace.
 func assertGoModFullTUI(t *testing.T, projectDir string) {
 	t.Helper()
 	goMod, err := os.ReadFile(filepath.Join(projectDir, "go.mod"))
@@ -251,7 +239,7 @@ func assertGoModFullTUI(t *testing.T, projectDir string) {
 	wants := []string{
 		"module " + integrationProjectName,
 		"charm.land/bubbletea/v2 v2.0.7",
-		"charm.land/lipgloss/v2 v2.0.3", // Phase 2 research §2.1 pin
+		"charm.land/lipgloss/v2 v2.0.3",
 		"charm.land/bubbles/v2 v2.1.0",
 	}
 	for _, want := range wants {
@@ -259,9 +247,6 @@ func assertGoModFullTUI(t *testing.T, projectDir string) {
 			t.Errorf("go.mod missing %q; got:\n%s", want, goMod)
 		}
 	}
-	// v1 lib paths (each was at github.com/charmbracelet/<lib> in v1; moved
-	// to charm.land/<lib>/v2). `github.com/charmbracelet/x/...` indirect
-	// deps are the current experimental namespace — NOT a v1 leak.
 	for _, v1lib := range []string{
 		"github.com/charmbracelet/bubbletea",
 		"github.com/charmbracelet/lipgloss",
@@ -277,15 +262,13 @@ func assertGoModFullTUI(t *testing.T, projectDir string) {
 			t.Errorf("go.mod contains forbidden v1 path %q:\n%s", v1lib, goMod)
 		}
 	}
-	// go 1.25.0 only required when --bubbles is used. We pass --bubbles
-	// for this test, so the go directive MUST be 1.25.0 (TOOL-01).
 	if !bytes.Contains(goMod, []byte("\ngo 1.25.0\n")) {
-		t.Errorf("go.mod missing 'go 1.25.0' (TOOL-01 requires 1.25.0 with --bubbles):\n%s", goMod)
+		t.Errorf("go.mod missing 'go 1.25.0' (required with --bubbles):\n%s", goMod)
 	}
 }
 
 // assertMainGoV2 validates the generated cmd/<name>/main.go uses the v2
-// API and is a thin entry point (Plan 02-05 restructure):
+// API and is a thin entry point:
 //   - package main, imports "{{module}}/internal/app", calls app.Run
 //   - does NOT contain v1 patterns (View() string, tea.WithAltScreen,
 //     lipgloss.NewRenderer)
@@ -308,9 +291,9 @@ func assertMainGoV2(t *testing.T, projectDir string) {
 		}
 	}
 	banned := []string{
-		"View() string",        // v1 View signature (TOOL-03)
-		"tea.WithAltScreen",    // v1 program option (removed in v2)
-		"lipgloss.NewRenderer", // v1 Renderer type (removed in v2)
+		"View() string",
+		"tea.WithAltScreen",
+		"lipgloss.NewRenderer",
 	}
 	for _, b := range banned {
 		if bytes.Contains(mainGo, []byte(b)) {
@@ -321,7 +304,7 @@ func assertMainGoV2(t *testing.T, projectDir string) {
 
 // assertAppGoV2 validates the restructured internal/app/*.go files use
 // the v2 bubbletea API and contain the expected per-file content.
-// Plan 02-05 split the old single main.go into:
+// The split is:
 //   - internal/app/app.go    — Model + New + Init + Run
 //   - internal/app/update.go — Update() with conditional lib wiring
 //   - internal/app/view.go   — View() returning tea.View
@@ -353,8 +336,8 @@ func assertAppGoV2(t *testing.T, projectDir string) {
 	}
 	for _, want := range []string{
 		"package app",
-		"tea.View",    // v2 type, not the v1 `View() string` signature
-		"tea.NewView", // v2 constructor
+		"tea.View",
+		"tea.NewView",
 	} {
 		if !bytes.Contains(viewGo, []byte(want)) {
 			t.Errorf("internal/app/view.go missing %q; got:\n%s", want, viewGo)
@@ -435,8 +418,8 @@ func assertTaskfile(t *testing.T, projectDir string) {
 }
 
 // assertLicenseMit validates the generated LICENSE is MIT and includes
-// the current year. (TOOL-05 is flag-agnostic about license choice;
-// license variants are covered by TestIntegrationScaffold_LicenseVariants.)
+// the current year. License variants are covered by
+// TestIntegrationScaffold_LicenseVariants.
 func assertLicenseMit(t *testing.T, projectDir string) {
 	t.Helper()
 	license, err := os.ReadFile(filepath.Join(projectDir, "LICENSE"))
@@ -546,9 +529,8 @@ func assertNoV1Leaks(t *testing.T, projectDir, repoRootPath string) {
 //   - the restructured tree (cmd/<name>/main.go + internal/app/*.go) is
 //     emitted with the expected per-file content
 //   - every lib's conditional block is INLINED into internal/app/update.go
-//     (huh, glamour, harmonica, bubbles, log) — Plan 02-05's central
-//     guarantee that the variant file composes libs in one place rather
-//     than scattering one file per lib
+//     (huh, glamour, harmonica, bubbles, log) — the variant file
+//     composes libs in one place rather than scattering one file per lib
 //   - the project builds with CGO_ENABLED=0 and has zero v1 leaks
 //
 // This is the "kitchen sink" TUI test: if a future change accidentally
@@ -589,9 +571,9 @@ func TestIntegrationScaffold_TUIAllLibs(t *testing.T) {
 	}
 
 	// internal/app/update.go must inline the lib content that belongs
-	// inside Update (Plan 02-05 central guarantee — no per-lib file).
-	// Constructors (spinner.New) live in app.go; tick/message handling
-	// lives in update.go. We check both files for the right markers.
+	// inside Update (no per-lib file). Constructors (spinner.New) live
+	// in app.go; tick/message handling lives in update.go. We check
+	// both files for the right markers.
 	updateGo, err := os.ReadFile(filepath.Join(projectDir, "internal", "app", "update.go"))
 	if err != nil {
 		t.Fatalf("read internal/app/update.go: %v", err)
@@ -610,8 +592,8 @@ func TestIntegrationScaffold_TUIAllLibs(t *testing.T) {
 		}
 	}
 
-	// app.go must hold the constructors (Plan 02-05 splits Model + New
-	// + Init + Run into app.go; the rest is in update.go and view.go).
+	// app.go must hold the constructors (Model + New + Init + Run live
+	// in app.go; the rest is in update.go and view.go).
 	appGo, err := os.ReadFile(filepath.Join(projectDir, "internal", "app", "app.go"))
 	if err != nil {
 		t.Fatalf("read internal/app/app.go: %v", err)
@@ -625,7 +607,7 @@ func TestIntegrationScaffold_TUIAllLibs(t *testing.T) {
 	// catches it before the v1-leak script does.
 	for _, banned := range []string{"huh.go", "wish.go", "glamour.go", "harmonica.go"} {
 		if _, err := os.Stat(filepath.Join(projectDir, "internal", "app", banned)); err == nil {
-			t.Errorf("internal/app/%s exists — Plan 02-05 forbids per-lib files; inline into update.go instead", banned)
+			t.Errorf("internal/app/%s exists; inline lib content into update.go instead", banned)
 		}
 	}
 
@@ -770,9 +752,9 @@ func TestIntegrationScaffold_AllVariant(t *testing.T) {
 
 // TestIntegrationScaffold_NameInPath verifies the walker substitutes the
 // `_name_` placeholder in output paths with p.Name for unusual but
-// legal project names (mixed case, digits, dashes, underscores). Plan
-// 02-05's central walker contract: `templates/.../cmd/_name_/main.go.tmpl`
-// renders to `cmd/<actual-name>/main.go`.
+// legal project names (mixed case, digits, dashes, underscores). The
+// walker contract: `templates/.../cmd/_name_/main.go.tmpl` renders to
+// `cmd/<actual-name>/main.go`.
 func TestIntegrationScaffold_NameInPath(t *testing.T) {
 	weirdName := "weird-name_123"
 	projectDir, _ := runSpinScaffold(t, weirdName,
@@ -801,9 +783,9 @@ func TestIntegrationScaffold_NameInPath(t *testing.T) {
 
 // TestIntegrationScaffold_AGENTSmd scaffolds a TUI project with --ai
 // and asserts the generated AGENTS.md contains the expected sections.
-// Plan 03-04's "AGENTS.md opt-in" test: --ai is the load-bearing flag,
-// and the output must begin with the marker, contain all 6 sections,
-// list libraries alphabetically, and contain no ANSI / lipgloss.
+// --ai is the load-bearing flag: the output must begin with the
+// marker, contain all required sections, list libraries
+// alphabetically, and contain no ANSI / lipgloss.
 func TestIntegrationScaffold_AGENTSmd(t *testing.T) {
 	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-ai",
 		[]string{"--tui", "--bubbletea", "--lipgloss", "--ai"})
@@ -815,8 +797,7 @@ func TestIntegrationScaffold_AGENTSmd(t *testing.T) {
 // determinism test: scaffolds the same project twice (in two separate
 // temp dirs, so the runs are independent) and asserts the two AGENTS.md
 // files are byte-identical. This is the contract that makes AGENTS.md
-// safe to commit (no machine IDs, no timestamps, no UUIDs). Pitfall 5
-// from 03-RESEARCH.md.
+// safe to commit (no machine IDs, no timestamps, no UUIDs).
 //
 // Both scaffolds use the same project name so the only difference
 // between the two runs is the working directory and process IDs —
@@ -844,11 +825,11 @@ func TestIntegrationScaffold_AGENTSmd_Determinism(t *testing.T) {
 }
 
 // TestIntegrationScaffold_AGENTSmd_Alias verifies --agents (the alias)
-// produces the same AGENTS.md as --ai. This is the UI-SPEC Locked
-// Decision #5 alias contract: the two spellings are interchangeable.
-// We use the same flag set as TestIntegrationScaffold_AGENTSmd so the
-// content assertions (Bubble Tea, Lip Gloss in alphabetical order) hold
-// for both --ai and --agents.
+// produces the same AGENTS.md as --ai. The two spellings are
+// interchangeable. We use the same flag set as
+// TestIntegrationScaffold_AGENTSmd so the content assertions
+// (Bubble Tea, Lip Gloss in alphabetical order) hold for both --ai
+// and --agents.
 func TestIntegrationScaffold_AGENTSmd_Alias(t *testing.T) {
 	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-agents-alias",
 		[]string{"--tui", "--bubbletea", "--lipgloss", "--agents"})
@@ -930,7 +911,7 @@ func assertAGENTSmd(t *testing.T, projectDir string) {
 		t.Errorf("AGENTS.md libraries not alphabetical: Bubble Tea at %d, Lip Gloss at %d", idxBT, idxLG)
 	}
 
-	// No ANSI escape codes (UI-SPEC §"What AGENTS.md MUST NOT contain").
+	// No ANSI escape codes.
 	for _, banned := range []string{"\033", "\x1b", "\x1B"} {
 		if bytes.Contains(agents, []byte(banned)) {
 			t.Errorf("AGENTS.md contains forbidden ANSI byte %q", banned)

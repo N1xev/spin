@@ -1,15 +1,9 @@
 // Package prompt owns the interactive prompt layer for `spin new`.
 //
-// Fill is the single chokepoint: it populates unset required fields
-// on *scaffold.Project by asking the user. ShouldPrompt is the
-// three-layer guard (env var, TTY, CI env vars) every prompt UI call
-// site must consult. Canceled is a typed error that main.go maps to
-// exit 130 (UI-SPEC §Cancellation / cleanup).
-//
-// Testability: os/exec seams live on the Deps struct (passed through
-// fillWithDeps / resolveBackend), not as package-level mutable
-// globals. Tests build a Deps with stubs and call the internal
-// entry points directly — no shared state, so t.Parallel() is safe.
+// Fill populates unset required fields on *scaffold.Project by asking
+// the user. IsInteractive is the three-layer guard (env var, TTY, CI)
+// every prompt UI call site must consult. ErrCanceled is a typed
+// error that callers map to exit code 130.
 package prompt
 
 import (
@@ -22,24 +16,21 @@ import (
 	"github.com/example/spin/internal/scaffold"
 )
 
-// ErrCanceled matches via errors.Is(err, prompt.ErrCanceled). Use
-// errors.As for the typed *Canceled when you need the Reason.
+// ErrCanceled is matched by errors.Is; the typed *Canceled carries Reason.
 var ErrCanceled = errors.New("prompt canceled by user")
 
+// Canceled describes a user-initiated cancellation.
 type Canceled struct {
 	Reason string
 }
 
 func (c *Canceled) Error() string { return "spin: " + c.Reason }
 
-// Is makes the type matchable with both errors.Is and errors.As.
+// Is makes *Canceled matchable with both errors.Is and errors.As.
 func (c *Canceled) Is(target error) bool { return target == ErrCanceled }
 
 type backend int
 
-// backendNone is reserved as the zero value; resolveBackend never
-// returns it. The Fill switch's default branch panics on it to
-// catch a future regression adding a third backend.
 const (
 	backendNone backend = iota
 	backendGum
@@ -57,9 +48,9 @@ func (b backend) String() string {
 	}
 }
 
-// Deps is the bag of injectable seams. The production values come
-// from DefaultDeps(); tests build a Deps with stubs and pass it to
-// the internal entry points.
+// Deps is the bag of injectable seams. Production values come from
+// DefaultDeps; tests build a Deps with stubs and pass it to the
+// internal entry points.
 type Deps struct {
 	LookPath     func(string) (string, error)
 	VersionCheck func(string) error
@@ -80,10 +71,9 @@ func DefaultDeps() Deps {
 	}
 }
 
-// Resolution order (UI-SPEC §gum vs huh decision + RESEARCH Pitfall 3):
-//  1. SPIN_USE_HUH=1 → backendHuh (escape hatch)
-//  2. LookPath + VersionCheck pass → backendGum
-//  3. Otherwise → backendHuh (always built in)
+// resolveBackend returns the active prompt backend. SPIN_USE_HUH=1
+// forces the huh backend; otherwise gum is used when present and
+// responsive. The huh backend is the final fallback.
 func resolveBackend(deps Deps) backend {
 	if os.Getenv("SPIN_USE_HUH") == "1" {
 		return backendHuh
@@ -98,13 +88,14 @@ func resolveBackend(deps Deps) backend {
 	return backendGum
 }
 
-// ShouldPrompt is the three-layer guard. p.NoInteractive is NOT
-// consulted here — cmd/new.go reads p.NoInteractive after
-// ResolveFlags and skips Fill entirely when --no-interactive is set.
+// ShouldPrompt reports whether the current invocation should run
+// interactive prompts. p.NoInteractive is not consulted here;
+// cmd/new.go reads that flag before calling Fill.
 func ShouldPrompt() bool {
 	return IsInteractive()
 }
 
+// Fill populates p's required fields by asking the user.
 func Fill(p *scaffold.Project) error {
 	return fillWithDeps(p, DefaultDeps())
 }

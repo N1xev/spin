@@ -14,13 +14,10 @@ import (
 // file map contains the expected files with the expected content.
 //
 // The test exercises the embed -> walk -> overlay -> text/template pipeline
-// without touching the filesystem. Plan 02/03 expand the Project fields
-// (License, Template, Force, NoGit, Quiet, ...) and the overlay engine.
-// Plan 02-05 restructured the layout to cmd/<name>/main.go + internal/app/.
-//
-// The test runs in <1s and requires no Go toolchain beyond the test
-// framework itself, proving the embed + template pipeline produces the
-// expected files for the Walking Skeleton flag combination.
+// without touching the filesystem. The test runs in <1s and requires no
+// Go toolchain beyond the test framework itself, proving the embed +
+// template pipeline produces the expected files for the Walking
+// Skeleton flag combination.
 func TestRenderToMapWalkingSkeleton(t *testing.T) {
 	p := &Project{
 		Name:    "myapp",
@@ -39,7 +36,7 @@ func TestRenderToMapWalkingSkeleton(t *testing.T) {
 		t.Fatal("renderToMap returned empty map; embed not walking templates?")
 	}
 
-	// Plan 02-05: main.go is at the canonical Go path `cmd/<name>/main.go`.
+	// main.go is at the canonical Go path `cmd/<name>/main.go`.
 	required := []string{"go.mod", "cmd/myapp/main.go", "README.md", ".gitignore"}
 	for _, name := range required {
 		if _, ok := files[name]; !ok {
@@ -62,7 +59,7 @@ func TestRenderToMapWalkingSkeleton(t *testing.T) {
 		}
 	}
 
-	// main.go assertions — Plan 02-05: thin entry, hands off to app.Run.
+	// main.go assertions: thin entry, hands off to app.Run.
 	mainGo, ok := files["cmd/myapp/main.go"]
 	if !ok {
 		t.Fatal("cmd/myapp/main.go missing from rendered map")
@@ -124,8 +121,8 @@ func TestNewEndToEndWalkingSkeleton(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 
-	// Assert the required files exist on disk. Plan 02-05: main.go
-	// is at the canonical Go path `cmd/<name>/main.go`.
+	// Assert the required files exist on disk. main.go is at
+	// the canonical Go path `cmd/<name>/main.go`.
 	for _, fname := range []string{"go.mod", "cmd/" + name + "/main.go", "README.md", ".gitignore"} {
 		path := filepath.Join(projectDir, fname)
 		if _, err := os.Stat(path); err != nil {
@@ -152,10 +149,10 @@ func keysOf(m map[string][]byte) []string {
 }
 
 // TestEmit_PathTraversal asserts that emit() rejects a rendered file map
-// whose relative paths resolve outside the project root. The guard added
-// in Plan 02-01 (Task 3) is the first line of defense against a template
-// (or a buggy template helper) that interpolates `{{.Name}}` (or any
-// other user-controlled value) into a path with `..` segments.
+// whose relative paths resolve outside the project root. The guard is
+// the first line of defense against a template (or a buggy template
+// helper) that interpolates `{{.Name}}` (or any other user-controlled
+// value) into a path with `..` segments.
 //
 // Sub-cases cover the three common escape shapes:
 //   - absolute `/etc/passwd` (POSIX) — `filepath.Join` strips the leading

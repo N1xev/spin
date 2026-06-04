@@ -7,7 +7,8 @@ import (
 	"testing"
 )
 
-// TestIsValidGoModuleSegment covers the 14 cases from RESEARCH §6:
+// TestIsValidGoModuleSegment covers the canonical set of valid and
+// invalid Go module segment names:
 //
 //	valid:    myapp, my-app, my_app, my.app, a1, go-app, 62-char-string
 //	invalid:  MyApp, -myapp, myapp-, test, internal, .., .hidden, a, "", myapp/../etc, 64-char, _test
@@ -148,8 +149,8 @@ func TestProjectValidate_ErrorFormat(t *testing.T) {
 	}
 }
 
-// TestIsValidLicense covers the CR-002 whitelist: mit / apache-2.0 / none
-// are accepted, everything else is rejected.
+// TestIsValidLicense covers the license whitelist: mit / apache-2.0 /
+// none are accepted, everything else is rejected.
 func TestIsValidLicense(t *testing.T) {
 	cases := []struct {
 		input string
@@ -183,7 +184,7 @@ func TestIsValidLicense(t *testing.T) {
 	}
 }
 
-// TestProjectValidate_LicenseField covers the CR-002 license validation
+// TestProjectValidate_LicenseField covers the license validation
 // branch in Project.Validate:
 //   - empty / default (mit) succeeds
 //   - case-insensitive normalization in resolve.go produces "mit"
@@ -228,9 +229,9 @@ func TestProjectValidate_LicenseField(t *testing.T) {
 	}
 }
 
-// TestResolveFlags_LicenseNormalization covers the resolve.go side of
-// CR-002: --license MIT (uppercase) must be normalized to "mit" before
-// being stored on the Project.
+// TestResolveFlags_LicenseNormalization covers the resolve.go side
+// of license normalization: --license MIT (uppercase) must be
+// normalized to "mit" before being stored on the Project.
 func TestResolveFlags_LicenseNormalization(t *testing.T) {
 	cases := []struct {
 		flag string
@@ -251,11 +252,10 @@ func TestResolveFlags_LicenseNormalization(t *testing.T) {
 	}
 }
 
-// TestIsValidTemplateRepo covers TMPL-03's URL format gate. The
-// validation is permissive (any git-supported protocol accepted) but
-// rejects obviously-invalid input (empty, no scheme, ftp://). The git
-// binary is the real choke point for invalid URLs that pass this
-// check.
+// TestIsValidTemplateRepo covers the URL format gate. The validation
+// is permissive (any git-supported protocol accepted) but rejects
+// obviously-invalid input (empty, no scheme, ftp://). The git binary
+// is the real choke point for invalid URLs that pass this check.
 func TestIsValidTemplateRepo(t *testing.T) {
 	cases := []struct {
 		name string
@@ -275,7 +275,7 @@ func TestIsValidTemplateRepo(t *testing.T) {
 		{"ftp rejected", "ftp://example.com/repo.git", false},
 		{"relative path rejected", "github.com/me/repo", false},
 		{"whitespace rejected", " https://example.com/repo.git", false},
-		// CR-004: leading-dash path segment rejected (defense in depth
+		// Leading-dash path segment rejected (defense in depth
 		// alongside the `--` separator in CloneTemplateRepo).
 		{"https with leading-dash path", "https://example.com/-evil", false},
 		{"http with leading-dash path", "http://example.com/-upload-pack=evil", false},

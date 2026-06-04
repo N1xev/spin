@@ -4,8 +4,8 @@
 // `git init -b main` failed because the local git is too old (< 2.28)
 // — in which case we fall back to `git init` + `git symbolic-ref HEAD
 // refs/heads/main` — or for some other reason, in which case we
-// surface the raw git error. WR-004 widened the matcher; the test
-// table covers every wording the review called out.
+// surface the raw git error. The test table covers every wording
+// the matcher must recognize.
 package scaffold
 
 import "testing"
@@ -24,11 +24,11 @@ func TestIsUnknownFlagErr(t *testing.T) {
 		// The flag is sometimes quoted bare (`b') and sometimes with
 		// a leading dash (`-b'). Both forms must match.
 		{"unknown option + bare flag", "error: unknown option `b'\nusage: git init [-q] [--bare] [-b <branch-name>]", "b", true},
-		{"unknown switch + bare flag (WR-004 fix)", "error: unknown switch `b'\nusage: git init [-q] [--bare]", "b", true},
+		{"unknown switch + bare flag", "error: unknown switch `b'\nusage: git init [-q] [--bare]", "b", true},
 		{"unknown option + dashed flag", "error: unknown option `-b'\nusage: git init", "b", true},
-		{"unknown switch + dashed flag (WR-004 fix)", "error: unknown switch `-b'", "b", true},
+		{"unknown switch + dashed flag", "error: unknown switch `-b'", "b", true},
 		{"unrecognized option + bare flag", "fatal: unrecognized option `b'", "b", true},
-		{"unrecognized switch + bare flag (WR-004 fix)", "git: unrecognized switch `b'", "b", true},
+		{"unrecognized switch + bare flag", "git: unrecognized switch `b'", "b", true},
 
 		// True negatives: errors that look similar but aren't about -b.
 		{"unknown branch-name (unrelated)", "error: unknown branch name 'main'", "b", false},

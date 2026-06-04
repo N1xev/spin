@@ -1,10 +1,9 @@
-// Package scaffold tests for the AllLibs method (Plan 02 / INT-05).
+// Tests for the AllLibs method.
 //
 // AllLibs unifies p.Libs and the per-lib bools (Cobra, Fang, Viper,
 // Huh, Glamour, Wish, Log, Harmonica) into a single sorted,
-// deduplicated slice. The method fixes Pitfall 4 from 03-RESEARCH.md
-// (parallel sources of truth) and is consumed by the prompt layer
-// (Plan 02 askLibs) and the AGENTS.md template (Plan 04).
+// deduplicated slice. It is consumed by the prompt layer
+// (askLibs) and the AGENTS.md template.
 
 package scaffold
 

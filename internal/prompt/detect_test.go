@@ -2,9 +2,7 @@
 // `ciEnv` is exercised indirectly through IsInteractive.
 //
 // TTY path: `go test` always runs with a pipe for stdin, so the
-// tty-missing path is reliably testable (RESEARCH §"Pitfall 1 /
-// env-vs-tty" treats CI/non-TTY the same; the pipe is the proxy for
-// "not a tty" in unit tests). The TTY-present path skips.
+// tty-missing path is reliably testable. The TTY-present path skips.
 package prompt_test
 
 import (

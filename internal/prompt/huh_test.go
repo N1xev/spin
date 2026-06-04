@@ -1,17 +1,10 @@
-// Package prompt tests — huh v2 form backend.
+// White-box tests for the huh v2 form backend.
 //
-// Per 03-02-PLAN.md Task 3, these tests assert the FORM CONSTRUCTION
-// (which options, which pre-selection, which skip predicate), not
-// the .Run() output. .Run()-level tests are TTY-only and deferred to
-// a future test suite using `tea.WithInput` / `tea.WithOutput` test
-// doubles (huh v2's `WithInput`/`WithOutput` form options make this
-// possible but the setup is out of scope for the unit suite).
-//
-// The tests use `package prompt` (white-box) to call the unexported
-// helpers (preSelectedLibs, templateOptionsFor) directly. The
-// form-construction smoke tests (e.g., TestAskType_BuildsForm) call
-// the form builders; if huh v2 ever changes its constructor signature,
-// these tests catch the regression.
+// These tests assert the form construction (which options, which
+// pre-selection, which skip predicate), not the .Run() output.
+// .Run()-level tests are TTY-only and out of scope for the unit
+// suite. The tests use `package prompt` (white-box) to call the
+// unexported helpers (preSelectedLibs, templateOptionsFor) directly.
 
 package prompt
 
@@ -212,7 +205,7 @@ func TestPreSelectedLibs_EmptyProject(t *testing.T) {
 }
 
 // TestTemplateOptionsFor_Variants asserts the template options
-// match the UI-SPEC for each variant.
+// match the expected set for each variant.
 func TestTemplateOptionsFor_Variants(t *testing.T) {
 	cases := []struct {
 		variant string
@@ -244,7 +237,7 @@ func TestTemplateOptionsFor_Variants(t *testing.T) {
 
 // TestSetBoolFieldByName asserts the small reflection-avoidance
 // switch in askLibs correctly maps field names to p.<Field>.
-// We test all 9 libBoolMirror entries.
+// We test all libBoolMirror entries.
 func TestSetBoolFieldByName(t *testing.T) {
 	for _, fieldName := range libBoolMirror {
 		p := &scaffold.Project{}

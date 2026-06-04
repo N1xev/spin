@@ -1,13 +1,12 @@
-// This is the Walking Skeleton's end-to-end test. It proves the spin binary
-// can be built, can scaffold a runnable bubbletea v2 TUI project from a temp
-// directory, and the generated project passes `go build ./...` and
-// `go test ./...` with CGO disabled. Failure here means the scaffolder
-// pipeline is broken end-to-end.
+// End-to-end test. It proves the spin binary can be built, can scaffold
+// a runnable bubbletea v2 TUI project from a temp directory, and the
+// generated project passes `go build ./...` and `go test ./...` with
+// CGO disabled. Failure here means the scaffolder pipeline is broken
+// end-to-end.
 //
 // The test builds spin into os.TempDir(), runs the CLI against a fresh
 // t.TempDir(), validates every emitted file, runs go build + go test on
-// the generated project, and greps for v1 charmbracelet import leaks
-// (TOOL-03).
+// the generated project, and greps for v1 charmbracelet import leaks.
 package scaffold
 
 import (
@@ -64,8 +63,8 @@ func TestE2EScaffold(t *testing.T) {
 		}
 	}
 
-	// 5. main.go assertions. Plan 02-05: main.go is at cmd/<name>/main.go
-	// (thin entry, hands off to app.Run); tea.NewProgram lives in
+	// 5. main.go assertions. main.go is at cmd/<name>/main.go (thin
+	// entry, hands off to app.Run); tea.NewProgram lives in
 	// internal/app/app.go.
 	mainGo, err := os.ReadFile(filepath.Join(projectDir, "cmd", "e2e-myapp", "main.go"))
 	if err != nil {
@@ -124,7 +123,7 @@ func TestE2EScaffold(t *testing.T) {
 		t.Fatalf("go test ./... in %s failed:\n%s", projectDir, out)
 	}
 
-	// 9. v1-leak grep (TOOL-03).
+	// 9. v1-leak grep.
 	grep := exec.Command("grep", "-rE", "github.com/charmbracelet/",
 		"--include=*.go", ".")
 	grep.Dir = projectDir
