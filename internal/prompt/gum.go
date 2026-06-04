@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -336,6 +337,7 @@ func askGumLibs(p *scaffold.Project) error {
 		pickSet[n] = true
 	}
 	p.Libs = names
+	sort.Strings(p.Libs)
 	for n, fieldName := range libBoolMirror {
 		setBoolFieldByName(p, fieldName, pickSet[n])
 	}
