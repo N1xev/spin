@@ -89,7 +89,15 @@ func init() {
 	pf.Bool("modifiers", false, "add x/modifiers (Phase 2)")
 	pf.Bool("ansi", false, "add x/ansi (Phase 2)")
 	pf.Bool("runewidth", false, "add go-runewidth (Phase 2)")
-	pf.Bool("ai", false, "opt in to AGENTS.md (Phase 3)")
+	pf.Bool("ai", false, "opt in to AGENTS.md (alias: --agents)")
+	pf.Bool("agents", false, "alias for --ai")
+	// UI-SPEC Locked Decision #5: --ai and --agents are the two spellings
+	// for the AGENTS.md opt-in. pflag v1.0.6 (the version pinned in go.mod)
+	// doesn't expose Flag.Aliases (only single-letter Shorthand), so we
+	// register both as separate flags and OR them into p.AI in
+	// ResolveFlags. The same pattern was used for --no-interactive /
+	// --yes / --batch in Plan 03-01; the help output shows both spellings
+	// via the Usage strings.
 }
 
 // runNew is the `spin new` RunE. It binds CLI flags to a *Project via

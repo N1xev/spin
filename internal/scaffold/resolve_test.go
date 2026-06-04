@@ -50,6 +50,7 @@ func newResolveCmd() *cobra.Command {
 	pf.Bool("ansi", false, "add x/ansi (Phase 2)")
 	pf.Bool("runewidth", false, "add go-runewidth (Phase 2)")
 	pf.Bool("ai", false, "opt in to AGENTS.md (Phase 3)")
+	pf.Bool("agents", false, "alias for --ai (Phase 3)")
 
 	return c
 }

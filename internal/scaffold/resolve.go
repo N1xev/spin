@@ -214,6 +214,16 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 		}
 		*b.field = v
 	}
+	// --agents is an alias for --ai (UI-SPEC Locked Decision #5). pflag
+	// v1.0.6 doesn't expose Flag.Aliases for long-form aliases, so we
+	// register both as separate flags and OR them into p.AI here. If
+	// either spelling is set, p.AI is true. Same pattern as
+	// --no-interactive / --yes / --batch above.
+	if v, err := mustBool(cmd, "agents"); err != nil {
+		return nil, err
+	} else if v {
+		p.AI = true
+	}
 
 	// Variant auto-defaults. WR-003 / CR-002 / CR-003:
 	//
