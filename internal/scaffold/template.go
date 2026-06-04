@@ -2,10 +2,10 @@
 //
 // The engine composes three overlay layers in last-write-wins order:
 //
-//	1. templates/_base/         — scaffolding files that every project gets
-//	                                 (go.mod, README, .air.toml, Taskfile.yml, LICENSE-*, .gitignore)
-//	2. templates/variant_<type>/ — the project variant (tui, cli, all) main.go
-//	3. templates/lib/<name>/     — per-library overlays (bubbletea, bubbles, lipgloss, ...)
+//  1. templates/_base/         — scaffolding files that every project gets
+//     (go.mod, README, .air.toml, Taskfile.yml, LICENSE-*, .gitignore)
+//  2. templates/variant_<type>/ — the project variant (tui, cli, all) main.go
+//  3. templates/lib/<name>/     — per-library overlays (bubbletea, bubbles, lipgloss, ...)
 //
 // Each lib overlay is a DIRECTORY. Its contents map directly to the output
 // tree (path-prefix `templates/lib/<name>/` stripped, `.tmpl` suffix
@@ -65,7 +65,7 @@ func charmLibInfoField(display, module, purpose, extending, example, field strin
 //
 // In addition to the entries in p.Libs, the function also walks the
 // lib/<name>/ overlay for every active bool flag (Cobra, Fang, Viper,
-// Huh, Glamour, Glow, Wish, Log, Harmonica). Plan 02-03 introduced
+// Huh, Glamour, Wish, Log, Harmonica). Plan 02-03 introduced
 // these as bools so the scaffolder didn't have to know the
 // forward-compat flag set at ResolveFlags time, but the overlay
 // engine still needs to walk their lib/<name>/ directories when
@@ -112,19 +112,21 @@ func (p *Project) overlayOrder() []string {
 //
 // Plan 02-05 reduced this map to a single entry (glow). Plan 03-04
 // adds the second surviving overlay: lib/ai/ (the AGENTS.md template
-// gated on --ai). All other charm library wiring is inlined in the
+// gated on --ai). After the quick task that drops --glow, only
+// lib/ai/ survives — the lib/glow/ overlay was dropped (glow binary
+// is redundant; glamour provides in-process markdown rendering).
+// All other charm library wiring is inlined in the
 // variant_*/internal/{app,cmd,ui,config}/*.go.tmpl files as
 // `if has<Lib> .` blocks, so no lib/* overlay directory is needed for
 // huh, wish, glamour, harmonica, bubbles, bubbletea, cobra, fang, log,
-// lipgloss, viper, ansi, modifiers, or runewidth.
+// lipgloss, viper, ansi, or runewidth.
 //
 // For the parallel "is this lib selected?" predicate that includes
 // non-overlay bools (Cobra, Fang, Viper, Huh, Log, etc.) see
 // libBoolMap in project.go — AllLibs() uses that one.
 func (p *Project) boolFlagOverlayMap() map[string]bool {
 	return map[string]bool{
-		"glow": p.Glow,
-		"ai":   p.AI,
+		"ai": p.AI,
 	}
 }
 
@@ -261,10 +263,10 @@ func funcMap(p *Project) template.FuncMap {
 			}
 			return strings.ToUpper(s[:1]) + s[1:]
 		},
-		"upper":  strings.ToUpper,
-		"join":   func(parts []string, sep string) string { return strings.Join(parts, sep) },
-		"quote":  strconv.Quote,
-		"has":    func(v string) bool { return slices.Contains(p.Libs, v) },
+		"upper": strings.ToUpper,
+		"join":  func(parts []string, sep string) string { return strings.Join(parts, sep) },
+		"quote": strconv.Quote,
+		"has":   func(v string) bool { return slices.Contains(p.Libs, v) },
 		"hasBubbles": func(p2 *Project) bool {
 			return slices.Contains(p2.Libs, "bubbles")
 		},
@@ -274,11 +276,10 @@ func funcMap(p *Project) template.FuncMap {
 		"hasLipgloss": func(p2 *Project) bool {
 			return slices.Contains(p2.Libs, "lipgloss")
 		},
-		"hasCobra": func(p2 *Project) bool { return p2.Cobra },
-		"hasFang":  func(p2 *Project) bool { return p2.Fang },
+		"hasCobra":     func(p2 *Project) bool { return p2.Cobra },
+		"hasFang":      func(p2 *Project) bool { return p2.Fang },
 		"hasHuh":       func(p2 *Project) bool { return p2.Huh },
 		"hasGlamour":   func(p2 *Project) bool { return p2.Glamour },
-		"hasGlow":      func(p2 *Project) bool { return p2.Glow },
 		"hasWish":      func(p2 *Project) bool { return p2.Wish },
 		"hasLog":       func(p2 *Project) bool { return p2.Log },
 		"hasHarmonica": func(p2 *Project) bool { return p2.Harmonica },
@@ -305,14 +306,12 @@ func funcMap(p *Project) template.FuncMap {
 				return DefaultPins.Viper
 			case "harmonica":
 				return DefaultLegacyPins.Harmonica
-			case "glow":
-				return DefaultLegacyPins.Glow
 			default:
 				return ""
 			}
 		},
 		// charmLibInfo returns a metadata string for a given library name
-		// (one of the 15 keys in the UI-SPEC §"Library lookup table" — see
+		// (one of the 13 keys in the UI-SPEC §"Library lookup table" — see
 		// the template at templates/lib/ai/AGENTS.md.tmpl). The second
 		// argument selects which field: "display", "module", "purpose",
 		// "extending", or "example". Returns "" for unknown names or
@@ -324,10 +323,10 @@ func funcMap(p *Project) template.FuncMap {
 		// versions. The version pin itself is what charmPin resolves; the
 		// module path is a separate, more stable identifier.
 		//
-		// The 15 keys cover every library listed in UI-SPEC Surface B §
+		// The 13 keys cover every library listed in UI-SPEC Surface B §
 		// "Library lookup table (canonical)": bubbletea, bubbles,
-		// lipgloss, huh, glamour, glow, wish, log, harmonica, cobra,
-		// fang, viper, modifiers, ansi, runewidth.
+		// lipgloss, huh, glamour, wish, log, harmonica, cobra,
+		// fang, viper, ansi, runewidth.
 		"charmLibInfo": func(name, field string) string {
 			switch name {
 			case "bubbletea":
@@ -355,11 +354,6 @@ func funcMap(p *Project) template.FuncMap {
 					"Stylesheet-based markdown renderer",
 					"Use `NewTermRenderer` for terminal, `Render` for plain string.",
 					"r, _ := glamour.NewTermRenderer(glamour.WithStylePath(\"dark\"))\nout, _ := r.Render(md)", field)
-			case "glow":
-				return charmLibInfoField("Glow", "github.com/charmbracelet/glow/v2",
-					"Markdown reader CLI",
-					"Binary-only; shell out via `os/exec`.",
-					"out, _ := exec.Command(\"glow\", \"README.md\").Output()\nfmt.Println(string(out))", field)
 			case "wish":
 				return charmLibInfoField("Wish", "charm.land/wish/v2",
 					"SSH server framework",
@@ -390,11 +384,6 @@ func funcMap(p *Project) template.FuncMap {
 					"Config-file support",
 					"Use `mapstructure` v2 fork; bind flags with `viper.BindPFlag`.",
 					"viper.SetDefault(\"port\", 8080)\nport := viper.GetInt(\"port\")", field)
-			case "modifiers":
-				return charmLibInfoField("x/modifiers", "github.com/charmbracelet/x/modifiers",
-					"Inert UI modifiers (e.g. inert)",
-					"Use inside `tea.Update` to short-circuit input handling.",
-					"if _, ok := msg.(modifiers.Inert); ok {\n    return m, nil\n}", field)
 			case "ansi":
 				return charmLibInfoField("x/ansi", "github.com/charmbracelet/x/ansi",
 					"Low-level ANSI parser/generator",

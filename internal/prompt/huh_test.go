@@ -237,8 +237,6 @@ func boolFieldByName(p *scaffold.Project, fieldName string) bool {
 		return p.Huh
 	case "Glamour":
 		return p.Glamour
-	case "Glow":
-		return p.Glow
 	case "Wish":
 		return p.Wish
 	case "Log":

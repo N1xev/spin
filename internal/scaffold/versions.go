@@ -8,9 +8,9 @@
 //   - CharmPins — libraries that migrated to charm.land/<lib>/v2. These
 //     are the canonical v2 paths and are what the generated go.mod emits.
 //   - LegacyCharmPins — libraries still on github.com/charmbracelet/
-//     because they pre-date the migration (harmonica) or are binaries
-//     served from the github.com path (glow). Kept on a separate struct
-//     so the per-library v1-leak grep suite can disambiguate.
+//     because they pre-date the migration (harmonica). Kept on a
+//     separate struct so the per-library v1-leak grep suite can
+//     disambiguate.
 package scaffold
 
 // CharmPins is the single source of truth for charm v2 versions emitted
@@ -65,13 +65,6 @@ type LegacyCharmPins struct {
 	// v0.2.0 pre-dates the charm.land migration; the lib is mature
 	// and is not expected to migrate.
 	Harmonica string
-
-	// Glow is the markdown reader CLI. The Go module path is
-	// github.com/charmbracelet/glow/v2; the binary is installed via
-	// `go install github.com/charmbracelet/glow/v2@latest`. This is
-	// the user-facing binary dependency for the --glow flag; no Go
-	// import is required in the generated project's go.mod.
-	Glow string
 }
 
 // DefaultPins is the package-level pin set used by the template engine.
@@ -92,5 +85,4 @@ var DefaultPins = CharmPins{
 // github.com/charmbracelet/ libs that have not migrated.
 var DefaultLegacyPins = LegacyCharmPins{
 	Harmonica: "v0.2.0",
-	Glow:      "v2.1.2",
 }

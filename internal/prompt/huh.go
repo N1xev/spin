@@ -261,8 +261,6 @@ func setBoolFieldByName(p *scaffold.Project, fieldName string, val bool) {
 		p.Huh = val
 	case "Glamour":
 		p.Glamour = val
-	case "Glow":
-		p.Glow = val
 	case "Wish":
 		p.Wish = val
 	case "Log":

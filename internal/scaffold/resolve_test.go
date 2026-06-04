@@ -42,11 +42,9 @@ func newResolveCmd() *cobra.Command {
 	pf.Bool("viper", false, "add viper (Phase 2)")
 	pf.Bool("huh", false, "add huh v2 (Phase 2)")
 	pf.Bool("glamour", false, "add glamour v2 (Phase 2)")
-	pf.Bool("glow", false, "add glow binary (Phase 2)")
 	pf.Bool("wish", false, "add wish v2 (Phase 2)")
 	pf.Bool("log", false, "add charm log v2 (Phase 2)")
 	pf.Bool("harmonica", false, "add harmonica v2 (Phase 2)")
-	pf.Bool("modifiers", false, "add x/modifiers (Phase 2)")
 	pf.Bool("ansi", false, "add x/ansi (Phase 2)")
 	pf.Bool("runewidth", false, "add go-runewidth (Phase 2)")
 	pf.Bool("ai", false, "opt in to AGENTS.md (Phase 3)")
@@ -172,8 +170,8 @@ func TestResolveFlags_AllBoolsBind(t *testing.T) {
 	flags := []string{
 		"--tui", "--bubbletea",
 		"--force", "--no-git", "--no-verify", "--quiet",
-		"--cobra", "--fang", "--viper", "--huh", "--glamour", "--glow",
-		"--wish", "--log", "--harmonica", "--modifiers", "--ansi",
+		"--cobra", "--fang", "--viper", "--huh", "--glamour",
+		"--wish", "--log", "--harmonica", "--ansi",
 		"--runewidth", "--ai",
 	}
 	p := runResolveCmd(t, "myapp", flags...)
@@ -191,11 +189,9 @@ func TestResolveFlags_AllBoolsBind(t *testing.T) {
 		{"Viper", p.Viper},
 		{"Huh", p.Huh},
 		{"Glamour", p.Glamour},
-		{"Glow", p.Glow},
 		{"Wish", p.Wish},
 		{"Log", p.Log},
 		{"Harmonica", p.Harmonica},
-		{"Modifiers", p.Modifiers},
 		{"Ansi", p.Ansi},
 		{"Runewidth", p.Runewidth},
 		{"AI", p.AI},
@@ -300,7 +296,8 @@ func TestResolveFlags_TemplateDefault(t *testing.T) {
 // p.TemplateRepo and p.ExternalDir stays empty (the latter is set
 // by runNew after the clone, not by ResolveFlags).
 func TestResolveFlags_TemplateRepo(t *testing.T) {
-	p := runResolveCmd(t, "myapp",
+	p := runResolveCmd(
+		t, "myapp",
 		"--tui", "--bubbletea",
 		"--template-repo", "https://github.com/example/spin-templates",
 	)
@@ -333,7 +330,8 @@ func TestResolveFlags_TemplateRepo(t *testing.T) {
 // TestResolveFlags_KeepTemplateCache asserts --keep-template-cache
 // binds to p.KeepTemplateCache.
 func TestResolveFlags_KeepTemplateCache(t *testing.T) {
-	p := runResolveCmd(t, "myapp",
+	p := runResolveCmd(
+		t, "myapp",
 		"--tui", "--bubbletea",
 		"--template-repo", "https://github.com/example/spin-templates",
 		"--keep-template-cache",
