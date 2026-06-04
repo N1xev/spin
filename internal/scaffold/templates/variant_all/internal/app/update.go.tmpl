@@ -13,9 +13,10 @@ import (
 	"fmt"
 	"os"
 {{- end}}
-{{- if or (hasBubbletea .) (hasHarmonica .)}}
+{{- if hasHarmonica .}}
 	"time"
-
+{{- end}}
+{{- if or (hasBubbletea .) (hasHarmonica .)}}
 	"charm.land/bubbletea/v2"
 {{- end}}
 {{- if hasLipgloss .}}
