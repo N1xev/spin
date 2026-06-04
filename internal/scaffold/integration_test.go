@@ -40,6 +40,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -48,7 +49,7 @@ const integrationProjectName = "spin-integration-myapp"
 
 func TestIntegrationScaffold(t *testing.T) {
 	projectDir, repoRootPath := runSpinScaffold(t, integrationProjectName,
-		[]string{"--tui", "--bubbletea", "--bubbles", "--lipgloss"})
+		[]string{"--tui", "--bubbletea", "--bubbles", "--lipgloss", "--ai"})
 
 	assertGoModFullTUI(t, projectDir)
 	assertMainGoV2(t, projectDir)
@@ -62,8 +63,11 @@ func TestIntegrationScaffold(t *testing.T) {
 	assertGitInit(t, projectDir)
 	assertGoBuildAndTest(t, projectDir)
 	assertNoV1Leaks(t, projectDir, repoRootPath)
+	// Plan 03-04: --ai is now part of the canonical TOOL-05 test, so
+	// every scaffold run also exercises AGENTS.md generation.
+	assertAGENTSmd(t, projectDir)
 
-	t.Logf("OK: Phase 1 integration test passed for %s", integrationProjectName)
+	t.Logf("OK: Phase 1+3 integration test passed for %s", integrationProjectName)
 }
 
 // TestIntegrationScaffold_AlwaysGo1250 asserts that every generated
@@ -157,7 +161,13 @@ func TestIntegrationScaffold_LicenseVariants(t *testing.T) {
 func runSpinScaffold(t *testing.T, name string, extraArgs []string) (string, string) {
 	t.Helper()
 
-	repoRootPath := repoRoot(t)
+	// Capture the repo root BEFORE chdir. Tests that call runSpinScaffold
+	// multiple times in the same function (e.g.
+	// TestIntegrationScaffold_AGENTSmd_Determinism) need the captured
+	// root to be valid even after the first call chdirs into its workDir.
+	// Caching in a package var (with sync.Once) ensures the very first
+	// call wins, regardless of cwd, and subsequent calls reuse it.
+	repoRootPath := cachedRepoRoot(t)
 	workDir := t.TempDir()
 
 	// Build the spin binary to a stable absolute path under os.TempDir
@@ -198,6 +208,27 @@ func runSpinScaffold(t *testing.T, name string, extraArgs []string) (string, str
 		t.Fatalf("project dir %s not created: %v", projectDir, err)
 	}
 	return projectDir, repoRootPath
+}
+
+// repoRootOnce is the cached repo root path. The first call to
+// runSpinScaffold in a test process computes the root by walking up
+// from cwd; subsequent calls reuse the cached value. The cache is
+// populated before runSpinScaffold does any chdir, so even tests that
+// call it multiple times (e.g. determinism) always see a stable path.
+//
+// We do NOT clear this cache between tests because the project root
+// doesn't change during a test binary's lifetime.
+var (
+	repoRootOnce sync.Once
+	repoRootPath string
+)
+
+func cachedRepoRoot(t *testing.T) string {
+	t.Helper()
+	repoRootOnce.Do(func() {
+		repoRootPath = repoRoot(t)
+	})
+	return repoRootPath
 }
 
 // assertGoModFullTUI validates the full-TUI go.mod:
@@ -773,5 +804,151 @@ func TestIntegrationScaffold_NameInPath(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("walk scaffold tree: %v", err)
+	}
+}
+
+// TestIntegrationScaffold_AGENTSmd scaffolds a TUI project with --ai
+// and asserts the generated AGENTS.md contains the expected sections.
+// Plan 03-04's "AGENTS.md opt-in" test: --ai is the load-bearing flag,
+// and the output must begin with the marker, contain all 6 sections,
+// list libraries alphabetically, and contain no ANSI / lipgloss.
+func TestIntegrationScaffold_AGENTSmd(t *testing.T) {
+	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-ai",
+		[]string{"--tui", "--bubbletea", "--lipgloss", "--ai"})
+
+	assertAGENTSmd(t, projectDir)
+}
+
+// TestIntegrationScaffold_AGENTSmd_Determinism is the load-bearing
+// determinism test: scaffolds the same project twice (in two separate
+// temp dirs, so the runs are independent) and asserts the two AGENTS.md
+// files are byte-identical. This is the contract that makes AGENTS.md
+// safe to commit (no machine IDs, no timestamps, no UUIDs). Pitfall 5
+// from 03-RESEARCH.md.
+//
+// Both scaffolds use the same project name so the only difference
+// between the two runs is the working directory and process IDs —
+// neither of which can leak into the rendered bytes. The project name
+// and module path are inputs, not noise; if those change, the output
+// is allowed to change.
+func TestIntegrationScaffold_AGENTSmd_Determinism(t *testing.T) {
+	flags := []string{"--tui", "--bubbletea", "--bubbles", "--lipgloss", "--ai"}
+	name := integrationProjectName + "-determinism"
+	first, _ := runSpinScaffold(t, name, flags)
+	second, _ := runSpinScaffold(t, name, flags)
+
+	firstAgents, err := os.ReadFile(filepath.Join(first, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read first AGENTS.md: %v", err)
+	}
+	secondAgents, err := os.ReadFile(filepath.Join(second, "AGENTS.md"))
+	if err != nil {
+		t.Fatalf("read second AGENTS.md: %v", err)
+	}
+	if !bytes.Equal(firstAgents, secondAgents) {
+		t.Errorf("AGENTS.md not byte-identical across two scaffolds:\n--- first ---\n%s\n--- second ---\n%s",
+			firstAgents, secondAgents)
+	}
+}
+
+// TestIntegrationScaffold_AGENTSmd_Alias verifies --agents (the alias)
+// produces the same AGENTS.md as --ai. This is the UI-SPEC Locked
+// Decision #5 alias contract: the two spellings are interchangeable.
+// We use the same flag set as TestIntegrationScaffold_AGENTSmd so the
+// content assertions (Bubble Tea, Lip Gloss in alphabetical order) hold
+// for both --ai and --agents.
+func TestIntegrationScaffold_AGENTSmd_Alias(t *testing.T) {
+	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-agents-alias",
+		[]string{"--tui", "--bubbletea", "--lipgloss", "--agents"})
+
+	agentsPath := filepath.Join(projectDir, "AGENTS.md")
+	if _, err := os.Stat(agentsPath); err != nil {
+		t.Fatalf("--agents did not produce AGENTS.md: %v", err)
+	}
+	// Same content assertions as --ai.
+	assertAGENTSmd(t, projectDir)
+}
+
+// TestIntegrationScaffold_NoAI_NoAGENTSmd asserts that without --ai
+// (or --agents), no AGENTS.md is emitted. The overlay walker skips
+// lib/ai/ when p.AI is false.
+func TestIntegrationScaffold_NoAI_NoAGENTSmd(t *testing.T) {
+	projectDir, _ := runSpinScaffold(t, integrationProjectName+"-no-ai",
+		[]string{"--tui", "--bubbletea"})
+
+	agentsPath := filepath.Join(projectDir, "AGENTS.md")
+	if _, err := os.Stat(agentsPath); !os.IsNotExist(err) {
+		t.Errorf("AGENTS.md should NOT exist without --ai, but %s exists (err=%v)",
+			agentsPath, err)
+	}
+}
+
+// assertAGENTSmd is the shared content assertion for AGENTS.md in the
+// integration tests. Asserts:
+//   - AGENTS.md exists at project root
+//   - line 1 is the version marker
+//   - the 6 required sections are present
+//   - libraries are listed alphabetically
+//   - no ANSI escape codes
+//   - no TODO / FIXME placeholders
+func assertAGENTSmd(t *testing.T, projectDir string) {
+	t.Helper()
+	agentsPath := filepath.Join(projectDir, "AGENTS.md")
+	agents, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", agentsPath, err)
+	}
+
+	// Line 1 is the version marker. The exact version comes from the
+	// spin binary (ldflags), so we assert the prefix rather than a
+	// specific version string.
+	firstLine, _, _ := strings.Cut(string(agents), "\n")
+	wantPrefix := "<!-- AUTOGENERATED by spin "
+	if !strings.HasPrefix(firstLine, wantPrefix) || !strings.HasSuffix(firstLine, " -->") {
+		t.Errorf("AGENTS.md line 1 = %q, want %q<ver>%q", firstLine, wantPrefix, " -->")
+	}
+
+	// All 6 required sections must be present.
+	sections := []string{
+		"## What this project is",
+		"## Libraries",
+		"## Extending",
+		"## Conventions",
+		"## Rebuilding this file",
+	}
+	for _, s := range sections {
+		if !bytes.Contains(agents, []byte(s)) {
+			t.Errorf("AGENTS.md missing section %q", s)
+		}
+	}
+
+	// Library sections are present and alphabetical. The test project
+	// has --tui --bubbletea --lipgloss (and auto-implied bubbletea),
+	// so we expect both Bubble Tea and Lip Gloss headings with BT
+	// appearing before LG.
+	idxBT := bytes.Index(agents, []byte("### Bubble Tea"))
+	idxLG := bytes.Index(agents, []byte("### Lip Gloss"))
+	if idxBT < 0 {
+		t.Errorf("AGENTS.md missing '### Bubble Tea' heading")
+	}
+	if idxLG < 0 {
+		t.Errorf("AGENTS.md missing '### Lip Gloss' heading")
+	}
+	if idxBT >= 0 && idxLG >= 0 && idxBT >= idxLG {
+		t.Errorf("AGENTS.md libraries not alphabetical: Bubble Tea at %d, Lip Gloss at %d", idxBT, idxLG)
+	}
+
+	// No ANSI escape codes (UI-SPEC §"What AGENTS.md MUST NOT contain").
+	for _, banned := range []string{"\033", "\x1b", "\x1B"} {
+		if bytes.Contains(agents, []byte(banned)) {
+			t.Errorf("AGENTS.md contains forbidden ANSI byte %q", banned)
+		}
+	}
+
+	// No TODO / FIXME placeholders — the file is a finished doc.
+	for _, banned := range []string{"TODO", "FIXME"} {
+		if bytes.Contains(agents, []byte(banned)) {
+			t.Errorf("AGENTS.md contains forbidden placeholder %q", banned)
+		}
 	}
 }

@@ -139,13 +139,29 @@ func TestE2EScaffold(t *testing.T) {
 // repoRoot returns the absolute path of the spin repo root so the E2E
 // test can run `go build .` from the right directory regardless of
 // process working directory.
+//
+// Walks up from the current working directory until it finds go.mod.
+// This is robust against tests that chdir into temp dirs (e.g. the
+// runSpinScaffold helper does `os.Chdir(workDir)` so the scaffolded
+// project is the cwd by the time `spin` runs). A previous version
+// used a fixed `wd/../..` which broke in exactly that scenario — the
+// first call to runSpinScaffold would chdir, the second would
+// compute the wrong root.
 func repoRoot(t *testing.T) string {
 	t.Helper()
-	// scaffold_test.go lives at internal/scaffold/, so two levels up.
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	root := filepath.Clean(filepath.Join(wd, "..", ".."))
-	return root
+	dir := wd
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			t.Fatalf("could not find go.mod starting from %s", wd)
+		}
+		dir = parent
+	}
 }
