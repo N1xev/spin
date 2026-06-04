@@ -15,6 +15,13 @@
 // The backend choice is decided once per `Fill` invocation by
 // resolveBackend() in prompt.go; see prompt.go for the dispatch.
 //
+// Testability: the runner is on the Deps struct (see prompt.go), not a
+// package-level mutable global. Tests construct a Deps with a stub
+// Runner and call fillWithGumDeps directly. The 5-minute context
+// timeout is set on the call stack (no global) and flows through the
+// widget wrappers as a parameter, so t.Parallel()-using tests are
+// safe — no shared state.
+//
 // Cancellation / timeout pattern is the same as the git-clone path
 // in internal/scaffold/repo.go: cmd.Cancel = Process.Kill + a short
 // cmd.WaitDelay so Ctrl-C / 5-min timeout never leaves the scaffolder
@@ -38,27 +45,8 @@ import (
 	"github.com/example/spin/internal/scaffold"
 )
 
-// gumRunner is the overridable test seam. The default is gumRunCapture
-// (the real subprocess call); tests in gum_test.go replace it with
-// stubs that record the call sequence and return canned answers.
-//
-// The signature matches gumRunCapture so the default assignment is a
-// direct bind (no adapter).
-var gumRunner = gumRunCapture
-
-// gumCtx is the context that widget wrappers pass to gumRunner. It is
-// set by fillWithGum at entry to a 5-minute timeout and reset to
-// context.Background() on exit. Tests that stub gumRunner bypass this
-// (the stub returns canned values without touching ctx), so the
-// default value of context.Background() is the safe no-op.
-//
-// This pattern keeps the wrapper signatures (gumChoose, gumInput, ...)
-// clean (no extra ctx parameter per the UI-SPEC widget choices) while
-// still pluming the 5-min timeout to the subprocess call site.
-var gumCtx = context.Background()
-
 // gumRunCapture is the single place in the package that calls
-// os/exec for gum. It honors the caller's ctx (set by fillWithGum
+// os/exec for gum. It honors the caller's ctx (set by fillWithGumDeps
 // for the 5-min timeout) and wires cmd.Cancel + cmd.WaitDelay so a
 // parent-side Ctrl-C (or context expiry) kills gum promptly without
 // leaving the parent's pipe drains hanging.
@@ -67,6 +55,9 @@ var gumCtx = context.Background()
 // when the subprocess exits non-zero, or a wrapped error including
 // stderr for other failures.
 func gumRunCapture(ctx context.Context, args ...string) (string, error) {
+	if len(args) == 0 {
+		return "", errors.New("gum: no subcommand")
+	}
 	var stdout, stderr bytes.Buffer
 	cmd := exec.CommandContext(ctx, "gum", args...)
 	cmd.Stdin = nil // gum reads from the controlling tty directly
@@ -104,10 +95,13 @@ func gumRunCapture(ctx context.Context, args ...string) (string, error) {
 // The `--selected` flag is 1-based per gum's documented convention
 // (gum choose --selected <N> highlights option N where N starts at 1);
 // we translate the 0-based Go defaultIdx to 1-based here.
-func gumChoose(header string, options []string, defaultIdx int) (string, error) {
+//
+// ctx and deps are passed through to deps.Runner; no package-level
+// state is touched. This is what makes t.Parallel() safe in tests.
+func gumChoose(ctx context.Context, deps Deps, header string, options []string, defaultIdx int) (string, error) {
 	args := []string{"choose", "--header", header, "--selected", strconv.Itoa(defaultIdx + 1)}
 	args = append(args, options...)
-	return gumRunner(gumCtx, args...)
+	return deps.Runner(ctx, args...)
 }
 
 // gumMultiSelect is the multi-select widget wrapper. Returns the
@@ -115,16 +109,17 @@ func gumChoose(header string, options []string, defaultIdx int) (string, error) 
 // user confirmed an empty selection. Per gum docs, multi-select
 // separates selections with newlines on stdout.
 //
-// The `preSelected` parameter is currently unused in the arg
-// construction because gum's `choose --no-limit` does not support
-// pre-selection via the CLI; the user's selection is the only
-// authoritative input. The parameter is kept in the signature for
-// symmetry with huh.NewMultiSelect and so a future plan can pre-fill
-// via stdin if needed without churning the wrapper surface.
-func gumMultiSelect(header string, options []string, preSelected []string) ([]string, error) {
+// Pre-selection note: gum's `choose --no-limit` does not support
+// pre-selection via the CLI, so the wrapper signature has no
+// preSelected parameter (the huh backend's pre-selection is applied
+// at the options-builder layer; the gum backend just shows the full
+// list). A future plan may pre-fill via stdin if needed; the
+// current contract is the user's selection is the only authoritative
+// input.
+func gumMultiSelect(ctx context.Context, deps Deps, header string, options []string) ([]string, error) {
 	args := []string{"choose", "--no-limit", "--header", header}
 	args = append(args, options...)
-	out, err := gumRunner(gumCtx, args...)
+	out, err := deps.Runner(ctx, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,67 +133,67 @@ func gumMultiSelect(header string, options []string, preSelected []string) ([]st
 // string on success. `placeholder` is shown when the field is empty;
 // `defaultValue`, if non-empty, is passed as the gum --value flag
 // (gum's pre-filled initial value).
-func gumInput(header, placeholder, defaultValue string) (string, error) {
+func gumInput(ctx context.Context, deps Deps, header, placeholder, defaultValue string) (string, error) {
 	args := []string{"input", "--header", header, "--placeholder", placeholder}
 	if defaultValue != "" {
 		args = append(args, "--value", defaultValue)
 	}
-	return gumRunner(gumCtx, args...)
+	return deps.Runner(ctx, args...)
 }
 
 // gumConfirm is the yes/no widget wrapper. Returns the user's choice
 // as a bool. gum prints "Yes" or "No" to stdout on confirm (exit 0
 // either way), so we string-compare.
-func gumConfirm(prompt string, defaultYes bool) (bool, error) {
+func gumConfirm(ctx context.Context, deps Deps, prompt string, defaultYes bool) (bool, error) {
 	args := []string{"confirm", "--default=" + strconv.FormatBool(defaultYes), prompt}
-	out, err := gumRunner(gumCtx, args...)
+	out, err := deps.Runner(ctx, args...)
 	if err != nil {
 		return false, err
 	}
 	return out == "Yes", nil
 }
 
-// fillWithGum runs the 8 prompt steps in UI-SPEC order, writing
+// fillWithGumDeps runs the 8 prompt steps in UI-SPEC order, writing
 // each answer back into p in place. Returns on the first error
 // (which may be a *Canceled from a gum subprocess abort).
 //
 // The order matches UI-SPEC §"Surface A / Prompt sequence" table:
-//  1. askType        — project variant (tui/cli/all)
-//  2. askName        — directory name (skipped if p.Name set)
-//  3. askModule      — go.mod module path (skipped if p.Module set)
-//  4. askLibs        — multi-select (always asked, pre-selected)
-//  5. askLicense     — mit / apache-2.0 / none (skipped if non-default set)
-//  6. askTemplate    — variant-specific template (skipped if non-default set)
-//  7. askTemplateRepo — optional external repo URL (skipped if p.TemplateRepo set)
-//  8. askAI          — yes/no AGENTS.md opt-in (always asked, default Yes)
+//  1. askGumType        — project variant (tui/cli/all)
+//  2. askGumName        — directory name (skipped if p.Name set)
+//  3. askGumModule      — go.mod module path (skipped if p.Module set)
+//  4. askGumLibs        — multi-select (always asked, pre-selected)
+//  5. askGumLicense     — mit / apache-2.0 / none (skipped if non-default set)
+//  6. askGumTemplate    — variant-specific template (skipped if non-default set)
+//  7. askGumTemplateRepo — optional external repo URL (skipped if p.TemplateRepo set)
+//  8. askGumAI          — yes/no AGENTS.md opt-in (always asked, default Yes)
 //
-// The 5-minute context timeout is set here (per the plan: "The
-// 5-minute context timeout is provided by the caller (use a
-// context.WithTimeout(context.Background(), 5*time.Minute) in
-// fillWithGum)") and reset on exit so a subsequent test or call to
-// fillWithHuh isn't affected.
-func fillWithGum(p *scaffold.Project) error {
+// The 5-minute context timeout is set here (per the plan) and flows
+// through the call stack as a parameter — no package-level mutable
+// state. This is what makes the call hermetic for tests.
+func fillWithGumDeps(p *scaffold.Project, deps Deps) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	prevCtx := gumCtx
-	gumCtx = ctx
-	defer func() { gumCtx = prevCtx }()
+	return runGumSteps(ctx, deps, p)
+}
 
+// runGumSteps dispatches the 8 steps in order. Each step's fn has the
+// signature (ctx, deps, p) so the steps table doesn't need closures.
+func runGumSteps(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	steps := []struct {
 		name string
-		fn   func(*scaffold.Project) error
+		fn   func(context.Context, Deps, *scaffold.Project) error
 	}{
-		{"askType", askGumType},
-		{"askName", askGumName},
-		{"askModule", askGumModule},
-		{"askLibs", askGumLibs},
-		{"askLicense", askGumLicense},
-		{"askTemplate", askGumTemplate},
-		{"askTemplateRepo", askGumTemplateRepo},
-		{"askAI", askGumAI},
+		{"askGumType", askGumType},
+		{"askGumName", askGumName},
+		{"askGumModule", askGumModule},
+		{"askGumLibs", askGumLibs},
+		{"askGumLicense", askGumLicense},
+		{"askGumTemplate", askGumTemplate},
+		{"askGumTemplateRepo", askGumTemplateRepo},
+		{"askGumAI", askGumAI},
 	}
 	for _, s := range steps {
-		if err := s.fn(p); err != nil {
+		if err := s.fn(ctx, deps, p); err != nil {
 			return err
 		}
 	}
@@ -216,7 +211,7 @@ var typeDisplayToKey = map[string]string{
 
 // askGumType: project variant select. Skipped if p.Type is already
 // set by a flag (--tui/--cli/--all).
-func askGumType(p *scaffold.Project) error {
+func askGumType(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	if p.Type != "" {
 		return nil
 	}
@@ -225,7 +220,7 @@ func askGumType(p *scaffold.Project) error {
 		"CLI — command-line tool with cobra + fang",
 		"TUI + CLI — single binary with both halves",
 	}
-	chosen, err := gumChoose("What kind of project?", options, 0)
+	chosen, err := gumChoose(ctx, deps, "What kind of project?", options, 0)
 	if err != nil {
 		if isCanceled(err) {
 			return &Canceled{Reason: "user canceled at project type selection"}
@@ -244,13 +239,13 @@ func askGumType(p *scaffold.Project) error {
 // IsValidGoModuleSegment. Re-prompts once on failure; second
 // failure returns the "spin: project name is required" error.
 // Skipped if p.Name is already set by a positional arg.
-func askGumName(p *scaffold.Project) error {
+func askGumName(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	if p.Name != "" {
 		return nil
 	}
 	var name string
 	for attempt := 1; attempt <= 2; attempt++ {
-		n, err := gumInput("Project name", "myapp", "")
+		n, err := gumInput(ctx, deps, "Project name", "myapp", "")
 		if err != nil {
 			if isCanceled(err) {
 				return &Canceled{Reason: "user canceled at project name"}
@@ -269,7 +264,7 @@ func askGumName(p *scaffold.Project) error {
 // askGumModule: module path (go.mod). Defaults to p.Name. Skipped
 // if p.Module is already set to a non-default value (i.e., the
 // user passed --module with a different path).
-func askGumModule(p *scaffold.Project) error {
+func askGumModule(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	if p.Module != "" && p.Module != p.Name {
 		return nil
 	}
@@ -277,7 +272,7 @@ func askGumModule(p *scaffold.Project) error {
 	if defaultValue == "" {
 		defaultValue = "github.com/<your-org>/myapp"
 	}
-	m, err := gumInput("Module path", "github.com/<your-org>/<name>", defaultValue)
+	m, err := gumInput(ctx, deps, "Module path", "github.com/<your-org>/<name>", defaultValue)
 	if err != nil {
 		if isCanceled(err) {
 			return &Canceled{Reason: "user canceled at module path"}
@@ -308,16 +303,14 @@ func askGumModule(p *scaffold.Project) error {
 // the multi-select answer, sorted) AND the per-lib bool fields
 // (p.Cobra, p.Huh, ...). This keeps the two parallel sources of
 // truth in sync — see Pitfall 4 in 03-RESEARCH.md.
-func askGumLibs(p *scaffold.Project) error {
+func askGumLibs(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	options := make([]string, 0, len(LibCatalog))
 	displayToName := make(map[string]string, len(LibCatalog))
 	for _, lib := range LibCatalog {
 		options = append(options, lib.Display)
 		displayToName[lib.Display] = lib.Name
 	}
-	pre := preSelectedLibs(p) // documented; not directly used by gum here
-	_ = pre
-	picks, err := gumMultiSelect("Pick libraries", options, pre)
+	picks, err := gumMultiSelect(ctx, deps, "Pick libraries", options)
 	if err != nil {
 		if isCanceled(err) {
 			return &Canceled{Reason: "user canceled at library selection"}
@@ -349,7 +342,7 @@ func askGumLibs(p *scaffold.Project) error {
 // user passed --license with something other than "mit", which
 // is the default). The "mit" default is always re-asked so the
 // user can confirm.
-func askGumLicense(p *scaffold.Project) error {
+func askGumLicense(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	if p.License != "" && p.License != "mit" {
 		return nil
 	}
@@ -360,7 +353,7 @@ func askGumLicense(p *scaffold.Project) error {
 	} else if p.License == "none" {
 		defaultIdx = 2
 	}
-	chosen, err := gumChoose("License", options, defaultIdx)
+	chosen, err := gumChoose(ctx, deps, "License", options, defaultIdx)
 	if err != nil {
 		if isCanceled(err) {
 			return &Canceled{Reason: "user canceled at license"}
@@ -373,7 +366,7 @@ func askGumLicense(p *scaffold.Project) error {
 
 // askGumTemplate: pick from variant-specific options. Skipped if
 // p.Template is already set to a non-default value.
-func askGumTemplate(p *scaffold.Project) error {
+func askGumTemplate(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	if p.Template != "" && p.Template != "tui-bubbletea" {
 		return nil
 	}
@@ -387,7 +380,7 @@ func askGumTemplate(p *scaffold.Project) error {
 		displays = append(displays, o.display)
 		displayToKey[o.display] = o.key
 	}
-	chosen, err := gumChoose("Template", displays, 0)
+	chosen, err := gumChoose(ctx, deps, "Template", displays, 0)
 	if err != nil {
 		if isCanceled(err) {
 			return &Canceled{Reason: "user canceled at template"}
@@ -406,12 +399,13 @@ func askGumTemplate(p *scaffold.Project) error {
 // means "skip" (use the embedded templates). Validates with
 // IsValidTemplateRepo; re-prompts once on failure. Skipped if
 // p.TemplateRepo is already set by --template-repo.
-func askGumTemplateRepo(p *scaffold.Project) error {
+func askGumTemplateRepo(ctx context.Context, deps Deps, p *scaffold.Project) error {
 	if p.TemplateRepo != "" {
 		return nil
 	}
+	var last string
 	for attempt := 1; attempt <= 2; attempt++ {
-		r, err := gumInput("External template repo URL", "(skip to use embedded templates)", "")
+		r, err := gumInput(ctx, deps, "External template repo URL", "(skip to use embedded templates)", "")
 		if err != nil {
 			if isCanceled(err) {
 				return &Canceled{Reason: "user canceled at template repo"}
@@ -426,15 +420,16 @@ func askGumTemplateRepo(p *scaffold.Project) error {
 			p.TemplateRepo = repo
 			return nil
 		}
+		last = repo
 	}
-	return fmt.Errorf("spin: invalid template repo URL %q", p.TemplateRepo)
+	return fmt.Errorf("spin: invalid template repo URL %q", last)
 }
 
 // askGumAI: yes/no confirm. Default Yes (UI-SPEC §"Copywriting
 // Contract" / AI opt-in default: Yes). Always asked; Plan 04
 // may add a --no-ai skip path.
-func askGumAI(p *scaffold.Project) error {
-	yes, err := gumConfirm(
+func askGumAI(ctx context.Context, deps Deps, p *scaffold.Project) error {
+	yes, err := gumConfirm(ctx, deps,
 		"Generate AGENTS.md for AI assistants? Adds an AGENTS.md describing the project's libraries and how to extend them.",
 		true,
 	)
@@ -483,7 +478,7 @@ func templateOptionsForType(typ string) []templateOption {
 
 // isCanceled reports whether err is (or wraps) a *Canceled from a
 // widget wrapper. The widget wrappers always return a fresh
-// *Canceled; gumRunCapture returns one when ctx is expired; gumRunner
+// *Canceled; gumRunCapture returns one when ctx is expired; Runner
 // stubs (tests) may return one to simulate a cancel. We use errors.As
 // for forward-compat (a future wrapper might wrap).
 func isCanceled(err error) bool {

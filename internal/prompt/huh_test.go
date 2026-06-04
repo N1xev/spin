@@ -75,21 +75,57 @@ func TestAskLicense_SkipsWhenNonMitSet(t *testing.T) {
 	}
 }
 
-// TestAskLicense_RunsWhenMitSet asserts askLicense DOES run when
-// p.License is "mit" (the default), per UI-SPEC: the user must
-// be able to confirm the default. The .Run() path is TTY-only and
-// is not exercised here; we only assert the skip predicate.
-func TestAskLicense_RunsWhenMitSet(t *testing.T) {
-	// The form would need a TTY to run; we can't test the actual
-	// form interaction. Instead, document the contract: askLicense
-	// pre-populates the form with the current License value (which
-	// is always "mit" when this path fires, because the non-mit
-	// skip path returned early in the skip test above).
-	options := []string{"mit", "apache-2.0", "none"}
-	if len(options) != 3 {
-		t.Errorf("askLicense options = %d, want 3", len(options))
+// TestAskLicense_Options asserts askLicenseOptions returns the
+// canonical three options in the documented order: MIT, Apache-2.0,
+// None. askLicense consumes this builder so a regression in the
+// option set (a typo, a missing value) would silently surface as a
+// confusing huh form error; this test pins the contract.
+func TestAskLicense_Options(t *testing.T) {
+	opts := askLicenseOptions()
+	if len(opts) != 3 {
+		t.Fatalf("askLicenseOptions len = %d, want 3", len(opts))
 	}
-	t.Logf("askLicense with License=mit would show the form; TTY-only behavior, documented")
+	wantValues := []string{"mit", "apache-2.0", "none"}
+	for i, want := range wantValues {
+		if opts[i].Value != want {
+			t.Errorf("askLicenseOptions[%d].Value = %q, want %q", i, opts[i].Value, want)
+		}
+	}
+}
+
+// TestPreSelectLicense_MitPicksIndexZero asserts that
+// preSelectLicense marks the mit option (index 0) as selected
+// when called with license="mit". The huh.Option Selected method
+// is a setter (returns a new Option with the flag flipped), so we
+// verify the contract by comparing the option identity at the
+// matched index against the pre-built "selected" option — the
+// underlying value should differ from the unselected baseline.
+func TestPreSelectLicense_MitPicksIndexZero(t *testing.T) {
+	base := askLicenseOptions()
+	sel := preSelectLicense(askLicenseOptions(), "mit")
+	if base[0] == sel[0] {
+		t.Error("preSelectLicense(mit): options[0] unchanged, want Selected(true) applied")
+	}
+	if base[1] != sel[1] {
+		t.Error("preSelectLicense(mit): options[1] mutated, want untouched")
+	}
+	if base[2] != sel[2] {
+		t.Error("preSelectLicense(mit): options[2] mutated, want untouched")
+	}
+}
+
+// TestPreSelectLicense_UnknownLeavesAllUnchanged asserts that a
+// license value with no matching option (e.g. "bsd-3-clause" if
+// it ever snuck in) does not crash and leaves every option in
+// its baseline state.
+func TestPreSelectLicense_UnknownLeavesAllUnchanged(t *testing.T) {
+	base := askLicenseOptions()
+	sel := preSelectLicense(askLicenseOptions(), "bsd-3-clause")
+	for i := range base {
+		if base[i] != sel[i] {
+			t.Errorf("preSelectLicense(unknown): options[%d] mutated, want untouched", i)
+		}
+	}
 }
 
 // TestAskTemplate_SkipsWhenNonDefaultSet asserts askTemplate skips

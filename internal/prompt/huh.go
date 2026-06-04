@@ -215,6 +215,34 @@ func askLibs(p *scaffold.Project) error {
 	return nil
 }
 
+// askLicenseOptions returns the three license options shown by
+// askLicense. Extracted as a package-private helper so tests can
+// assert against the canonical option list (Values: "mit",
+// "apache-2.0", "none") without needing a TTY to drive the form.
+func askLicenseOptions() []huh.Option[string] {
+	return []huh.Option[string]{
+		huh.NewOption("MIT", "mit"),
+		huh.NewOption("Apache-2.0", "apache-2.0"),
+		huh.NewOption("None", "none"),
+	}
+}
+
+// preSelectLicense returns options with the entry whose Value
+// matches license marked Selected(true). Extracted as a helper so
+// tests can verify the pre-select behavior without a TTY. The
+// huh.Option type's Selected method is a setter (returns a new
+// Option with the flag flipped), so the only way to detect the
+// mutation is to compare the returned slice's identity at the
+// matched index against the input — which is what the test does.
+func preSelectLicense(options []huh.Option[string], license string) []huh.Option[string] {
+	for i := range options {
+		if options[i].Value == license {
+			options[i] = options[i].Selected(true)
+		}
+	}
+	return options
+}
+
 // preSelectedLibs returns the lib Names that should be pre-selected
 // in the askLibs multi-select prompt. The result is the union of:
 //
@@ -279,18 +307,7 @@ func askLicense(p *scaffold.Project) error {
 	if p.License != "" && p.License != "mit" {
 		return nil
 	}
-	options := []huh.Option[string]{
-		huh.NewOption("MIT", "mit"),
-		huh.NewOption("Apache-2.0", "apache-2.0"),
-		huh.NewOption("None", "none"),
-	}
-	// Pre-select the current License (always "mit" when this fires,
-	// because the non-mit skip path returned early above).
-	for i, opt := range options {
-		if opt.Value == p.License {
-			options[i] = opt.Selected(true)
-		}
-	}
+	options := preSelectLicense(askLicenseOptions(), p.License)
 	var lic string
 	err := huh.NewForm(
 		huh.NewGroup(
@@ -369,7 +386,7 @@ func askTemplateRepo(p *scaffold.Project) error {
 	if p.TemplateRepo != "" {
 		return nil
 	}
-	var repo string
+	var repo, last string
 	for attempt := 1; attempt <= 2; attempt++ {
 		r := repo
 		err := huh.NewInput().
@@ -392,8 +409,9 @@ func askTemplateRepo(p *scaffold.Project) error {
 			p.TemplateRepo = repo
 			return nil
 		}
+		last = repo
 	}
-	return fmt.Errorf("spin: invalid template repo URL %q", repo)
+	return fmt.Errorf("spin: invalid template repo URL %q", last)
 }
 
 // askAI: yes/no confirm. Default Yes (UI-SPEC §"Copywriting

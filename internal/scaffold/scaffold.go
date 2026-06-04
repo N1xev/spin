@@ -119,8 +119,11 @@ func emit(p *Project, files map[string][]byte) error {
 		// outside the project root. filepath.Clean collapses the path
 		// so the prefix check is unambiguous.
 		cleanFull := filepath.Clean(full)
-		if !strings.HasPrefix(cleanFull+string(filepath.Separator), cleanRoot) &&
-			cleanFull+string(filepath.Separator) != cleanRoot {
+		// cleanRoot carries the trailing separator, so a candidate path
+		// equal to cleanRoot fails the prefix check (cleanFull+sep has
+		// an extra sep suffix) and is correctly rejected. No second
+		// clause needed.
+		if !strings.HasPrefix(cleanFull+string(filepath.Separator), cleanRoot) {
 			return fmt.Errorf(
 				"path traversal: rendered %q resolves to %q which is outside project root %q",
 				rel, cleanFull, cleanRoot,

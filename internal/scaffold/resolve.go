@@ -237,18 +237,30 @@ func ResolveFlags(cmd *cobra.Command, args []string) (*Project, error) {
 	// in go.mod — `go build` fails. This is the cluster of CR-002,
 	// CR-003, and WR-003.
 	//
+	// Respect explicit user negation: if the user passed --cobra=false
+	// or --fang=false (pflag's negation syntax), Changed() returns true
+	// and we leave their choice alone. Same for --bubbletea=false and
+	// --bubbles=false (--bubbles implies --bubbletea, so honoring the
+	// negation of either suppresses the --all auto-add).
+	//
 	// NOTE: this block MUST run AFTER the bool-flag binding loop above
-	// so it overrides the bound (false) values from --cobra / --fang when
-	// the user did not pass those flags explicitly.
+	// so it can see the bound values AND consult Changed() to detect
+	// explicit user input.
 	if p.Type == "cli" || p.Type == "all" {
-		p.Cobra = true
-		p.Fang = true
+		if !cmd.Flags().Changed("cobra") {
+			p.Cobra = true
+		}
+		if !cmd.Flags().Changed("fang") {
+			p.Fang = true
+		}
 	}
 	if p.Type == "all" {
 		// --all also implies --bubbletea; we already added "bubbletea"
 		// to p.Libs above for the tui path, but for the --all path we
 		// need to add it here because the tui-specific block did not fire.
-		if !containsString(p.Libs, "bubbletea") {
+		if !containsString(p.Libs, "bubbletea") &&
+			!cmd.Flags().Changed("bubbletea") &&
+			!cmd.Flags().Changed("bubbles") {
 			p.Libs = append(p.Libs, "bubbletea")
 			sort.Strings(p.Libs)
 			p.Libs = dedupStrings(p.Libs)

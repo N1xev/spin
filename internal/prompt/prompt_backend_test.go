@@ -9,10 +9,9 @@
 // Fill call).
 //
 // resolveBackend is package-private, so this test file is `package
-// prompt` (white-box) to access it. The test seam gumLookPath /
-// gumVersionCheck is set in TestMain-style setup (or per-test
-// t.Cleanup) so each test can simulate a different gum state without
-// affecting others.
+// prompt` (white-box) to access it. Tests construct a Deps with
+// stubbed LookPath and VersionCheck and pass it to resolveBackend —
+// no package-level state is mutated, so t.Parallel() is safe.
 
 package prompt
 
@@ -29,19 +28,14 @@ func TestResolveBackend_HuhWhenGumMissing(t *testing.T) {
 	// Ensure the SPIN_USE_HUH escape hatch is OFF so the LookPath
 	// path is exercised.
 	t.Setenv("SPIN_USE_HUH", "")
-	// Save and restore the seams around the assertion.
-	savedLook := gumLookPath
-	savedCheck := gumVersionCheck
-	t.Cleanup(func() {
-		gumLookPath = savedLook
-		gumVersionCheck = savedCheck
-	})
-	gumLookPath = func(file string) (string, error) {
-		return "", errors.New("gum not on PATH (test stub)")
+	deps := Deps{
+		LookPath: func(file string) (string, error) {
+			return "", errors.New("gum not on PATH (test stub)")
+		},
+		VersionCheck: func(path string) error { return nil },
+		Runner:       gumRunCapture,
 	}
-	gumVersionCheck = func(path string) error { return nil }
-
-	if got := resolveBackend(); got != backendHuh {
+	if got := resolveBackend(deps); got != backendHuh {
 		t.Errorf("resolveBackend() with gum missing = %v, want %v", got, backendHuh)
 	}
 }
@@ -53,16 +47,12 @@ func TestResolveBackend_HuhWhenSPINUseHuh1(t *testing.T) {
 	t.Setenv("SPIN_USE_HUH", "1")
 	// Even if a fake LookPath returns success and the version
 	// check passes, the env var must short-circuit to backendHuh.
-	savedLook := gumLookPath
-	savedCheck := gumVersionCheck
-	t.Cleanup(func() {
-		gumLookPath = savedLook
-		gumVersionCheck = savedCheck
-	})
-	gumLookPath = func(file string) (string, error) { return "/fake/gum", nil }
-	gumVersionCheck = func(path string) error { return nil }
-
-	if got := resolveBackend(); got != backendHuh {
+	deps := Deps{
+		LookPath:     func(file string) (string, error) { return "/fake/gum", nil },
+		VersionCheck: func(path string) error { return nil },
+		Runner:       gumRunCapture,
+	}
+	if got := resolveBackend(deps); got != backendHuh {
 		t.Errorf("resolveBackend() with SPIN_USE_HUH=1 = %v, want %v", got, backendHuh)
 	}
 }
@@ -73,16 +63,12 @@ func TestResolveBackend_HuhWhenSPINUseHuh1(t *testing.T) {
 // healthy install.
 func TestResolveBackend_GumWhenAvailableAndHealthy(t *testing.T) {
 	t.Setenv("SPIN_USE_HUH", "")
-	savedLook := gumLookPath
-	savedCheck := gumVersionCheck
-	t.Cleanup(func() {
-		gumLookPath = savedLook
-		gumVersionCheck = savedCheck
-	})
-	gumLookPath = func(file string) (string, error) { return "/fake/gum", nil }
-	gumVersionCheck = func(path string) error { return nil }
-
-	if got := resolveBackend(); got != backendGum {
+	deps := Deps{
+		LookPath:     func(file string) (string, error) { return "/fake/gum", nil },
+		VersionCheck: func(path string) error { return nil },
+		Runner:       gumRunCapture,
+	}
+	if got := resolveBackend(deps); got != backendGum {
 		t.Errorf("resolveBackend() with healthy gum = %v, want %v", got, backendGum)
 	}
 }
@@ -94,16 +80,14 @@ func TestResolveBackend_GumWhenAvailableAndHealthy(t *testing.T) {
 // <must_haves> block.
 func TestResolveBackend_HuhWhenGumBroken(t *testing.T) {
 	t.Setenv("SPIN_USE_HUH", "")
-	savedLook := gumLookPath
-	savedCheck := gumVersionCheck
-	t.Cleanup(func() {
-		gumLookPath = savedLook
-		gumVersionCheck = savedCheck
-	})
-	gumLookPath = func(file string) (string, error) { return "/fake/gum", nil }
-	gumVersionCheck = func(path string) error { return errors.New("gum: corrupt install (test stub)") }
-
-	if got := resolveBackend(); got != backendHuh {
+	deps := Deps{
+		LookPath: func(file string) (string, error) { return "/fake/gum", nil },
+		VersionCheck: func(path string) error {
+			return errors.New("gum: corrupt install (test stub)")
+		},
+		Runner: gumRunCapture,
+	}
+	if got := resolveBackend(deps); got != backendHuh {
 		t.Errorf("resolveBackend() with broken gum = %v, want %v (must fall back to huh)", got, backendHuh)
 	}
 }
@@ -137,20 +121,14 @@ func TestBackendString(t *testing.T) {
 // is covered by the gum tests in gum_test.go.
 func TestFill_DispatchHiresolvesHuhWhenGumMissing(t *testing.T) {
 	t.Setenv("SPIN_USE_HUH", "")
-	savedLook := gumLookPath
-	savedCheck := gumVersionCheck
-	t.Cleanup(func() {
-		gumLookPath = savedLook
-		gumVersionCheck = savedCheck
-	})
-	gumLookPath = func(file string) (string, error) {
-		return "", errors.New("gum not on PATH (test stub)")
+	deps := Deps{
+		LookPath: func(file string) (string, error) {
+			return "", errors.New("gum not on PATH (test stub)")
+		},
+		VersionCheck: func(path string) error { return nil },
+		Runner:       gumRunCapture,
 	}
-	gumVersionCheck = func(path string) error { return nil }
-
-	// resolveBackend is the unit under test; in the test env
-	// (with the stubbed LookPath) it must return backendHuh.
-	if got := resolveBackend(); got != backendHuh {
+	if got := resolveBackend(deps); got != backendHuh {
 		t.Errorf("resolveBackend() = %v, want %v (Fill would dispatch to fillWithHuh)", got, backendHuh)
 	}
 }

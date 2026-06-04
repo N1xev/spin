@@ -17,6 +17,15 @@
 // shell-out backend (fillWithGum in gum.go) and a resolveBackend() call
 // in Fill that picks backendGum when gum is on $PATH and a `gum --version`
 // sanity check exits 0; otherwise backendHuh.
+//
+// Testability: the package's os/exec seams (LookPath, gum --version probe,
+// gum subprocess invocation) are collected on the Deps struct, not as
+// package-level mutable globals. Tests construct a Deps with stub
+// functions and pass it to the internal fillWithDeps / resolveBackend
+// entry points. This eliminates the race-condition footgun of the
+// previous design (gumLookPath / gumVersionCheck / gumRunner / gumCtx
+// were all package globals; a future test using t.Parallel() would have
+// raced on them).
 package prompt
 
 import (
@@ -62,12 +71,11 @@ func (c *Canceled) Is(target error) bool {
 type backend int
 
 const (
-	// backendNone is the unreachable-in-practice default returned by
-	// resolveBackend when both gum and huh are unavailable. Defensive:
-	// only fires if ShouldPrompt() returned true (TTY + not CI + not
-	// --no-interactive) AND resolveBackend cannot find gum, which
-	// should never happen on a real terminal because the huh backend
-	// is always built in.
+	// backendNone is reserved as the zero value; resolveBackend never
+	// returns it (it always returns backendGum or backendHuh). The
+	// Fill switch's default branch panics on this value to catch a
+	// future regression that adds a third backend without updating
+	// the dispatch.
 	backendNone backend = iota
 	backendGum
 	backendHuh
@@ -87,25 +95,52 @@ func (b backend) String() string {
 	}
 }
 
-// gumLookPath is the test seam for exec.LookPath. Default is the
-// real exec.LookPath; tests in prompt_backend_test.go override it
-// to simulate gum being present or absent on $PATH.
-var gumLookPath = exec.LookPath
+// Deps is the bag of injectable seams for the prompt package. The
+// production values come from DefaultDeps(); tests construct a Deps
+// with stub functions and pass it to the internal fillWithDeps /
+// resolveBackend entry points. Keeping the seams on a value type
+// (passed through call sites) — rather than as package-level mutable
+// globals — eliminates the race-condition footgun of the previous
+// design and lets tests run with t.Parallel() safely.
+type Deps struct {
+	// LookPath is exec.LookPath; the resolveBackend probe uses it to
+	// decide whether gum is on $PATH. Tests stub this to simulate gum
+	// being present or absent.
+	LookPath func(string) (string, error)
 
-// gumVersionCheck is the test seam for the `gum --version` sanity
-// probe. Default runs the real `gum --version` with a 2-second
-// timeout; tests override it to simulate a broken gum install
-// (RESEARCH §Pitfall 3). The probe contract: return nil if gum is
-// healthy, non-nil if it should be rejected.
-var gumVersionCheck = func(path string) error {
-	verCtx, verCancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer verCancel()
-	return exec.CommandContext(verCtx, path, "--version").Run()
+	// VersionCheck runs `gum --version` against the path LookPath
+	// returned; nil means "healthy install". Tests stub this to
+	// simulate a healthy or broken install (RESEARCH §Pitfall 3: a
+	// corrupt install must not break the scaffolder — it falls
+	// back to backendHuh).
+	VersionCheck func(string) error
+
+	// Runner is the gum subprocess invocation used by every widget
+	// wrapper (gumChoose, gumInput, gumMultiSelect, gumConfirm). The
+	// production value is gumRunCapture. Tests stub this to record
+	// the arg list and return canned answers.
+	Runner func(context.Context, ...string) (string, error)
 }
 
-// resolveBackend decides once which prompt backend to use for this
-// Fill invocation. The result is locked for the duration of the call;
-// we never switch backends mid-flow (per UI-SPEC §"gum vs huh decision").
+// DefaultDeps returns the production Deps: real exec.LookPath, a
+// 2-second-timeout `gum --version` probe, and the real gumRunCapture
+// as the runner. Called by Fill on entry; tests bypass this and
+// build their own Deps.
+func DefaultDeps() Deps {
+	return Deps{
+		LookPath: exec.LookPath,
+		VersionCheck: func(path string) error {
+			verCtx, verCancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer verCancel()
+			return exec.CommandContext(verCtx, path, "--version").Run()
+		},
+		Runner: gumRunCapture,
+	}
+}
+
+// resolveBackend picks the prompt backend for a single Fill call.
+// The result is locked for the duration of the call; we never switch
+// backends mid-flow (per UI-SPEC §"gum vs huh decision").
 //
 // Resolution order (per UI-SPEC §"gum vs huh decision" + RESEARCH
 // Pattern 1 + Pitfall 3):
@@ -113,25 +148,22 @@ var gumVersionCheck = func(path string) error {
 //  1. SPIN_USE_HUH=1 forces backendHuh. Escape hatch for users who
 //     want the in-process backend for some reason (debugging, no
 //     charmbracelet feel wanted, etc.). Documented in the install hint.
-//  2. exec.LookPath("gum") finds the binary on $PATH AND a `gum --version`
-//     sanity check exits 0 within 2s → backendGum. A non-zero exit
-//     (corrupt install, missing shared lib, weird permission) falls
-//     through to backendHuh per RESEARCH §Pitfall 3.
+//  2. deps.LookPath("gum") finds the binary on $PATH AND deps.VersionCheck
+//     exits 0 within 2s → backendGum. A non-zero exit (corrupt install,
+//     missing shared lib, weird permission) falls through to backendHuh
+//     per RESEARCH §Pitfall 3.
 //  3. Otherwise → backendHuh (the in-process fallback is always
 //     available; the only thing missing is the TTY, which ShouldPrompt
 //     already verified).
-func resolveBackend() backend {
+func resolveBackend(deps Deps) backend {
 	if os.Getenv("SPIN_USE_HUH") == "1" {
 		return backendHuh
 	}
-	path, err := gumLookPath("gum")
+	path, err := deps.LookPath("gum")
 	if err != nil {
 		return backendHuh
 	}
-	// Sanity check: `gum --version` must exit 0 within 2s. A non-zero
-	// exit (or a hang) means a broken install; fall back to huh rather
-	// than failing the whole scaffolder (RESEARCH §Pitfall 3).
-	if err := gumVersionCheck(path); err != nil {
+	if err := deps.VersionCheck(path); err != nil {
 		return backendHuh
 	}
 	return backendGum
@@ -162,26 +194,32 @@ func ShouldPrompt() bool {
 // Fill entry; the decision is logged at Debug level per UI-SPEC
 // §"gum vs huh decision".
 func Fill(p *scaffold.Project) error {
+	return fillWithDeps(p, DefaultDeps())
+}
+
+// fillWithDeps is the internal entry point used by tests. It takes the
+// injectable Deps explicitly so tests don't have to mutate any
+// package-level state.
+func fillWithDeps(p *scaffold.Project, deps Deps) error {
 	if !ShouldPrompt() {
 		return nil
 	}
 	if p == nil {
 		return nil
 	}
-	be := resolveBackend()
+	be := resolveBackend(deps)
 	logBackend(be.String())
 	switch be {
 	case backendGum:
-		return fillWithGum(p)
+		return fillWithGumDeps(p, deps)
 	case backendHuh:
 		return fillWithHuh(p)
 	default:
-		// Defensive: ShouldPrompt() returned true (TTY + not CI +
-		// not --no-interactive) but resolveBackend() returned
-		// backendNone. In practice this is unreachable because
-		// backendHuh is always built in. If we ever land here, the
-		// TTY disappeared between the two checks (e.g., user
-		// detached); treat as cancel per RESEARCH Pattern 1.
-		return &Canceled{Reason: "no TTY available for prompts"}
+		// Unreachable: resolveBackend() only returns backendGum or
+		// backendHuh. A future regression adding a third backend
+		// without updating this switch is a bug — panic loudly so
+		// the regression is caught immediately rather than masked
+		// by a fake cancellation.
+		panic("spin: prompt: unreachable backendNone in Fill")
 	}
 }

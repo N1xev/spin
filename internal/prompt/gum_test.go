@@ -1,26 +1,30 @@
 // Package prompt tests — gum shell-out backend (Plan 03).
 //
 // These tests verify the gum widget wrappers pass the correct
-// arguments to the gumRunner seam. The seam is stubbed per-test
-// (saved + restored via t.Cleanup) so no real os/exec call is
-// made. The test runner has no TTY and no gum binary; the seam
-// is the only way the package's subprocess machinery gets exercised.
+// arguments to deps.Runner. The runner is supplied via the Deps
+// struct (no package-level mutable seam), so no real os/exec call
+// is made. The test runner has no TTY and no gum binary; Deps is
+// the only way the package's subprocess machinery gets exercised.
 //
 // Per 03-03-PLAN.md Task 3, the assertions cover:
 //   - arg construction for each widget (choose, multi-select, input,
 //     confirm)
 //   - default-value / --selected / --default plumbing
-//   - fillWithGum's write-back to *scaffold.Project
-//   - *Canceled propagation from a stubbed gumRunner
+//   - fillWithGumDeps's write-back to *scaffold.Project
+//   - *Canceled propagation from a stubbed Runner
 //
-// The stub MUST be reset (saved + restored via t.Cleanup) after each
-// test sets it; otherwise state leaks across tests.
+// Tests build a Deps with a stub Runner and call fillWithGumDeps /
+// gumChoose / gumMultiSelect / gumInput / gumConfirm directly. The
+// Runner stub records the arg list and returns a caller-supplied
+// canned answer. No global state is touched, so t.Parallel() is
+// safe (these tests don't use it today, but the structure permits it).
 
 package prompt
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"testing"
@@ -28,7 +32,7 @@ import (
 	"github.com/example/spin/internal/scaffold"
 )
 
-// gumCall is one recorded invocation of the gumRunner stub. `name`
+// gumCall is one recorded invocation of the Runner stub. `name`
 // is the first arg (the gum subcommand: "choose", "input",
 // "confirm"); `args` is the full arg list including the name.
 type gumCall struct {
@@ -36,23 +40,26 @@ type gumCall struct {
 	args []string
 }
 
-// captureGumRunner replaces gumRunner with a stub that records
-// every call's args and returns a caller-supplied canned answer.
-// Returns the call list (caller's `calls` variable) and registers
-// a t.Cleanup that restores the original runner.
-func captureGumRunner(t *testing.T, calls *[]gumCall, answer string, err error) {
-	t.Helper()
-	saved := gumRunner
-	t.Cleanup(func() { gumRunner = saved })
-	gumRunner = func(ctx context.Context, args ...string) (string, error) {
-		if len(args) == 0 {
-			t.Fatalf("gumRunner called with no args")
-		}
-		// Defensive copy so the test's expectation isn't affected
-		// by the stub mutating the args slice.
-		cp := append([]string(nil), args...)
-		*calls = append(*calls, gumCall{name: args[0], args: cp})
-		return answer, err
+// captureRunner returns a Deps with a Runner that records every
+// call's args into *calls and returns the supplied answer/err.
+// The returned Deps has production-equivalent LookPath and
+// VersionCheck so tests that exercise the full fillWithGumDeps
+// path don't trip on a nil LookPath.
+func captureRunner(calls *[]gumCall, answer string, err error) Deps {
+	return Deps{
+		LookPath:     func(file string) (string, error) { return "/fake/gum", nil },
+		VersionCheck: func(path string) error { return nil },
+		Runner: func(ctx context.Context, args ...string) (string, error) {
+			if len(args) == 0 {
+				// Match the production gumRunCapture guard.
+				return "", errors.New("gum: no subcommand")
+			}
+			// Defensive copy so the test's expectation isn't affected
+			// by the stub mutating the args slice.
+			cp := append([]string(nil), args...)
+			*calls = append(*calls, gumCall{name: args[0], args: cp})
+			return answer, err
+		},
 	}
 }
 
@@ -62,12 +69,12 @@ func captureGumRunner(t *testing.T, calls *[]gumCall, answer string, err error) 
 // plan passes defaultIdx+1).
 func TestGumChoose_Args(t *testing.T) {
 	var calls []gumCall
-	captureGumRunner(t, &calls, "stub", nil)
-	if _, err := gumChoose("Pick one", []string{"a", "b", "c"}, 0); err != nil {
+	deps := captureRunner(&calls, "stub", nil)
+	if _, err := gumChoose(context.Background(), deps, "Pick one", []string{"a", "b", "c"}, 0); err != nil {
 		t.Fatalf("gumChoose: %v", err)
 	}
 	if len(calls) != 1 {
-		t.Fatalf("gumRunner called %d times, want 1", len(calls))
+		t.Fatalf("Runner called %d times, want 1", len(calls))
 	}
 	want := []string{"choose", "--header", "Pick one", "--selected", "1", "a", "b", "c"}
 	if !reflect.DeepEqual(calls[0].args, want) {
@@ -79,8 +86,8 @@ func TestGumChoose_Args(t *testing.T) {
 // 0-based Go defaultIdx to gum's 1-based --selected.
 func TestGumChoose_DefaultIndex(t *testing.T) {
 	var calls []gumCall
-	captureGumRunner(t, &calls, "stub", nil)
-	if _, err := gumChoose("Pick one", []string{"a", "b", "c"}, 1); err != nil {
+	deps := captureRunner(&calls, "stub", nil)
+	if _, err := gumChoose(context.Background(), deps, "Pick one", []string{"a", "b", "c"}, 1); err != nil {
 		t.Fatalf("gumChoose: %v", err)
 	}
 	want := []string{"choose", "--header", "Pick one", "--selected", "2", "a", "b", "c"}
@@ -96,8 +103,8 @@ func TestGumChoose_DefaultIndex(t *testing.T) {
 func TestGumMultiSelect_Args(t *testing.T) {
 	var calls []gumCall
 	// Stub returns "a\nb" so the wrapper splits and returns ["a","b"].
-	captureGumRunner(t, &calls, "a\nb", nil)
-	got, err := gumMultiSelect("Pick libs", []string{"a", "b", "c"}, nil)
+	deps := captureRunner(&calls, "a\nb", nil)
+	got, err := gumMultiSelect(context.Background(), deps, "Pick libs", []string{"a", "b", "c"})
 	if err != nil {
 		t.Fatalf("gumMultiSelect: %v", err)
 	}
@@ -115,8 +122,8 @@ func TestGumMultiSelect_Args(t *testing.T) {
 // slice. This is the contract documented in the plan.
 func TestGumMultiSelect_EmptyReturnsNil(t *testing.T) {
 	var calls []gumCall
-	captureGumRunner(t, &calls, "", nil)
-	got, err := gumMultiSelect("Pick libs", []string{"a", "b"}, nil)
+	deps := captureRunner(&calls, "", nil)
+	got, err := gumMultiSelect(context.Background(), deps, "Pick libs", []string{"a", "b"})
 	if err != nil {
 		t.Fatalf("gumMultiSelect: %v", err)
 	}
@@ -154,8 +161,8 @@ func TestGumInput_Args(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var calls []gumCall
-			captureGumRunner(t, &calls, "stub", nil)
-			if _, err := gumInput(c.header, c.placeholder, c.defaultValue); err != nil {
+			deps := captureRunner(&calls, "stub", nil)
+			if _, err := gumInput(context.Background(), deps, c.header, c.placeholder, c.defaultValue); err != nil {
 				t.Fatalf("gumInput: %v", err)
 			}
 			if !reflect.DeepEqual(calls[0].args, c.want) {
@@ -205,8 +212,8 @@ func TestGumConfirm_Args(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var calls []gumCall
-			captureGumRunner(t, &calls, c.answer, nil)
-			got, err := gumConfirm(c.prompt, c.defaultYes)
+			deps := captureRunner(&calls, c.answer, nil)
+			got, err := gumConfirm(context.Background(), deps, c.prompt, c.defaultYes)
 			if err != nil {
 				t.Fatalf("gumConfirm: %v", err)
 			}
@@ -225,40 +232,47 @@ func TestGumConfirm_Args(t *testing.T) {
 }
 
 // TestGumConfirm_CanceledPropagation asserts that a *Canceled
-// error from gumRunner propagates through gumConfirm unchanged so
+// error from Runner propagates through gumConfirm unchanged so
 // the per-step askGumXxx wrappers can wrap it with a specific
 // "user canceled at <step>" reason.
 func TestGumConfirm_CanceledPropagation(t *testing.T) {
 	var calls []gumCall
 	want := &Canceled{Reason: "test cancel"}
-	captureGumRunner(t, &calls, "", want)
-	_, err := gumConfirm("Deploy?", true)
+	deps := captureRunner(&calls, "", want)
+	_, err := gumConfirm(context.Background(), deps, "Deploy?", true)
 	if err != want {
 		t.Errorf("gumConfirm err = %v, want %v (same *Canceled instance)", err, want)
 	}
 }
 
-// stubFillWithGum replaces gumRunner with a stub that returns a
-// pre-recorded sequence of answers (one per call). Returns the
-// remaining answer index for diagnostic purposes.
-func stubFillWithGum(t *testing.T, answers []string) {
+// sequenceDeps returns a Deps with a Runner that returns successive
+// answers from the supplied slice. After the slice is exhausted,
+// the Runner fails the test (a clear signal that the call count
+// didn't match the plan). The Runner also records every call's
+// args so the test can assert arg construction if desired.
+func sequenceDeps(t *testing.T, answers []string) (Deps, *[]gumCall) {
 	t.Helper()
-	saved := gumRunner
-	t.Cleanup(func() { gumRunner = saved })
+	var calls []gumCall
 	var i int
-	gumRunner = func(ctx context.Context, args ...string) (string, error) {
-		if i >= len(answers) {
-			t.Fatalf("gumRunner called %d times, only %d answers stubbed", i+1, len(answers))
-		}
-		ans := answers[i]
-		i++
-		return ans, nil
+	deps := Deps{
+		LookPath:     func(file string) (string, error) { return "/fake/gum", nil },
+		VersionCheck: func(path string) error { return nil },
+		Runner: func(ctx context.Context, args ...string) (string, error) {
+			if i >= len(answers) {
+				return "", fmt.Errorf("Runner called %d times, only %d answers stubbed", i+1, len(answers))
+			}
+			cp := append([]string(nil), args...)
+			calls = append(calls, gumCall{name: args[0], args: cp})
+			ans := answers[i]
+			i++
+			return ans, nil
+		},
 	}
-	_ = i
+	return deps, &calls
 }
 
 // TestFillWithGum_WritesBackToProject is the load-bearing test for
-// fillWithGum: it stubs the runner to return the strings
+// fillWithGum: it stubs the Runner to return the strings
 // fillWithGum expects for each of the 8 steps and asserts the
 // resulting *scaffold.Project has the correct field values. This
 // proves the write-back is correct end-to-end without spawning
@@ -277,11 +291,11 @@ func TestFillWithGum_WritesBackToProject(t *testing.T) {
 		"",                                  // askTemplateRepo → skip (empty)
 		"Yes",                               // askAI → true
 	}
-	stubFillWithGum(t, answers)
+	deps, _ := sequenceDeps(t, answers)
 
 	p := &scaffold.Project{}
-	if err := fillWithGum(p); err != nil {
-		t.Fatalf("fillWithGum: %v", err)
+	if err := fillWithGumDeps(p, deps); err != nil {
+		t.Fatalf("fillWithGumDeps: %v", err)
 	}
 	if p.Type != "tui" {
 		t.Errorf("p.Type = %q, want %q", p.Type, "tui")
@@ -313,14 +327,16 @@ func TestFillWithGum_WritesBackToProject(t *testing.T) {
 // TestFillWithGum_SkipsSetFields asserts that fillWithGum respects
 // the "field already set by flag" skip predicate for each step.
 // A pre-populated Project must come out of fillWithGum unchanged
-// (no gumRunner calls) — the flags were the source of truth.
+// (no Runner calls) — the flags were the source of truth.
 func TestFillWithGum_SkipsSetFields(t *testing.T) {
-	saved := gumRunner
-	t.Cleanup(func() { gumRunner = saved })
 	var calls int
-	gumRunner = func(ctx context.Context, args ...string) (string, error) {
-		calls++
-		return "", nil
+	deps := Deps{
+		LookPath:     func(file string) (string, error) { return "/fake/gum", nil },
+		VersionCheck: func(path string) error { return nil },
+		Runner: func(ctx context.Context, args ...string) (string, error) {
+			calls++
+			return "", nil
+		},
 	}
 
 	// Template is set to a NON-default value so askGumTemplate's
@@ -330,7 +346,7 @@ func TestFillWithGum_SkipsSetFields(t *testing.T) {
 	// License is set to "apache-2.0" (non-default) so askGumLicense's
 	// skip predicate (`License != "mit"`) fires. Setting License="mit"
 	// re-asks per UI-SPEC (the user must be able to confirm the
-	// default), so the test would have an extra gumRunner call.
+	// default), so the test would have an extra Runner call.
 	p := &scaffold.Project{
 		Type:         "tui",
 		Name:         "myapp",
@@ -341,17 +357,17 @@ func TestFillWithGum_SkipsSetFields(t *testing.T) {
 		// AI: false (always asked)
 		// Libs: nil (always asked)
 	}
-	if err := fillWithGum(p); err != nil {
-		t.Fatalf("fillWithGum: %v", err)
+	if err := fillWithGumDeps(p, deps); err != nil {
+		t.Fatalf("fillWithGumDeps: %v", err)
 	}
 	// The skip predicate covers Type, Name, Module, License, Template,
 	// TemplateRepo. The always-asked steps are Libs and AI. So we
-	// expect exactly 2 gumRunner calls.
+	// expect exactly 2 Runner calls.
 	if calls != 2 {
-		t.Errorf("gumRunner called %d times, want 2 (only Libs + AI should fire)", calls)
+		t.Errorf("Runner called %d times, want 2 (only Libs + AI should fire)", calls)
 	}
 	// Verify the un-set fields are still at their zero values
-	// (we only stubbed the runner to return ""; the dispatcher
+	// (we only stubbed the Runner to return ""; the dispatcher
 	// would interpret "" as a user cancellation or empty pick,
 	// but here we expect the skip predicates to short-circuit
 	// all but 2 steps).
@@ -376,30 +392,32 @@ func TestFillWithGum_SkipsSetFields(t *testing.T) {
 }
 
 // TestFillWithGum_CancelPropagates asserts that a *Canceled error
-// from a stubbed gumRunner propagates up to fillWithGum wrapped
+// from a stubbed Runner propagates up to fillWithGumDeps wrapped
 // with a step-specific reason (e.g., "user canceled at project
 // type selection"). The caller's errors.As(*Canceled) check
 // (in main.go) can still match it via the Is method and map
 // to exit code 130.
 func TestFillWithGum_CancelPropagates(t *testing.T) {
 	inner := &Canceled{Reason: "inner test cancel"}
-	saved := gumRunner
-	t.Cleanup(func() { gumRunner = saved })
-	gumRunner = func(ctx context.Context, args ...string) (string, error) {
-		return "", inner
+	deps := Deps{
+		LookPath:     func(file string) (string, error) { return "/fake/gum", nil },
+		VersionCheck: func(path string) error { return nil },
+		Runner: func(ctx context.Context, args ...string) (string, error) {
+			return "", inner
+		},
 	}
 
 	p := &scaffold.Project{}
-	err := fillWithGum(p)
+	err := fillWithGumDeps(p, deps)
 	if err == nil {
-		t.Fatal("fillWithGum err = nil, want *Canceled")
+		t.Fatal("fillWithGumDeps err = nil, want *Canceled")
 	}
 	var c *Canceled
 	if !errors.As(err, &c) {
-		t.Errorf("fillWithGum err = %v, want *Canceled (matchable via errors.As)", err)
+		t.Errorf("fillWithGumDeps err = %v, want *Canceled (matchable via errors.As)", err)
 	}
 	if c != nil && c.Reason == "" {
-		t.Errorf("fillWithGum *Canceled Reason = empty, want non-empty (step-specific)")
+		t.Errorf("fillWithGumDeps *Canceled Reason = empty, want non-empty (step-specific)")
 	}
 }
 
