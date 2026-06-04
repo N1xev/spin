@@ -1,12 +1,5 @@
-// Package scaffold: Validate enforces project name + directory constraints.
-//
-// ModuleSegmentRegex is the whitelist pattern for a Go module path segment.
-// IsValidGoModuleSegment applies the regex + reserved-word + path-traversal
-// checks. Project.Validate combines the name check with the existing-
-// directory check and the --force escape hatch.
-//
-// SCAF-02 (reject invalid module path segments) and SCAF-08 (refuse to
-// overwrite existing dir without --force) are enforced here.
+// Package scaffold: Validate enforces project name + directory constraints
+// (SCAF-02, SCAF-08).
 package scaffold
 
 import (
@@ -18,13 +11,12 @@ import (
 )
 
 // ModuleSegmentRegex is the whitelist pattern for a Go module path segment.
-// RESEARCH §6: lowercase letters, digits, hyphens, underscores, dots; must
+// RESEARCH §6: lowercase letters, digits, hyphens, underscores, dots;
 // start and end with a letter or digit; 2-62 chars total.
 var ModuleSegmentRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,61}[a-z0-9]$`)
 
-// reservedGoWords is the set of Go-reserved package names that cannot be
-// used as a project name (they collide with stdlib packages, tooling
-// directories, or are syntactic keywords that confuse go/build).
+// reservedGoWords collides with stdlib packages, tooling directories,
+// or are syntactic keywords that confuse go/build.
 var reservedGoWords = map[string]bool{
 	"test":    true,
 	"tests":   true,
@@ -36,58 +28,37 @@ var reservedGoWords = map[string]bool{
 	"golang":  true,
 }
 
-// validLicenses is the set of supported --license values. CR-002: the
-// flag used to be free-form, which meant a typo like --license mt
-// silently emitted no LICENSE file. The walker only matches
-// LICENSE-<active>.tmpl case-insensitively, so without an explicit
-// whitelist a bad value would never reach the error path.
+// validLicenses is the supported --license whitelist (CR-002). The
+// walker only matches LICENSE-<active>.tmpl case-insensitively, so
+// without an explicit whitelist a bad value would never reach the
+// error path (it would silently emit no LICENSE).
 var validLicenses = map[string]bool{
 	"mit":        true,
 	"apache-2.0": true,
 	"none":       true,
 }
 
-// IsValidLicense reports whether s is one of the supported --license
-// values. The check is case-insensitive after lowercase normalization
-// (the walker is already case-insensitive on filenames, so callers may
-// pass "MIT" or "Apache-2.0" and get the right result).
+// IsValidLicense reports whether s is a supported --license value.
+// Case-insensitive (the walker is case-insensitive on filenames too,
+// so callers may pass "MIT" or "Apache-2.0" and get the right result).
 func IsValidLicense(s string) bool {
 	return validLicenses[strings.ToLower(s)]
 }
 
 // IsValidTemplateRepo reports whether s is an acceptable --template-repo
-// URL (TMPL-03). Permissive: we accept any of https://, http://, git://,
-// file://, and git@ (for ssh-agent URLs). git itself is the real choke
-// point — an unreachable URL or a non-git path returns a meaningful
-// error from the clone step.
-//
-// Rejected:
-//
-//   - empty string
-//   - schemes that git does not support (e.g. ftp://)
-//   - strings that don't look like a URL at all (no scheme prefix and
-//     no git@ prefix)
-//   - URLs whose first non-scheme path segment starts with `-` (CR-004):
-//     even with the `--` separator in CloneTemplateRepo, a leading-dash
-//     path is almost certainly a typo or an attack and is rejected at
-//     the validator too as defense-in-depth.
-//
-// file:// is accepted because it's a standard git protocol (useful for
-// local development and the smoke tests). The recommended workflow for
-// distributed templates is still to push to a remote and clone via
-// https://, but we don't force that.
+// URL (TMPL-03). Permissive — git itself is the real choke point; an
+// unreachable URL or non-git path returns a meaningful error from the
+// clone step. file:// is accepted (standard git protocol, useful for
+// local dev and smoke tests).
 func IsValidTemplateRepo(s string) bool {
 	if s == "" {
 		return false
 	}
-	// SSH-agent style: git@github.com:user/repo.git
 	if strings.HasPrefix(s, "git@") {
 		return true
 	}
-	// Standard schemes git supports. We use prefix matching instead
-	// of url.Parse because url.Parse accepts relative paths and we
-	// want to reject those. The scheme check is enough to catch the
-	// common typos (--template-repo not-a-url, --template-repo foo/bar).
+	// Prefix matching (not url.Parse) so relative paths are rejected.
+	// The scheme check is enough to catch common typos.
 	var scheme string
 	switch {
 	case strings.HasPrefix(s, "https://"):
@@ -105,39 +76,26 @@ func IsValidTemplateRepo(s string) bool {
 	// starts with `-` (e.g. "https://x.com/-evil"). Git's `--` separator
 	// in CloneTemplateRepo is the primary mitigation; this is the
 	// validator-side belt to that suspenders.
-	//
-	// Logic: find the host (up to the first `/`, `?`, `#`, or end of
-	// string), then look at the first character of the path. A path
-	// starting with `-` is almost certainly a typo or an attack.
 	rest := strings.TrimPrefix(s, scheme)
-	// Skip leading slashes (file:///path -> path).
 	rest = strings.TrimLeft(rest, "/")
 	if rest == "" {
 		// Scheme with no host is malformed.
 		return false
 	}
-	// Find the path separator (end of host).
 	pathStart := strings.IndexAny(rest, "/?#")
 	if pathStart < 0 {
 		// No path — just a host. Nothing to check on the path side.
 		return true
 	}
-	// First char of the path must not be `-`. (Empty path is fine.)
 	if pathStart+1 < len(rest) && rest[pathStart+1] == '-' {
 		return false
 	}
 	return true
 }
 
-// IsValidGoModuleSegment reports whether s is acceptable as a project name
-// (i.e. a Go module path segment, the directory name, and the binary name).
-//
-// Rules:
-//   - length 2-62 inclusive
-//   - matches ModuleSegmentRegex (lowercase [a-z0-9._-], start/end with
-//     letter or digit)
-//   - no `..` (path traversal)
-//   - not a Go-reserved word (test, internal, cmd, go, golang, etc.)
+// IsValidGoModuleSegment reports whether s is acceptable as a project
+// name (Go module path segment, directory name, binary name). Length
+// 2-62, matches ModuleSegmentRegex, no `..`, not a Go-reserved word.
 func IsValidGoModuleSegment(s string) bool {
 	if len(s) < 2 || len(s) > 62 {
 		return false
@@ -154,16 +112,9 @@ func IsValidGoModuleSegment(s string) bool {
 	return true
 }
 
-// Validate enforces the SCAF-02 and SCAF-08 constraints on a Project:
-//
-//  1. Project.Name must satisfy IsValidGoModuleSegment.
-//  2. Project.License must be one of the supported values
-//     (mit, apache-2.0, none). CR-002.
-//  3. ./<Project.Name>/ must not already exist; if it does, --force must
-//     be set to proceed.
-//
-// Returns a descriptive error suitable for surfacing to the user. The
-// error message names the constraint and gives an example invocation.
+// Validate enforces SCAF-02 (name regex) and SCAF-08 (refuse to overwrite
+// existing dir without --force) on a Project. CR-002: license must be in
+// the whitelist.
 func (p *Project) Validate() error {
 	if p == nil {
 		return fmt.Errorf("scaffold: project is nil")
@@ -188,13 +139,11 @@ func (p *Project) Validate() error {
 
 	target := filepath.Join(".", p.Name)
 	if _, err := os.Stat(target); err == nil {
-		// Directory exists.
 		if !p.Force {
 			return fmt.Errorf("directory %q already exists; pass --force to overwrite", target)
 		}
 		// --force: proceed (CWD is the user's responsibility).
 	} else if !os.IsNotExist(err) {
-		// Stat error other than "not exists" (permissions, I/O, etc.).
 		return fmt.Errorf("check directory %q: %w", target, err)
 	}
 

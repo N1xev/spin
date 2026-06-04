@@ -1,131 +1,75 @@
 // Package scaffold implements the spin scaffolder.
 //
-// Project is the single source of truth for scaffold inputs: it captures the
-// name/module/type/libs/license/force/etc. that cmd/new.go extracts from CLI
-// flags and the fields that internal/scaffold/* consumes during template
+// Project is the single source of truth for scaffold inputs: it captures
+// the name/module/type/libs/license/force/etc. that cmd/new.go extracts
+// from CLI flags and that internal/scaffold/* consumes during template
 // rendering.
-//
-// Walking Skeleton fields: Name, Module, Type, Libs, Year, SpinVer.
-// Plan 02 expands with License, Template, Force, NoGit, NoVerify, Quiet, and
-// the forward-compatibility booleans (Cobra, Fang, Viper, Huh, Glamour,
-// Wish, Log, Harmonica, Ansi, Runewidth, AI) so the template
-// engine and flag binding don't churn when later phases add content.
 package scaffold
 
 import "sort"
 
 // Project is the single source of truth for scaffold inputs.
-//
-// TMPL-07 fields (per PROJECT.md / RESEARCH §4.4): Name, Module, Type, Libs,
-// License, Template. Walking Skeleton fields: Year, SpinVer. Plan 02 adds
-// Force, NoGit, NoVerify, Quiet, and the 13 forward-compat booleans.
 type Project struct {
-	// Name is the directory name (e.g. "myapp") and the default module
-	// segment when Module is empty.
 	Name string
-
-	// Module is the go.mod module path. Defaults to Name when empty.
 	Module string
-
 	// Type is the project variant: "tui" | "cli" | "all".
-	// Walking Skeleton supports only "tui"; Plan 02 adds "cli" and "all".
 	Type string
-
-	// Libs is the ordered list of charm v2 libraries to include.
-	// Sorted and deduped by ResolveFlags. Walking Skeleton supports only
-	// "bubbletea"; Plan 02 expands to bubbles, lipgloss, etc.
+	// Libs is the ordered list of charm v2 libraries. Sorted and
+	// deduped by ResolveFlags.
 	Libs []string
-
 	// License is the LICENSE file to emit: "mit" | "apache-2.0" | "none".
 	// "none" suppresses LICENSE emission. Default is "mit".
 	License string
-
-	// Template is the template name (e.g. "tui-bubbletea"). Default is
-	// "tui-bubbletea". Plan 02 only ships one; Phase 2 adds more.
+	// Template is the template name (e.g. "tui-bubbletea"). Default
+	// is "tui-bubbletea".
 	Template string
-
 	// ExternalDir is the on-disk path of a cloned template repo
-	// (--template-repo). Empty by default; the template walker reads
-	// from the package embed (FS in scaffold.go) when ExternalDir is
-	// empty. Populated by runNew after CloneTemplateRepo succeeds.
-	//
-	// This is a pipeline-internal field: callers do not set it
-	// directly. It is set by the --template-repo flag handler in
-	// runNew (cmd/new.go) once the git clone + _base/ validation
-	// passes. The currentFS helper (fs.go) reads this field.
+	// (--template-repo). Empty by default; the walker reads from the
+	// package embed when empty. Pipeline-internal — set by runNew
+	// after CloneTemplateRepo succeeds; the currentFS helper reads it.
 	ExternalDir string
-
 	// KeepTemplateCache, when true, retains the cloned template repo
-	// on disk after scaffolding completes. Useful for debugging a
-	// broken template repo. When false (the default), runNew
-	// schedules os.RemoveAll(ExternalDir) on completion.
-	//
-	// This is a pipeline-internal field: callers do not set it
-	// directly. It is set by the --keep-template-cache flag handler
-	// in ResolveFlags.
+	// on disk after scaffolding completes (debug aid).
 	KeepTemplateCache bool
-
-	// TemplateRepo is the user-supplied git URL from --template-repo
-	// (TMPL-03). Empty when the embedded template is used. Format is
-	// validated by IsValidTemplateRepo before any clone attempt, but
-	// the actual choke point is git itself — invalid paths return
-	// a clear error from CloneTemplateRepo. Populated by ResolveFlags
-	// from the --template-repo flag.
+	// TemplateRepo is the user-supplied git URL from --template-repo.
+	// Format validated by IsValidTemplateRepo before any clone.
 	TemplateRepo string
-
-	// Force overwrites an existing ./<name>/ directory (SCAF-08). When
-	// false, Project.Validate returns an error if the dir exists.
+	// Force overwrites an existing ./<name>/ directory (SCAF-08).
 	Force bool
-
 	// NoGit skips the post-scaffold `git init` + initial commit.
-	// Useful for tests and for users who prefer to init their own repo.
 	NoGit bool
-
 	// NoVerify skips the post-scaffold `go build ./...` smoke test.
-	// Power-user escape hatch; default keeps the "perfect first run"
-	// promise intact.
 	NoVerify bool
-
 	// Quiet reduces scaffolder output (charm/log v2 levels).
 	Quiet bool
-
 	// NoInteractive disables interactive prompts (--no-interactive /
-	// --yes / --batch). Populated by ResolveFlags from --no-interactive;
-	// the alias spellings (--yes, --batch) bind to the same flag via
-	// pflag Aliases (UI-SPEC §"Trigger logic" #3, Locked Decision #5).
-	// Read in cmd/new.go's runNew before calling prompt.Fill — Fill
-	// itself does NOT consult this field; the chokepoint split keeps
-	// the three-layer guard (env/TTY/CI) independent of flag plumbing.
+	// --yes / --batch). Read in cmd/new.go's runNew before calling
+	// prompt.Fill — Fill itself does NOT consult this field; the
+	// split keeps the three-layer guard (env/TTY/CI) independent of
+	// flag plumbing.
 	NoInteractive bool
-
 	// Year is the current year (used in generated LICENSE / README footers).
 	Year int
-
 	// SpinVer is the spin version emitted in `// generated by spin X.Y.Z`
 	// markers and the generated README footer.
 	SpinVer string
 
 	// Forward-compat booleans (Phase 2/3/4). All default to false. Flag
 	// binding exists today; template content is added in the corresponding
-	// phase. Kept on the struct so the scaffolder doesn't churn when later
-	// phases wire their content.
+	// phase.
 
-	// Cobra / Fang / Viper are CLI framework flags (Phase 2).
 	Cobra bool
 	Fang  bool
 	Viper bool
 
-	// Huh / Glamour / Wish / Log / Harmonica are charm library flags (Phase 2).
-	// Huh is interactive forms; Glamour is markdown rendering;
-	// Wish is SSH server; Log is structured logger;
-	// Harmonica is spring animations.
+	// Huh / Glamour / Wish / Log / Harmonica are charm library flags.
 	Huh       bool
 	Glamour   bool
 	Wish      bool
 	Log       bool
 	Harmonica bool
 
-	// Ansi / Runewidth are charmbracelet/x subpackage flags (Phase 2).
+	// Ansi / Runewidth are charmbracelet/x subpackage flags.
 	Ansi      bool
 	Runewidth bool
 
@@ -133,53 +77,18 @@ type Project struct {
 	AI bool
 }
 
-// AllLibs returns the unified library set: every entry in p.Libs plus
-// every bool set in the boolFlagOverlayMap (Cobra, Fang, Viper, Huh,
-// Glamour, Wish, Log, Harmonica), deduplicated and sorted
-// alphabetically. Use this anywhere a "complete library list" is
-// needed: the AGENTS.md template, the prompt default-selection, and
-// the overlay walker's order.
+// AllLibs returns the unified library set: p.Libs union the 8 bool-flag
+// libs (Cobra, Fang, Viper, Huh, Glamour, Wish, Log, Harmonica),
+// deduped and sorted. Single source of truth for "what libs does this
+// project include?" — fixes the two-parallel-sources bug from
+// 03-RESEARCH.md Pitfall 4.
 //
-// Pitfall 4 from 03-RESEARCH.md documents the bug this method fixes:
-// p.Libs and the Phase 2 bools were two parallel sources of truth.
-// A user with `--huh` (and no --huh in p.Libs) would get an AGENTS.md
-// that omitted the Huh section, and vice versa. AllLibs derives the
-// union so there's exactly one place to ask "what libs does this
-// project include?".
+// overlayOrder in template.go is intentionally kept on its own
+// implementation (refactoring it to use AllLibs is a low-risk change
+// but was deferred to avoid coupling this plan to TOOL-05 invariants).
 //
-// Returns a fresh slice; safe to mutate. The result is empty (not
-// nil) for a zero *Project, which is the easier invariant for
-// templates (no need to nil-check before ranging).
-//
-// Note for maintainers: this method is the canonical "libs for
-// prompting" view. overlayOrder in template.go is intentionally kept
-// on its own implementation in this plan (refactoring overlayOrder
-// to use AllLibs is a low-risk change but was deferred to avoid
-// coupling this plan to TOOL-05 invariants).
-// libBoolMap returns the FULL mapping of per-lib bool fields to their
-// library names — including the libs that no longer have overlay
-// directories (cobra, fang, viper, huh, glamour, wish, log, harmonica).
-// This is the parallel source of truth for "is this lib selected?"
-// queries that the overlay walker does not cover.
-//
-// Plan 02-05 split the concept from boolFlagOverlayMap (template.go):
-//   - boolFlagOverlayMap returns only the bools that still have a
-//     lib/<name>/ overlay (just "ai" now).
-//   - libBoolMap returns the full 8-entry set, used by AllLibs to
-//     build the unified library list for prompts and AGENTS.md.
-func (p *Project) libBoolMap() map[string]bool {
-	return map[string]bool{
-		"cobra":     p.Cobra,
-		"fang":      p.Fang,
-		"viper":     p.Viper,
-		"huh":       p.Huh,
-		"glamour":   p.Glamour,
-		"wish":      p.Wish,
-		"log":       p.Log,
-		"harmonica": p.Harmonica,
-	}
-}
-
+// Returns a fresh slice; empty (not nil) for a zero *Project so callers
+// can range without nil-checking.
 func (p *Project) AllLibs() []string {
 	seen := map[string]bool{}
 	out := []string{}
@@ -197,4 +106,26 @@ func (p *Project) AllLibs() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// libBoolMap returns the FULL mapping of per-lib bool fields to library
+// names — including the libs that no longer have lib/<name>/ overlay
+// directories (cobra, fang, viper, huh, glamour, wish, log, harmonica).
+// This is the parallel source of truth for "is this lib selected?"
+// queries the overlay walker does not cover.
+//
+// Plan 02-05 split this from boolFlagOverlayMap (template.go): the
+// overlay map returns only bools that still have a lib/<name>/ overlay
+// (just "ai" now); this one returns the full 8-entry set used by AllLibs.
+func (p *Project) libBoolMap() map[string]bool {
+	return map[string]bool{
+		"cobra":     p.Cobra,
+		"fang":      p.Fang,
+		"viper":     p.Viper,
+		"huh":       p.Huh,
+		"glamour":   p.Glamour,
+		"wish":      p.Wish,
+		"log":       p.Log,
+		"harmonica": p.Harmonica,
+	}
 }
