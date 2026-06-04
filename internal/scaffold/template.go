@@ -32,6 +32,33 @@ import (
 	"text/template"
 )
 
+// charmLibInfoField is the field selector used by the charmLibInfo
+// FuncMap helper. It dispatches on the `field` argument and returns the
+// matching piece of the library metadata. The four metadata fields
+// (display, module, purpose, extending, example) are passed positionally
+// so the call site is a single switch case rather than a 5-way nested
+// switch. Returns "" for unknown fields, matching the contract of
+// charmPin (unknown names / fields return empty strings).
+//
+// The string fields are kept short and copy-pasteable: they appear
+// verbatim in the generated AGENTS.md, and a long extending block
+// would make the file noisy.
+func charmLibInfoField(display, module, purpose, extending, example, field string) string {
+	switch field {
+	case "display":
+		return display
+	case "module":
+		return module
+	case "purpose":
+		return purpose
+	case "extending":
+		return extending
+	case "example":
+		return example
+	}
+	return ""
+}
+
 // overlayOrder returns the layer paths in walk order (lowest precedence
 // first, last-write-wins last). The result is independent of which .tmpl
 // files exist — missing layers are silently skipped by the walker.
@@ -83,8 +110,9 @@ func (p *Project) overlayOrder() []string {
 // templates/lib/<name>/ directory names; values are the bool fields on
 // Project. Kept in declaration order so the overlay walk is stable.
 //
-// Plan 02-05: only the glow overlay (binary install hint README) remains
-// as a per-lib overlay. All other charm library wiring is inlined in the
+// Plan 02-05 reduced this map to a single entry (glow). Plan 03-04
+// adds the second surviving overlay: lib/ai/ (the AGENTS.md template
+// gated on --ai). All other charm library wiring is inlined in the
 // variant_*/internal/{app,cmd,ui,config}/*.go.tmpl files as
 // `if has<Lib> .` blocks, so no lib/* overlay directory is needed for
 // huh, wish, glamour, harmonica, bubbles, bubbletea, cobra, fang, log,
@@ -96,6 +124,7 @@ func (p *Project) overlayOrder() []string {
 func (p *Project) boolFlagOverlayMap() map[string]bool {
 	return map[string]bool{
 		"glow": p.Glow,
+		"ai":   p.AI,
 	}
 }
 
@@ -282,6 +311,110 @@ func funcMap(p *Project) template.FuncMap {
 				return ""
 			}
 		},
+		// charmLibInfo returns a metadata string for a given library name
+		// (one of the 15 keys in the UI-SPEC §"Library lookup table" — see
+		// the template at templates/lib/ai/AGENTS.md.tmpl). The second
+		// argument selects which field: "display", "module", "purpose",
+		// "extending", or "example". Returns "" for unknown names or
+		// fields, matching the charmPin contract.
+		//
+		// Module paths are pinned in code (not looked up from versions.go)
+		// because they are the long-lived canonical paths documented in
+		// CLAUDE.md and the AGENTS.md must remain stable across spin
+		// versions. The version pin itself is what charmPin resolves; the
+		// module path is a separate, more stable identifier.
+		//
+		// The 15 keys cover every library listed in UI-SPEC Surface B §
+		// "Library lookup table (canonical)": bubbletea, bubbles,
+		// lipgloss, huh, glamour, glow, wish, log, harmonica, cobra,
+		// fang, viper, modifiers, ansi, runewidth.
+		"charmLibInfo": func(name, field string) string {
+			switch name {
+			case "bubbletea":
+				return charmLibInfoField("Bubble Tea", "charm.land/bubbletea/v2",
+					"TUI framework, MVU runtime",
+					"Add new messages to the model `Update` switch; v2 uses `View() tea.View` not `View() string`.",
+					"m := model{}\np := tea.NewProgram(m)\nif _, err := p.Run(); err != nil {\n    fmt.Println(err)\n}", field)
+			case "bubbles":
+				return charmLibInfoField("Bubbles", "charm.land/bubbles/v2",
+					"Pre-built TUI components",
+					"Components are `tea.Model` implementations; compose with `lipgloss` for layout.",
+					"ti := textinput.New()\nti.Placeholder = \"name\"\nti.Focus()", field)
+			case "lipgloss":
+				return charmLibInfoField("Lip Gloss", "charm.land/lipgloss/v2",
+					"CSS-like terminal styling",
+					"Use subpackages for tables/lists/trees; v2 is the supported line.",
+					"style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(\"5\"))\nfmt.Println(style.Render(\"hi\"))", field)
+			case "huh":
+				return charmLibInfoField("Huh", "charm.land/huh/v2",
+					"Accessible forms/prompts",
+					"Forms compose Fields into Groups; submit via `form.Run()`.",
+					"form := huh.NewForm(huh.NewGroup(huh.NewInput().Title(\"Name\")))\n_ = form.Run()", field)
+			case "glamour":
+				return charmLibInfoField("Glamour", "charm.land/glamour/v2",
+					"Stylesheet-based markdown renderer",
+					"Use `NewTermRenderer` for terminal, `Render` for plain string.",
+					"r, _ := glamour.NewTermRenderer(glamour.WithStylePath(\"dark\"))\nout, _ := r.Render(md)", field)
+			case "glow":
+				return charmLibInfoField("Glow", "github.com/charmbracelet/glow/v2",
+					"Markdown reader CLI",
+					"Binary-only; shell out via `os/exec`.",
+					"out, _ := exec.Command(\"glow\", \"README.md\").Output()\nfmt.Println(string(out))", field)
+			case "wish":
+				return charmLibInfoField("Wish", "charm.land/wish/v2",
+					"SSH server framework",
+					"Subpackages: `bubbletea`, `logging`, `activeterm`; wire as middleware.",
+					"s, _ := wish.NewServer(wish.WithMiddleware(\n    bubbletea.Middleware(teaHandler),\n))", field)
+			case "log":
+				return charmLibInfoField("Log", "charm.land/log/v2",
+					"Minimal colorful leveled logging",
+					"`log.Default()` + `log.SetDefault(log.New(os.Stderr, log.Options{...}))`.",
+					"log.Info(\"hi\", \"k\", \"v\")\nlog.Error(\"oops\", \"err\", err)", field)
+			case "harmonica":
+				return charmLibInfoField("Harmonica", "github.com/charmbracelet/harmonica",
+					"Spring animations for the terminal",
+					"Use `NewSpring` + `Update` per frame in `tea.Tick`.",
+					"sp := harmonica.NewSpring(harmonica.FPS(60), 8.0, 0.5)\n_, _, _ = sp.Update(0.016, 0)", field)
+			case "cobra":
+				return charmLibInfoField("Cobra", "github.com/spf13/cobra",
+					"CLI subcommand/flag framework",
+					"Pair with fang for styled help; pin v1.9+.",
+					"var rootCmd = &cobra.Command{Use: \"app\"}\nrootCmd.AddCommand(&cobra.Command{Use: \"hello\"})", field)
+			case "fang":
+				return charmLibInfoField("Fang", "charm.land/fang/v2",
+					"Styled help + errors for Cobra",
+					"Drop-in `fang.Execute(ctx, rootCmd)`; replaces cobra's default renderer.",
+					"if err := fang.Execute(ctx, rootCmd); err != nil {\n    os.Exit(1)\n}", field)
+			case "viper":
+				return charmLibInfoField("Viper", "github.com/spf13/viper",
+					"Config-file support",
+					"Use `mapstructure` v2 fork; bind flags with `viper.BindPFlag`.",
+					"viper.SetDefault(\"port\", 8080)\nport := viper.GetInt(\"port\")", field)
+			case "modifiers":
+				return charmLibInfoField("x/modifiers", "github.com/charmbracelet/x/modifiers",
+					"Inert UI modifiers (e.g. inert)",
+					"Use inside `tea.Update` to short-circuit input handling.",
+					"if _, ok := msg.(modifiers.Inert); ok {\n    return m, nil\n}", field)
+			case "ansi":
+				return charmLibInfoField("x/ansi", "github.com/charmbracelet/x/ansi",
+					"Low-level ANSI parser/generator",
+					"Use for escape sequences lipgloss v2 doesn't cover.",
+					"link := ansi.Hyperlink(\"https://example.com\", \"example\")\nfmt.Println(link)", field)
+			case "runewidth":
+				return charmLibInfoField("go-runewidth", "github.com/mattn/go-runewidth",
+					"East-Asian-aware display width",
+					"Set `RUNEWIDTH_EASTASIAN=true` env var for CJK terminals.",
+					"w := runewidth.StringWidth(\"こんにちは\")\nfmt.Println(w) // 10", field)
+			}
+			return ""
+		},
+		// allLibs returns the project's full library set (p.Libs union
+		// the bool-flag libs, sorted) so the AGENTS.md template can
+		// iterate in a stable order. This is the same iteration order
+		// the gum/huh prompt backend uses, so the AGENTS.md matches the
+		// "what we asked the user to confirm" sequence. See
+		// Project.AllLibs() in project.go for the implementation.
+		"allLibs": func(p2 *Project) []string { return p2.AllLibs() },
 		"requiresImport": func(p2 *Project, lib string) bool {
 			if slices.Contains(p2.Libs, lib) {
 				return true
