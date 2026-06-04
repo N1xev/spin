@@ -64,18 +64,28 @@ func TestE2EScaffold(t *testing.T) {
 		}
 	}
 
-	// 5. main.go assertions.
-	mainGo, err := os.ReadFile(filepath.Join(projectDir, "main.go"))
+	// 5. main.go assertions. Plan 02-05: main.go is at cmd/<name>/main.go
+	// (thin entry, hands off to app.Run); tea.NewProgram lives in
+	// internal/app/app.go.
+	mainGo, err := os.ReadFile(filepath.Join(projectDir, "cmd", "e2e-myapp", "main.go"))
 	if err != nil {
-		t.Fatalf("read main.go: %v", err)
+		t.Fatalf("read cmd/e2e-myapp/main.go: %v", err)
 	}
 	for _, want := range []string{
 		"package main",
-		"tea.NewProgram",
+		"app.Run",
 	} {
 		if !bytes.Contains(mainGo, []byte(want)) {
 			t.Errorf("main.go missing %q; got:\n%s", want, mainGo)
 		}
+	}
+	// The bubbletea runtime is in internal/app/app.go.
+	appGo, err := os.ReadFile(filepath.Join(projectDir, "internal", "app", "app.go"))
+	if err != nil {
+		t.Fatalf("read internal/app/app.go: %v", err)
+	}
+	if !bytes.Contains(appGo, []byte("tea.NewProgram")) {
+		t.Errorf("internal/app/app.go missing tea.NewProgram; got:\n%s", appGo)
 	}
 
 	// 6. .gitignore exists.

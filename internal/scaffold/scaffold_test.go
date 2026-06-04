@@ -16,6 +16,7 @@ import (
 // The test exercises the embed -> walk -> overlay -> text/template pipeline
 // without touching the filesystem. Plan 02/03 expand the Project fields
 // (License, Template, Force, NoGit, Quiet, ...) and the overlay engine.
+// Plan 02-05 restructured the layout to cmd/<name>/main.go + internal/app/.
 //
 // The test runs in <1s and requires no Go toolchain beyond the test
 // framework itself, proving the embed + template pipeline produces the
@@ -38,8 +39,8 @@ func TestRenderToMapWalkingSkeleton(t *testing.T) {
 		t.Fatal("renderToMap returned empty map; embed not walking templates?")
 	}
 
-	// Required files in the Walking Skeleton output.
-	required := []string{"go.mod", "main.go", "README.md", ".gitignore"}
+	// Plan 02-05: main.go is at the canonical Go path `cmd/<name>/main.go`.
+	required := []string{"go.mod", "cmd/myapp/main.go", "README.md", ".gitignore"}
 	for _, name := range required {
 		if _, ok := files[name]; !ok {
 			t.Errorf("missing required rendered file %q; got keys: %v", name, keysOf(files))
@@ -61,14 +62,14 @@ func TestRenderToMapWalkingSkeleton(t *testing.T) {
 		}
 	}
 
-	// main.go assertions.
-	mainGo, ok := files["main.go"]
+	// main.go assertions — Plan 02-05: thin entry, hands off to app.Run.
+	mainGo, ok := files["cmd/myapp/main.go"]
 	if !ok {
-		t.Fatal("main.go missing from rendered map")
+		t.Fatal("cmd/myapp/main.go missing from rendered map")
 	}
 	for _, want := range []string{
 		"package main",
-		"tea.NewProgram",
+		"app.Run",
 	} {
 		if !bytes.Contains(mainGo, []byte(want)) {
 			t.Errorf("main.go missing %q; got:\n%s", want, mainGo)
@@ -123,8 +124,9 @@ func TestNewEndToEndWalkingSkeleton(t *testing.T) {
 		t.Fatalf("New failed: %v", err)
 	}
 
-	// Assert the four required files exist on disk.
-	for _, fname := range []string{"go.mod", "main.go", "README.md", ".gitignore"} {
+	// Assert the required files exist on disk. Plan 02-05: main.go
+	// is at the canonical Go path `cmd/<name>/main.go`.
+	for _, fname := range []string{"go.mod", "cmd/" + name + "/main.go", "README.md", ".gitignore"} {
 		path := filepath.Join(projectDir, fname)
 		if _, err := os.Stat(path); err != nil {
 			t.Errorf("expected file %q not on disk: %v", path, err)
