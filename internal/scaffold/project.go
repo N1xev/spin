@@ -158,6 +158,31 @@ type Project struct {
 // on its own implementation in this plan (refactoring overlayOrder
 // to use AllLibs is a low-risk change but was deferred to avoid
 // coupling this plan to TOOL-05 invariants).
+// libBoolMap returns the FULL mapping of per-lib bool fields to their
+// library names — including the libs that no longer have overlay
+// directories (cobra, fang, viper, huh, glamour, wish, log, harmonica).
+// This is the parallel source of truth for "is this lib selected?"
+// queries that the overlay walker does not cover.
+//
+// Plan 02-05 split the concept from boolFlagOverlayMap (template.go):
+//   - boolFlagOverlayMap returns only the bools that still have a
+//     lib/<name>/ overlay (just "glow" now).
+//   - libBoolMap returns the full 9-entry set, used by AllLibs to
+//     build the unified library list for prompts and AGENTS.md.
+func (p *Project) libBoolMap() map[string]bool {
+	return map[string]bool{
+		"cobra":     p.Cobra,
+		"fang":      p.Fang,
+		"viper":     p.Viper,
+		"huh":       p.Huh,
+		"glamour":   p.Glamour,
+		"glow":      p.Glow,
+		"wish":      p.Wish,
+		"log":       p.Log,
+		"harmonica": p.Harmonica,
+	}
+}
+
 func (p *Project) AllLibs() []string {
 	seen := map[string]bool{}
 	out := []string{}
@@ -167,7 +192,7 @@ func (p *Project) AllLibs() []string {
 			out = append(out, lib)
 		}
 	}
-	for lib, active := range p.boolFlagOverlayMap() {
+	for lib, active := range p.libBoolMap() {
 		if active && !seen[lib] {
 			seen[lib] = true
 			out = append(out, lib)

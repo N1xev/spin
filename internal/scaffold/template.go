@@ -50,14 +50,25 @@ func (p *Project) overlayOrder() []string {
 		layers = append(layers, "variant_"+p.Type)
 	}
 	seen := map[string]bool{}
+	// p.Libs still contains names like "bubbletea", "bubbles", "lipgloss"
+	// (set by ResolveFlags for the templates' has* predicates to read),
+	// but those no longer have lib/<name>/ overlay directories in the
+	// restructured tree. Filter against the overlay-walk set so we don't
+	// add `lib/bubbletea` to the layer list and then silently skip it
+	// when fs.WalkDir returns "file does not exist" — that mismatch made
+	// TestOverlayOrder_TUI fail.
+	overlayLibs := p.boolFlagOverlayMap()
 	for _, lib := range p.Libs {
+		if !overlayLibs[lib] {
+			continue
+		}
 		layers = append(layers, "lib/"+lib)
 		seen[lib] = true
 	}
 	// Walk the lib/<name>/ overlay for every active bool flag. Skip
 	// entries that were already added via p.Libs (the bool may be
 	// derived from the same flag).
-	for lib, active := range p.boolFlagOverlayMap() {
+	for lib, active := range overlayLibs {
 		if !active || seen[lib] {
 			continue
 		}
@@ -78,6 +89,10 @@ func (p *Project) overlayOrder() []string {
 // `if has<Lib> .` blocks, so no lib/* overlay directory is needed for
 // huh, wish, glamour, harmonica, bubbles, bubbletea, cobra, fang, log,
 // lipgloss, viper, ansi, modifiers, or runewidth.
+//
+// For the parallel "is this lib selected?" predicate that includes
+// non-overlay bools (Cobra, Fang, Viper, Huh, Log, etc.) see
+// libBoolMap in project.go — AllLibs() uses that one.
 func (p *Project) boolFlagOverlayMap() map[string]bool {
 	return map[string]bool{
 		"glow": p.Glow,
