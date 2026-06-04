@@ -8,7 +8,7 @@ Build a Go project scaffolder that delivers the "perfect first run" promise — 
 
 - [x] **Phase 1: Scaffolder Foundation + Core TUI Stack** - One-command runnable TUI project (the "perfect first run" MVP) (completed 2026-06-02)
 - [x] **Phase 2: CLI Variant + Wrappers + Extended Library Coverage + External Templates** - All variants, all charm libs, toolchain wrappers, --template-repo (completed 2026-06-03)
-- [ ] **Phase 3: Interactive Prompts (gum) + AI/AGENTS.md** - Prompts when flags missing, AGENTS.md opt-in
+- [x] **Phase 3: Interactive Prompts (gum) + AI/AGENTS.md** - Prompts when flags missing, AGENTS.md opt-in (completed 2026-06-04)
 - [ ] **Phase 4: Post-Scaffold Health + Verification + Dogfooding** - spin doctor/add/update + CI grep suite + CGO matrix
 
 ## Phase Details
@@ -79,5 +79,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 |-------|----------------|--------|-----------|
 | 1. Scaffolder Foundation + Core TUI Stack | 4/4 | Complete   | 2026-06-02 |
 | 2. CLI Variant + Wrappers + Extended Library Coverage + External Templates | 4/4 | Complete   | 2026-06-03 |
-| 3. Interactive Prompts (gum) + AI/AGENTS.md | 0/TBD | Not started | - |
+| 3. Interactive Prompts (gum) + AI/AGENTS.md | 4/4 | Complete   | 2026-06-04 |
 | 4. Post-Scaffold Health + Verification + Dogfooding | 0/TBD | Not started | - |
