@@ -1,31 +1,15 @@
 // Package prompt owns the interactive prompt layer for `spin new`.
 //
-// This is the single chokepoint through which every prompt UI call must
-// pass. The contract is:
+// Fill is the single chokepoint: it populates unset required fields
+// on *scaffold.Project by asking the user. ShouldPrompt is the
+// three-layer guard (env var, TTY, CI env vars) every prompt UI call
+// site must consult. Canceled is a typed error that main.go maps to
+// exit 130 (UI-SPEC §Cancellation / cleanup).
 //
-//   - Fill(p *scaffold.Project) error populates any unset required fields
-//     on p by asking the user. It writes back into p in place.
-//   - ShouldPrompt() bool is the three-layer guard (env var, TTY, CI env
-//     vars) that every prompt UI call site must consult before showing
-//     a widget. When it returns false, Fill is a no-op.
-//   - Canceled is a typed error that propagates to main.go for exit-code
-//     mapping (exit 130 on cancellation, per UI-SPEC §"Cancellation /
-//     cleanup").
-//
-// Plan 01 shipped the contract surface only. Plan 02 wired the huh v2
-// in-process backend (fillWithHuh in huh.go). Plan 03 adds the gum
-// shell-out backend (fillWithGum in gum.go) and a resolveBackend() call
-// in Fill that picks backendGum when gum is on $PATH and a `gum --version`
-// sanity check exits 0; otherwise backendHuh.
-//
-// Testability: the package's os/exec seams (LookPath, gum --version probe,
-// gum subprocess invocation) are collected on the Deps struct, not as
-// package-level mutable globals. Tests construct a Deps with stub
-// functions and pass it to the internal fillWithDeps / resolveBackend
-// entry points. This eliminates the race-condition footgun of the
-// previous design (gumLookPath / gumVersionCheck / gumRunner / gumCtx
-// were all package globals; a future test using t.Parallel() would have
-// raced on them).
+// Testability: os/exec seams live on the Deps struct (passed through
+// fillWithDeps / resolveBackend), not as package-level mutable
+// globals. Tests build a Deps with stubs and call the internal
+// entry points directly — no shared state, so t.Parallel() is safe.
 package prompt
 
 import (
@@ -38,52 +22,30 @@ import (
 	"github.com/example/spin/internal/scaffold"
 )
 
-// ErrCanceled is the sentinel that *Canceled.Is matches against. Callers
-// that want to detect a user cancellation independent of the typed error
-// (e.g., log statements) can use errors.Is(err, prompt.ErrCanceled).
+// ErrCanceled matches via errors.Is(err, prompt.ErrCanceled). Use
+// errors.As for the typed *Canceled when you need the Reason.
 var ErrCanceled = errors.New("prompt canceled by user")
 
-// Canceled is the typed error returned by Fill when the user cancels
-// (Ctrl-C, Esc, or any other abort path). The Reason field is a
-// human-readable explanation suitable for logging.
-//
-// The main boundary in main.go matches this with errors.As to map it
-// to exit code 130 (UI-SPEC §"Cancellation / cleanup").
 type Canceled struct {
 	Reason string
 }
 
-// Error returns "spin: <Reason>". The "spin:" prefix matches the rest
-// of the scaffolder's user-facing error messages for grep-friendly logs.
-func (c *Canceled) Error() string {
-	return "spin: " + c.Reason
-}
+func (c *Canceled) Error() string { return "spin: " + c.Reason }
 
-// Is reports whether target is ErrCanceled. This makes the type matchable
-// with both errors.Is(err, ErrCanceled) and errors.As(err, &c).
-func (c *Canceled) Is(target error) bool {
-	return target == ErrCanceled
-}
+// Is makes the type matchable with both errors.Is and errors.As.
+func (c *Canceled) Is(target error) bool { return target == ErrCanceled }
 
-// backend is the resolved prompt backend for a single Fill call. The
-// choice is made once at Fill entry (in resolveBackend) and never
-// re-evaluated; per the plan, the backend never switches mid-flow.
 type backend int
 
+// backendNone is reserved as the zero value; resolveBackend never
+// returns it. The Fill switch's default branch panics on it to
+// catch a future regression adding a third backend.
 const (
-	// backendNone is reserved as the zero value; resolveBackend never
-	// returns it (it always returns backendGum or backendHuh). The
-	// Fill switch's default branch panics on this value to catch a
-	// future regression that adds a third backend without updating
-	// the dispatch.
 	backendNone backend = iota
 	backendGum
 	backendHuh
 )
 
-// String returns the lowercase name used in the Debug log line per
-// UI-SPEC §"gum vs huh decision": `"prompt backend" backend=gum` or
-// `backend=huh`.
 func (b backend) String() string {
 	switch b {
 	case backendGum:
@@ -95,37 +57,17 @@ func (b backend) String() string {
 	}
 }
 
-// Deps is the bag of injectable seams for the prompt package. The
-// production values come from DefaultDeps(); tests construct a Deps
-// with stub functions and pass it to the internal fillWithDeps /
-// resolveBackend entry points. Keeping the seams on a value type
-// (passed through call sites) — rather than as package-level mutable
-// globals — eliminates the race-condition footgun of the previous
-// design and lets tests run with t.Parallel() safely.
+// Deps is the bag of injectable seams. The production values come
+// from DefaultDeps(); tests build a Deps with stubs and pass it to
+// the internal entry points.
 type Deps struct {
-	// LookPath is exec.LookPath; the resolveBackend probe uses it to
-	// decide whether gum is on $PATH. Tests stub this to simulate gum
-	// being present or absent.
-	LookPath func(string) (string, error)
-
-	// VersionCheck runs `gum --version` against the path LookPath
-	// returned; nil means "healthy install". Tests stub this to
-	// simulate a healthy or broken install (RESEARCH §Pitfall 3: a
-	// corrupt install must not break the scaffolder — it falls
-	// back to backendHuh).
+	LookPath     func(string) (string, error)
 	VersionCheck func(string) error
-
-	// Runner is the gum subprocess invocation used by every widget
-	// wrapper (gumChoose, gumInput, gumMultiSelect, gumConfirm). The
-	// production value is gumRunCapture. Tests stub this to record
-	// the arg list and return canned answers.
-	Runner func(context.Context, ...string) (string, error)
+	Runner       func(context.Context, ...string) (string, error)
 }
 
 // DefaultDeps returns the production Deps: real exec.LookPath, a
-// 2-second-timeout `gum --version` probe, and the real gumRunCapture
-// as the runner. Called by Fill on entry; tests bypass this and
-// build their own Deps.
+// 2-second-timeout `gum --version` probe, and the real gumRunCapture.
 func DefaultDeps() Deps {
 	return Deps{
 		LookPath: exec.LookPath,
@@ -138,23 +80,10 @@ func DefaultDeps() Deps {
 	}
 }
 
-// resolveBackend picks the prompt backend for a single Fill call.
-// The result is locked for the duration of the call; we never switch
-// backends mid-flow (per UI-SPEC §"gum vs huh decision").
-//
-// Resolution order (per UI-SPEC §"gum vs huh decision" + RESEARCH
-// Pattern 1 + Pitfall 3):
-//
-//  1. SPIN_USE_HUH=1 forces backendHuh. Escape hatch for users who
-//     want the in-process backend for some reason (debugging, no
-//     charmbracelet feel wanted, etc.). Documented in the install hint.
-//  2. deps.LookPath("gum") finds the binary on $PATH AND deps.VersionCheck
-//     exits 0 within 2s → backendGum. A non-zero exit (corrupt install,
-//     missing shared lib, weird permission) falls through to backendHuh
-//     per RESEARCH §Pitfall 3.
-//  3. Otherwise → backendHuh (the in-process fallback is always
-//     available; the only thing missing is the TTY, which ShouldPrompt
-//     already verified).
+// Resolution order (UI-SPEC §gum vs huh decision + RESEARCH Pitfall 3):
+//  1. SPIN_USE_HUH=1 → backendHuh (escape hatch)
+//  2. LookPath + VersionCheck pass → backendGum
+//  3. Otherwise → backendHuh (always built in)
 func resolveBackend(deps Deps) backend {
 	if os.Getenv("SPIN_USE_HUH") == "1" {
 		return backendHuh
@@ -169,37 +98,17 @@ func resolveBackend(deps Deps) backend {
 	return backendGum
 }
 
-// ShouldPrompt is the public chokepoint that every prompt UI call site
-// must consult. It delegates to IsInteractive (in detect.go) for the
-// three-layer guard (env var → TTY → CI env vars).
-//
-// Note: p.NoInteractive is NOT consulted here. The contract is that
-// cmd/new.go reads p.NoInteractive AFTER ResolveFlags and skips the
-// Fill call entirely when the user passed --no-interactive / --yes /
-// --batch. The split keeps ShouldPrompt's three-layer check independent
-// of the flag plumbing.
+// ShouldPrompt is the three-layer guard. p.NoInteractive is NOT
+// consulted here — cmd/new.go reads p.NoInteractive after
+// ResolveFlags and skips Fill entirely when --no-interactive is set.
 func ShouldPrompt() bool {
 	return IsInteractive()
 }
 
-// Fill populates any unset required fields on p by asking the user. It
-// writes back into p in place. If ShouldPrompt() returns false, Fill
-// returns nil without modifying p and any missing fields will surface
-// in the subsequent p.Validate() call.
-//
-// If the user cancels (Ctrl-C, Esc, empty-after-retry), Fill returns a
-// *Canceled error; the caller exits 130.
-//
-// The backend (gum or huh) is decided once via resolveBackend at
-// Fill entry; the decision is logged at Debug level per UI-SPEC
-// §"gum vs huh decision".
 func Fill(p *scaffold.Project) error {
 	return fillWithDeps(p, DefaultDeps())
 }
 
-// fillWithDeps is the internal entry point used by tests. It takes the
-// injectable Deps explicitly so tests don't have to mutate any
-// package-level state.
 func fillWithDeps(p *scaffold.Project, deps Deps) error {
 	if !ShouldPrompt() {
 		return nil
@@ -215,11 +124,6 @@ func fillWithDeps(p *scaffold.Project, deps Deps) error {
 	case backendHuh:
 		return fillWithHuh(p)
 	default:
-		// Unreachable: resolveBackend() only returns backendGum or
-		// backendHuh. A future regression adding a third backend
-		// without updating this switch is a bug — panic loudly so
-		// the regression is caught immediately rather than masked
-		// by a fake cancellation.
 		panic("spin: prompt: unreachable backendNone in Fill")
 	}
 }
