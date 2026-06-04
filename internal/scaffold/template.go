@@ -50,14 +50,25 @@ func (p *Project) overlayOrder() []string {
 		layers = append(layers, "variant_"+p.Type)
 	}
 	seen := map[string]bool{}
+	// p.Libs still contains names like "bubbletea", "bubbles", "lipgloss"
+	// (set by ResolveFlags for the templates' has* predicates to read),
+	// but those no longer have lib/<name>/ overlay directories in the
+	// restructured tree. Filter against the overlay-walk set so we don't
+	// add `lib/bubbletea` to the layer list and then silently skip it
+	// when fs.WalkDir returns "file does not exist" — that mismatch made
+	// TestOverlayOrder_TUI fail.
+	overlayLibs := p.boolFlagOverlayMap()
 	for _, lib := range p.Libs {
+		if !overlayLibs[lib] {
+			continue
+		}
 		layers = append(layers, "lib/"+lib)
 		seen[lib] = true
 	}
 	// Walk the lib/<name>/ overlay for every active bool flag. Skip
 	// entries that were already added via p.Libs (the bool may be
 	// derived from the same flag).
-	for lib, active := range p.boolFlagOverlayMap() {
+	for lib, active := range overlayLibs {
 		if !active || seen[lib] {
 			continue
 		}
@@ -71,17 +82,20 @@ func (p *Project) overlayOrder() []string {
 // be walked when the corresponding bool flag is set. Keys match the
 // templates/lib/<name>/ directory names; values are the bool fields on
 // Project. Kept in declaration order so the overlay walk is stable.
+//
+// Plan 02-05: only the glow overlay (binary install hint README) remains
+// as a per-lib overlay. All other charm library wiring is inlined in the
+// variant_*/internal/{app,cmd,ui,config}/*.go.tmpl files as
+// `if has<Lib> .` blocks, so no lib/* overlay directory is needed for
+// huh, wish, glamour, harmonica, bubbles, bubbletea, cobra, fang, log,
+// lipgloss, viper, ansi, modifiers, or runewidth.
+//
+// For the parallel "is this lib selected?" predicate that includes
+// non-overlay bools (Cobra, Fang, Viper, Huh, Log, etc.) see
+// libBoolMap in project.go — AllLibs() uses that one.
 func (p *Project) boolFlagOverlayMap() map[string]bool {
 	return map[string]bool{
-		"cobra":     p.Cobra,
-		"fang":      p.Fang,
-		"viper":     p.Viper,
-		"huh":       p.Huh,
-		"glamour":   p.Glamour,
-		"glow":      p.Glow,
-		"wish":      p.Wish,
-		"log":       p.Log,
-		"harmonica": p.Harmonica,
+		"glow": p.Glow,
 	}
 }
 
@@ -89,6 +103,14 @@ func (p *Project) boolFlagOverlayMap() map[string]bool {
 // against p (with the FuncMap), and returns a map of relative output path
 // to rendered bytes. The .tmpl extension is stripped from output keys.
 // Last-write-wins on identical relative output paths.
+//
+// Output-path placeholder substitution: after the .tmpl suffix is
+// stripped, every occurrence of `_name_` in the relative output path is
+// replaced with p.Name. This lets templates live at paths like
+// `cmd/_name_/main.go.tmpl` and render to `cmd/myapp/main.go`. The
+// underscore form is preferred over `<name>` because `<>` are valid in
+// filenames but harder to type in editors; the walker convention is
+// documented here so template authors can find it.
 //
 // License gating: LICENSE-<X>.tmpl files render only when License matches
 // X. License="none" suppresses all LICENSE files.
@@ -150,6 +172,16 @@ func (p *Project) renderToMap() (map[string][]byte, error) {
 				return fmt.Errorf("rel %s: %w", path, err)
 			}
 			outKey := strings.TrimSuffix(filepath.ToSlash(rel), ".tmpl")
+
+			// Substitute the `_name_` placeholder in the output path with
+			// p.Name. This is a PATH-level substitution (not a template
+			// substitution) so the walker can locate templates at paths
+			// like `cmd/_name_/main.go.tmpl` and emit `cmd/myapp/main.go`.
+			// See the function comment for the rationale and the `_name_`
+			// vs `<name>` choice.
+			if p.Name != "" {
+				outKey = strings.ReplaceAll(outKey, "_name_", p.Name)
+			}
 
 			// The active LICENSE file maps to the literal key "LICENSE" in
 			// the output (not "LICENSE-mit" or "LICENSE-Apache-2.0"). The

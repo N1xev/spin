@@ -123,3 +123,112 @@ Phase 2 complete. Route to Phase 3 (Interactive Prompts (gum) + AI/AGENTS.md).
 
 _Verified: 2026-06-03T00:30:00Z_
 _Verifier: gsd-verifier_
+
+---
+
+## Addendum — Plan 02-05 Restructure (2026-06-04)
+
+User-flagged design defect mid-Phase 3: scaffolded apps shipped one file per
+lib (`lib/huh/huh.go`, `lib/wish/wish.go`, ...) — a "parts catalog", not an
+idiomatic Go project. Plan 02-05 restructures the templates so the scaffolded
+output reads like a real charmbracelet v2 example app: thin
+`cmd/<name>/main.go`, then `internal/app/` (TUI MVU runtime) and/or
+`internal/cmd/` (cobra subcommands), with every lib's content INLINED behind
+`{{ if has<Lib> . }}` conditionals in the variant files.
+
+### Scaffolded Tree (post-restructure)
+
+```
+<name>/
+├── cmd/<name>/main.go      # thin entry: tea.NewProgram(app.New).Run() or fang.Execute
+├── internal/
+│   ├── app/                # TUI variant (only --tui / --all)
+│   │   ├── app.go          # Model + New + Init + Run
+│   │   ├── update.go       # Update() — inlines huh.NewForm, glamour.NewTermRenderer,
+│   │   │                   #   harmonica.NewSpring, spinner.TickMsg, log.Info
+│   │   ├── view.go         # View() returning tea.View
+│   │   └── keys.go         # KeyMap
+│   ├── cmd/                # CLI variant (only --cli / --all)
+│   │   ├── root.go         # cobra root, fang.Execute
+│   │   ├── hello.go        # styled subcommand (--lipgloss)
+│   │   ├── readme.go       # glamour-rendered README (--glamour) + glow shell-out (--glow)
+│   │   ├── ssh.go          # wish SSH server on :2222 (--wish)
+│   │   └── tui.go          # --all only: subcommand that launches the TUI
+│   ├── ui/styles.go        # lipgloss styles (--lipgloss); empty stub otherwise
+│   └── config/config.go    # viper wiring (--viper)
+├── go.mod                  # go 1.25.0, charm.land/*/v2 pins
+├── .air.toml               # hot reload
+├── Taskfile.yml            # setup, run, build, test, fmt, vet
+├── README.md
+├── LICENSE                 # gated on --license {mit,apache-2.0,none}
+└── .gitignore
+```
+
+`templates/lib/*/` directories DELETED except `glow/README.glow.md.tmpl`
+(binary install hint). All other lib content is now `{{ if has<Lib> . }}`
+blocks inside `variant_*/internal/{app,cmd,ui,config}/*.go.tmpl`.
+
+### Walker Substitution
+
+`templates/.../cmd/_name_/main.go.tmpl` → `cmd/<actual-name>/main.go`.
+The `_name_` placeholder is substituted in the output path (not the
+template body) so template authors can address per-project paths without
+templating the filesystem. `<name>` was considered but rejected — angle
+brackets are valid in filenames but harder to type in editors.
+
+### Bool→Name Map Split
+
+Plan 02-05 split the single bool map into two:
+- `boolFlagOverlayMap()` in `template.go` — only entries with a
+  surviving `lib/<name>/` overlay (now just `{"glow": p.Glow}`). Drives
+  the overlay walker.
+- `libBoolMap()` in `project.go` — full 9-entry map (cobra, fang, viper,
+  huh, glamour, glow, wish, log, harmonica). Drives `AllLibs()` for
+  prompts and AGENTS.md.
+
+Splitting the map fixed `TestProject_AllLibs_OnlyBoolsSet` which had
+regressed when the overlay map shrunk.
+
+### Evidence
+
+- `go build ./...` — exit 0
+- `go test ./internal/scaffold/... ./internal/prompt/... ./cmd/... -count=1` — all green
+  (scaffold 69.2s, prompt 0.006s, cmd 6.4s)
+- 4 new integration tests in `internal/scaffold/integration_test.go`:
+  - `TestIntegrationScaffold_TUIAllLibs` — `--tui --bubbletea --bubbles --lipgloss
+    --huh --glamour --harmonica --log` scaffolds, builds, has zero v1 leaks; asserts
+    `internal/app/update.go` inlines huh.NewForm, glamour.NewTermRenderer,
+    harmonica.NewSpring, spinner.TickMsg, log.Info; asserts no per-lib files
+    in `internal/app/`
+  - `TestIntegrationScaffold_CLIAllLibs` — `--cli --cobra --fang --lipgloss
+    --glamour --wish --log --viper` scaffolds, builds, runs `hello world` and
+    `readme` subcommands and asserts expected output
+  - `TestIntegrationScaffold_AllVariant` — `--all` with full lib set; asserts
+    both `internal/app/` and `internal/cmd/` exist, root `--help` lists tui,
+    hello, readme, ssh subcommands, hello + readme execute end-to-end
+  - `TestIntegrationScaffold_NameInPath` — scaffolds `weird-name_123`; asserts
+    `cmd/weird-name_123/main.go` exists and no scaffolded path contains the
+    unsubstituted `_name_` placeholder
+
+### Manual Smoke Tests
+
+- TUI variant (`--tui --bubbletea --bubbles --lipgloss --huh --glamour
+  --harmonica --log`): scaffold + `go build ./...` — no errors
+- CLI variant (`--cli --cobra --fang --lipgloss --glamour --wish --log
+  --viper`): scaffold + build + `./myapp hello world` prints styled
+  "Hello, world!", `./myapp readme` renders glamour
+- All variant (`--all` with full lib set): scaffold + build + `--help`
+  shows 4 subcommands (tui, hello, readme, ssh); hello, readme execute
+
+### Pre-existing Flakes (NOT Plan 02-05 regressions)
+
+- `wrap.TestRun_WithAirToml` hangs in the air subprocess; documented as
+  pre-existing in Plan 02-04 SUMMARY. Skipped in scaffold suite.
+- `wrap.TestFmt_GofumptMissing_NoStrict` fails when gofumpt is in PATH;
+  documented as pre-existing in Plan 02-03 SUMMARY.
+
+Both fail at base commit 8c82071 as well.
+
+---
+
+_Plan 02-05 verified: 2026-06-04_

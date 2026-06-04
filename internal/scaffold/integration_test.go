@@ -52,6 +52,7 @@ func TestIntegrationScaffold(t *testing.T) {
 
 	assertGoModFullTUI(t, projectDir)
 	assertMainGoV2(t, projectDir)
+	assertAppGoV2(t, projectDir)
 	assertStylesGoV2(t, projectDir)
 	assertAirToml(t, projectDir)
 	assertTaskfile(t, projectDir)
@@ -252,24 +253,27 @@ func assertGoModFullTUI(t *testing.T, projectDir string) {
 	}
 }
 
-// assertMainGoV2 validates the generated main.go uses the v2 API:
-//   - package main, tea.NewProgram, tea.View
+// assertMainGoV2 validates the generated cmd/<name>/main.go uses the v2
+// API and is a thin entry point (Plan 02-05 restructure):
+//   - package main, imports "{{module}}/internal/app", calls app.Run
 //   - does NOT contain v1 patterns (View() string, tea.WithAltScreen,
 //     lipgloss.NewRenderer)
+//   - the bubbletea MVU runtime (tea.NewProgram, tea.View) lives in
+//     internal/app/, not main.go
 func assertMainGoV2(t *testing.T, projectDir string) {
 	t.Helper()
-	mainGo, err := os.ReadFile(filepath.Join(projectDir, "main.go"))
+	mainGo, err := os.ReadFile(filepath.Join(projectDir, "cmd", integrationProjectName, "main.go"))
 	if err != nil {
-		t.Fatalf("read main.go: %v", err)
+		t.Fatalf("read cmd/%s/main.go: %v", integrationProjectName, err)
 	}
 	wants := []string{
 		"package main",
-		"tea.NewProgram",
-		"tea.View", // v2 type, not the v1 `View() string` signature
+		"app.Run",
+		`"` + integrationProjectName + `/internal/app"`,
 	}
 	for _, want := range wants {
 		if !bytes.Contains(mainGo, []byte(want)) {
-			t.Errorf("main.go missing %q; got:\n%s", want, mainGo)
+			t.Errorf("cmd/%s/main.go missing %q; got:\n%s", integrationProjectName, want, mainGo)
 		}
 	}
 	banned := []string{
@@ -279,7 +283,64 @@ func assertMainGoV2(t *testing.T, projectDir string) {
 	}
 	for _, b := range banned {
 		if bytes.Contains(mainGo, []byte(b)) {
-			t.Errorf("main.go contains forbidden v1 pattern %q:\n%s", b, mainGo)
+			t.Errorf("cmd/%s/main.go contains forbidden v1 pattern %q:\n%s", integrationProjectName, b, mainGo)
+		}
+	}
+}
+
+// assertAppGoV2 validates the restructured internal/app/*.go files use
+// the v2 bubbletea API and contain the expected per-file content.
+// Plan 02-05 split the old single main.go into:
+//   - internal/app/app.go    — Model + New + Init + Run
+//   - internal/app/update.go — Update() with conditional lib wiring
+//   - internal/app/view.go   — View() returning tea.View
+//   - internal/app/keys.go   — help.Component KeyMap
+func assertAppGoV2(t *testing.T, projectDir string) {
+	t.Helper()
+	base := filepath.Join(projectDir, "internal", "app")
+	for _, f := range []string{"app.go", "update.go", "view.go", "keys.go"} {
+		if _, err := os.Stat(filepath.Join(base, f)); err != nil {
+			t.Errorf("internal/app/%s missing: %v", f, err)
+		}
+	}
+	appGo, err := os.ReadFile(filepath.Join(base, "app.go"))
+	if err != nil {
+		t.Fatalf("read internal/app/app.go: %v", err)
+	}
+	for _, want := range []string{
+		"package app",
+		"type Model struct",
+		"tea.NewProgram",
+	} {
+		if !bytes.Contains(appGo, []byte(want)) {
+			t.Errorf("internal/app/app.go missing %q; got:\n%s", want, appGo)
+		}
+	}
+	viewGo, err := os.ReadFile(filepath.Join(base, "view.go"))
+	if err != nil {
+		t.Fatalf("read internal/app/view.go: %v", err)
+	}
+	for _, want := range []string{
+		"package app",
+		"tea.View",     // v2 type, not the v1 `View() string` signature
+		"tea.NewView",  // v2 constructor
+	} {
+		if !bytes.Contains(viewGo, []byte(want)) {
+			t.Errorf("internal/app/view.go missing %q; got:\n%s", want, viewGo)
+		}
+	}
+	updateGo, err := os.ReadFile(filepath.Join(base, "update.go"))
+	if err != nil {
+		t.Fatalf("read internal/app/update.go: %v", err)
+	}
+	for _, want := range []string{
+		"package app",
+		"func (m *Model) Update",
+		"tea.KeyPressMsg",
+		"tea.Quit",
+	} {
+		if !bytes.Contains(updateGo, []byte(want)) {
+			t.Errorf("internal/app/update.go missing %q; got:\n%s", want, updateGo)
 		}
 	}
 }
@@ -446,5 +507,271 @@ func assertNoV1Leaks(t *testing.T, projectDir, repoRootPath string) {
 	if err := cmd.Run(); err != nil {
 		t.Errorf("v1 leaks detected in %s:\n%s%s",
 			projectDir, stdout.String(), stderr.String())
+	}
+}
+
+// TestIntegrationScaffold_TUIAllLibs scaffolds a TUI variant with every
+// charm v2 lib that has a TUI-side conditional block and asserts:
+//   - the restructured tree (cmd/<name>/main.go + internal/app/*.go) is
+//     emitted with the expected per-file content
+//   - every lib's conditional block is INLINED into internal/app/update.go
+//     (huh, glamour, harmonica, bubbles, log) — Plan 02-05's central
+//     guarantee that the variant file composes libs in one place rather
+//     than scattering one file per lib
+//   - the project builds with CGO_ENABLED=0 and has zero v1 leaks
+//
+// This is the "kitchen sink" TUI test: if a future change accidentally
+// reverts to the file-per-lib overlay pattern this test catches it.
+func TestIntegrationScaffold_TUIAllLibs(t *testing.T) {
+	name := integrationProjectName + "-tui-all"
+	projectDir, repoRootPath := runSpinScaffold(t, name,
+		[]string{"--tui", "--bubbletea", "--bubbles", "--lipgloss",
+			"--huh", "--glamour", "--harmonica", "--log"})
+
+	// Structure: thin entry + internal/app + internal/ui.
+	wantFiles := []string{
+		filepath.Join("cmd", name, "main.go"),
+		filepath.Join("internal", "app", "app.go"),
+		filepath.Join("internal", "app", "update.go"),
+		filepath.Join("internal", "app", "view.go"),
+		filepath.Join("internal", "app", "keys.go"),
+		filepath.Join("internal", "ui", "styles.go"),
+	}
+	for _, f := range wantFiles {
+		if _, err := os.Stat(filepath.Join(projectDir, f)); err != nil {
+			t.Errorf("scaffold missing %s: %v", f, err)
+		}
+	}
+
+	// main.go is the thin entry point — does NOT contain MVU runtime.
+	mainGo, err := os.ReadFile(filepath.Join(projectDir, "cmd", name, "main.go"))
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	for _, banned := range []string{"tea.NewProgram", "type Model struct", "func (m"} {
+		if bytes.Contains(mainGo, []byte(banned)) {
+			t.Errorf("cmd/%s/main.go should be a thin entry, but contains %q:\n%s",
+				name, banned, mainGo)
+		}
+	}
+
+	// internal/app/update.go must inline the lib content that belongs
+	// inside Update (Plan 02-05 central guarantee — no per-lib file).
+	// Constructors (spinner.New) live in app.go; tick/message handling
+	// lives in update.go. We check both files for the right markers.
+	updateGo, err := os.ReadFile(filepath.Join(projectDir, "internal", "app", "update.go"))
+	if err != nil {
+		t.Fatalf("read internal/app/update.go: %v", err)
+	}
+	wantInlinedUpdate := map[string]string{
+		"huh.NewForm":             "--huh wiring",
+		"glamour.NewTermRenderer": "--glamour wiring",
+		"harmonica.NewSpring":     "--harmonica wiring",
+		"spinner.TickMsg":         "--bubbles spinner tick handling",
+		"log.Info":                "--log wiring",
+	}
+	for marker, label := range wantInlinedUpdate {
+		if !bytes.Contains(updateGo, []byte(marker)) {
+			t.Errorf("internal/app/update.go missing %s (%q):\n%s",
+				label, marker, updateGo)
+		}
+	}
+
+	// app.go must hold the constructors (Plan 02-05 splits Model + New
+	// + Init + Run into app.go; the rest is in update.go and view.go).
+	appGo, err := os.ReadFile(filepath.Join(projectDir, "internal", "app", "app.go"))
+	if err != nil {
+		t.Fatalf("read internal/app/app.go: %v", err)
+	}
+	if !bytes.Contains(appGo, []byte("spinner.New")) {
+		t.Errorf("internal/app/app.go missing 'spinner.New' (--bubbles constructor):\n%s", appGo)
+	}
+
+	// internal/app/* must NOT have the old file-per-lib overlay names.
+	// If a future change accidentally re-introduces them this test
+	// catches it before the v1-leak script does.
+	for _, banned := range []string{"huh.go", "wish.go", "glamour.go", "harmonica.go"} {
+		if _, err := os.Stat(filepath.Join(projectDir, "internal", "app", banned)); err == nil {
+			t.Errorf("internal/app/%s exists — Plan 02-05 forbids per-lib files; inline into update.go instead", banned)
+		}
+	}
+
+	assertGoBuildAndTest(t, projectDir)
+	assertNoV1Leaks(t, projectDir, repoRootPath)
+}
+
+// TestIntegrationScaffold_CLIAllLibs scaffolds a CLI variant with every
+// charm v2 lib that has a CLI-side conditional block and asserts:
+//   - the restructured tree (cmd/<name>/main.go + internal/cmd/*.go) is
+//     emitted with one file per subcommand (hello, readme, ssh)
+//   - main.go is a thin fang.Execute entry
+//   - hello and readme subcommands run end-to-end and produce the
+//     expected output (lipgloss-styled "Hello, world!" + glamour-rendered
+//     README)
+//   - the project builds with CGO_ENABLED=0 and has zero v1 leaks
+func TestIntegrationScaffold_CLIAllLibs(t *testing.T) {
+	name := integrationProjectName + "-cli-all"
+	projectDir, repoRootPath := runSpinScaffold(t, name,
+		[]string{"--cli", "--cobra", "--fang", "--lipgloss",
+			"--glamour", "--wish", "--log", "--viper"})
+
+	// Structure: thin entry + internal/cmd subcommands + internal/ui.
+	wantFiles := []string{
+		filepath.Join("cmd", name, "main.go"),
+		filepath.Join("internal", "cmd", "root.go"),
+		filepath.Join("internal", "cmd", "hello.go"),
+		filepath.Join("internal", "cmd", "readme.go"),
+		filepath.Join("internal", "cmd", "ssh.go"),
+		filepath.Join("internal", "ui", "styles.go"),
+	}
+	for _, f := range wantFiles {
+		if _, err := os.Stat(filepath.Join(projectDir, f)); err != nil {
+			t.Errorf("scaffold missing %s: %v", f, err)
+		}
+	}
+
+	// main.go must be the thin fang.Execute entry point.
+	mainGo, err := os.ReadFile(filepath.Join(projectDir, "cmd", name, "main.go"))
+	if err != nil {
+		t.Fatalf("read main.go: %v", err)
+	}
+	for _, want := range []string{
+		"package main",
+		"fang.Execute",
+		`"` + name + `/internal/cmd"`,
+	} {
+		if !bytes.Contains(mainGo, []byte(want)) {
+			t.Errorf("cmd/%s/main.go missing %q; got:\n%s", name, want, mainGo)
+		}
+	}
+
+	assertGoBuildAndTest(t, projectDir)
+	assertNoV1Leaks(t, projectDir, repoRootPath)
+
+	// Build the scaffolded CLI and exercise hello + readme subcommands.
+	cliBin := filepath.Join(t.TempDir(), name)
+	build := exec.Command("go", "build", "-o", cliBin, "./cmd/"+name)
+	build.Dir = projectDir
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build CLI: %v\n%s", err, out)
+	}
+
+	hello := exec.Command(cliBin, "hello", "world")
+	hello.Dir = projectDir
+	out, err := hello.CombinedOutput()
+	if err != nil {
+		t.Errorf("%s hello world failed: %v\n%s", name, err, out)
+	}
+	if !bytes.Contains(out, []byte("Hello, world!")) {
+		t.Errorf("hello world output missing 'Hello, world!':\n%s", out)
+	}
+
+	readme := exec.Command(cliBin, "readme")
+	readme.Dir = projectDir
+	out, err = readme.CombinedOutput()
+	if err != nil {
+		t.Errorf("%s readme failed: %v\n%s", name, err, out)
+	}
+	// Glamour-rendered README contains the project name as a heading.
+	if !bytes.Contains(out, []byte(name)) {
+		t.Errorf("readme output missing project name %q:\n%s", name, out)
+	}
+}
+
+// TestIntegrationScaffold_AllVariant scaffolds the --all variant
+// (TUI + CLI composed in one binary) with the full lib set and asserts:
+//   - the merged tree contains internal/app/*.go AND internal/cmd/*.go
+//   - the root help lists all 4 subcommands (tui, hello, readme, ssh)
+//   - hello and readme subcommands work end-to-end
+//   - tui subcommand exists in help (we do not exec the TUI itself
+//     because bubbletea needs a real TTY)
+func TestIntegrationScaffold_AllVariant(t *testing.T) {
+	name := integrationProjectName + "-all"
+	projectDir, repoRootPath := runSpinScaffold(t, name,
+		[]string{"--all", "--bubbletea", "--bubbles", "--lipgloss",
+			"--cobra", "--fang", "--huh", "--glamour", "--wish", "--log"})
+
+	// Structure: thin entry + internal/app + internal/cmd + internal/ui.
+	for _, f := range []string{
+		filepath.Join("cmd", name, "main.go"),
+		filepath.Join("internal", "app", "app.go"),
+		filepath.Join("internal", "app", "update.go"),
+		filepath.Join("internal", "app", "view.go"),
+		filepath.Join("internal", "cmd", "root.go"),
+		filepath.Join("internal", "cmd", "hello.go"),
+		filepath.Join("internal", "cmd", "readme.go"),
+		filepath.Join("internal", "cmd", "ssh.go"),
+		filepath.Join("internal", "cmd", "tui.go"),
+		filepath.Join("internal", "ui", "styles.go"),
+	} {
+		if _, err := os.Stat(filepath.Join(projectDir, f)); err != nil {
+			t.Errorf("scaffold missing %s: %v", f, err)
+		}
+	}
+
+	assertGoBuildAndTest(t, projectDir)
+	assertNoV1Leaks(t, projectDir, repoRootPath)
+
+	// Build + exercise root help (must list tui, hello, readme, ssh).
+	allBin := filepath.Join(t.TempDir(), name)
+	build := exec.Command("go", "build", "-o", allBin, "./cmd/"+name)
+	build.Dir = projectDir
+	build.Env = append(os.Environ(), "CGO_ENABLED=0")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build all-variant: %v\n%s", err, out)
+	}
+
+	help := exec.Command(allBin, "--help")
+	help.Dir = projectDir
+	out, err := help.CombinedOutput()
+	if err != nil {
+		t.Errorf("%s --help failed: %v\n%s", name, err, out)
+	}
+	for _, sub := range []string{"tui", "hello", "readme", "ssh"} {
+		if !bytes.Contains(out, []byte(sub)) {
+			t.Errorf("--help output missing subcommand %q:\n%s", sub, out)
+		}
+	}
+
+	hello := exec.Command(allBin, "hello", "world")
+	hello.Dir = projectDir
+	out, err = hello.CombinedOutput()
+	if err != nil {
+		t.Errorf("%s hello world failed: %v\n%s", name, err, out)
+	}
+	if !bytes.Contains(out, []byte("Hello, world!")) {
+		t.Errorf("hello world output missing 'Hello, world!':\n%s", out)
+	}
+}
+
+// TestIntegrationScaffold_NameInPath verifies the walker substitutes the
+// `_name_` placeholder in output paths with p.Name for unusual but
+// legal project names (mixed case, digits, dashes, underscores). Plan
+// 02-05's central walker contract: `templates/.../cmd/_name_/main.go.tmpl`
+// renders to `cmd/<actual-name>/main.go`.
+func TestIntegrationScaffold_NameInPath(t *testing.T) {
+	weirdName := "weird-name_123"
+	projectDir, _ := runSpinScaffold(t, weirdName,
+		[]string{"--tui", "--bubbletea"})
+
+	wantPath := filepath.Join(projectDir, "cmd", weirdName, "main.go")
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Fatalf("expected %s to exist (walker `_name_` substitution failed): %v", wantPath, err)
+	}
+
+	// The literal `_name_` placeholder must NOT appear anywhere in the
+	// scaffolded tree (would indicate a missed substitution).
+	err := filepath.Walk(projectDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return err
+		}
+		if strings.Contains(path, "_name_") {
+			t.Errorf("scaffolded path contains unsubstituted `_name_` placeholder: %s", path)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk scaffold tree: %v", err)
 	}
 }
