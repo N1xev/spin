@@ -22,7 +22,7 @@ Example:
 
 To add a new charm library, re-run `spin new <name> --<flag>` with the additional flag (e.g. `--huh`).
 To add a new command, edit `cmd/<name>/main.go` and add a new `cobra.Command` to `rootCmd`.
-The template tree is composed from `_base/` (shared scaffolding), `variant_<type>/` (with every charm lib's wiring inlined behind per-lib `has<Lib>` blocks in the variant files), and the two surviving `lib/<lib>/` overlays (`lib/glow/`, `lib/ai/`); see `internal/scaffold/templates/` in the spin source for the canonical set.
+The template tree is composed from `_base/` (shared scaffolding), `variant_<type>/` (with every charm lib's wiring inlined behind per-lib `has<Lib>` blocks in the variant files), and the one surviving `lib/<lib>/` overlay (`lib/ai/`); see `internal/scaffold/templates/` in the spin source for the canonical set.
 
 ## Conventions
 

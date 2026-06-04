@@ -12,9 +12,8 @@ import (
 )
 
 // RootCmd builds and returns the root cobra command. The hello
-// subcommand is always present; readme is added when --glamour or
-// --glow; ssh is added when --wish. viper is wired via
-// PersistentPreRunE when --viper is set.
+// subcommand is always present; ssh is added when --wish.
+// viper is wired via PersistentPreRunE when --viper is set.
 func RootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "{{.Name}}",
@@ -35,9 +34,6 @@ charm-style colors, and (optionally) viper for config-file support.`,
 	}
 
 	root.AddCommand(helloCmd)
-{{- if or (hasGlamour .) (hasGlow .)}}
-	root.AddCommand(readmeCmd)
-{{- end}}
 {{- if hasWish .}}
 	root.AddCommand(sshCmd)
 {{- end}}
