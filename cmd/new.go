@@ -34,7 +34,7 @@ func init() {
 	//           --cobra, and --fang are all auto-enabled (CR-003).
 	//
 	// Library flags (--bubbletea, --bubbles, --lipgloss, --cobra, --fang,
-	// --viper, --huh, --glamour, --glow, --wish, --log, --harmonica)
+	// --viper, --huh, --glamour, --wish, --log, --harmonica)
 	// layer in extra charm v2 deps on top of the chosen variant.
 	pf.Bool("tui", false, "TUI project variant (default if no --cli)")
 	pf.Bool("cli", false, "CLI project variant (Phase 2 templates)")
@@ -82,11 +82,9 @@ func init() {
 	pf.Bool("viper", false, "add viper (Phase 2)")
 	pf.Bool("huh", false, "add huh v2 (Phase 2)")
 	pf.Bool("glamour", false, "add glamour v2 (Phase 2)")
-	pf.Bool("glow", false, "add glow binary (Phase 2)")
 	pf.Bool("wish", false, "add wish v2 (Phase 2)")
 	pf.Bool("log", false, "add charm log v2 (Phase 2)")
 	pf.Bool("harmonica", false, "add harmonica v2 (Phase 2)")
-	pf.Bool("modifiers", false, "add x/modifiers (Phase 2)")
 	pf.Bool("ansi", false, "add x/ansi (Phase 2)")
 	pf.Bool("runewidth", false, "add go-runewidth (Phase 2)")
 	pf.Bool("ai", false, "opt in to AGENTS.md (alias: --agents)")

@@ -7,8 +7,8 @@
 //
 // Walking Skeleton fields: Name, Module, Type, Libs, Year, SpinVer.
 // Plan 02 expands with License, Template, Force, NoGit, NoVerify, Quiet, and
-// the forward-compatibility booleans (Cobra, Fang, Viper, Huh, Glamour, Glow,
-// Wish, Log, Harmonica, Modifiers, Ansi, Runewidth, AI) so the template
+// the forward-compatibility booleans (Cobra, Fang, Viper, Huh, Glamour,
+// Wish, Log, Harmonica, Ansi, Runewidth, AI) so the template
 // engine and flag binding don't churn when later phases add content.
 package scaffold
 
@@ -115,19 +115,17 @@ type Project struct {
 	Fang  bool
 	Viper bool
 
-	// Huh / Glamour / Glow / Wish / Log / Harmonica are charm library flags (Phase 2).
-	// Huh is interactive forms; Glamour is markdown rendering; Glow is the
-	// markdown reader binary; Wish is SSH server; Log is structured logger;
+	// Huh / Glamour / Wish / Log / Harmonica are charm library flags (Phase 2).
+	// Huh is interactive forms; Glamour is markdown rendering;
+	// Wish is SSH server; Log is structured logger;
 	// Harmonica is spring animations.
 	Huh       bool
 	Glamour   bool
-	Glow      bool
 	Wish      bool
 	Log       bool
 	Harmonica bool
 
-	// Modifiers / Ansi / Runewidth are charmbracelet/x subpackage flags (Phase 2).
-	Modifiers bool
+	// Ansi / Runewidth are charmbracelet/x subpackage flags (Phase 2).
 	Ansi      bool
 	Runewidth bool
 
@@ -137,7 +135,7 @@ type Project struct {
 
 // AllLibs returns the unified library set: every entry in p.Libs plus
 // every bool set in the boolFlagOverlayMap (Cobra, Fang, Viper, Huh,
-// Glamour, Glow, Wish, Log, Harmonica), deduplicated and sorted
+// Glamour, Wish, Log, Harmonica), deduplicated and sorted
 // alphabetically. Use this anywhere a "complete library list" is
 // needed: the AGENTS.md template, the prompt default-selection, and
 // the overlay walker's order.
@@ -166,8 +164,8 @@ type Project struct {
 //
 // Plan 02-05 split the concept from boolFlagOverlayMap (template.go):
 //   - boolFlagOverlayMap returns only the bools that still have a
-//     lib/<name>/ overlay (just "glow" now).
-//   - libBoolMap returns the full 9-entry set, used by AllLibs to
+//     lib/<name>/ overlay (just "ai" now).
+//   - libBoolMap returns the full 8-entry set, used by AllLibs to
 //     build the unified library list for prompts and AGENTS.md.
 func (p *Project) libBoolMap() map[string]bool {
 	return map[string]bool{
@@ -176,7 +174,6 @@ func (p *Project) libBoolMap() map[string]bool {
 		"viper":     p.Viper,
 		"huh":       p.Huh,
 		"glamour":   p.Glamour,
-		"glow":      p.Glow,
 		"wish":      p.Wish,
 		"log":       p.Log,
 		"harmonica": p.Harmonica,

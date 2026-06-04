@@ -1,7 +1,7 @@
 // Package scaffold tests for the AllLibs method (Plan 02 / INT-05).
 //
 // AllLibs unifies p.Libs and the per-lib bools (Cobra, Fang, Viper,
-// Huh, Glamour, Glow, Wish, Log, Harmonica) into a single sorted,
+// Huh, Glamour, Wish, Log, Harmonica) into a single sorted,
 // deduplicated slice. The method fixes Pitfall 4 from 03-RESEARCH.md
 // (parallel sources of truth) and is consumed by the prompt layer
 // (Plan 02 askLibs) and the AGENTS.md template (Plan 04).
@@ -89,7 +89,7 @@ func TestProject_AllLibs_Empty(t *testing.T) {
 }
 
 // TestProject_AllLibs_AllBoolsSet covers the case where every
-// per-lib bool is set: the result must contain all 9 bool-mapped
+// per-lib bool is set: the result must contain all 8 bool-mapped
 // libs, sorted alphabetically. This is the upper-bound coverage for
 // the bool-flag derivation path.
 func TestProject_AllLibs_AllBoolsSet(t *testing.T) {
@@ -99,13 +99,12 @@ func TestProject_AllLibs_AllBoolsSet(t *testing.T) {
 		Viper:     true,
 		Huh:       true,
 		Glamour:   true,
-		Glow:      true,
 		Wish:      true,
 		Log:       true,
 		Harmonica: true,
 	}
 	got := p.AllLibs()
-	want := []string{"cobra", "fang", "glamour", "glow", "harmonica", "huh", "log", "viper", "wish"}
+	want := []string{"cobra", "fang", "glamour", "harmonica", "huh", "log", "viper", "wish"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("AllLibs() = %v, want %v", got, want)
 	}

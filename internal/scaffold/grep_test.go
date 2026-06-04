@@ -110,9 +110,7 @@ func TestGrepV1Leaks_CatchesDeprecatedAir(t *testing.T) {
 // (harmonica has not migrated to charm.land per RESEARCH §2.1).
 //
 // This test pins that regression: a project that imports harmonica MUST
-// pass the grep suite. Companion test TestGrepV1Leaks_AllowsGlowV2 covers
-// the other intentionally-allowed path (the glow v2 binary's module
-// path is still `github.com/charmbracelet/glow/v2`).
+// pass the grep suite.
 func TestGrepV1Leaks_AllowsHarmonica(t *testing.T) {
 	dir := t.TempDir()
 	src := `package myapp
@@ -130,33 +128,6 @@ func main() {
 	stdout, stderr, err := runGrep(t, dir)
 	if err != nil {
 		t.Fatalf("grep script should have PASSED on harmonica import (it is the current path, not a v1 leak); got exit %v\nstdout: %s\nstderr: %s",
-			err, stdout, stderr)
-	}
-	if !strings.Contains(stdout, "OK: no v1 leaks detected") {
-		t.Errorf("expected 'OK' line in stdout; got: %q", stdout)
-	}
-}
-
-// TestGrepV1Leaks_AllowsGlowV2 is the second positive-control test for
-// the Task 4 per-module deny-list: `github.com/charmbracelet/glow/v2`
-// is the current path for the glow binary's Go module and is allowed.
-func TestGrepV1Leaks_AllowsGlowV2(t *testing.T) {
-	dir := t.TempDir()
-	src := `package myapp
-
-import "github.com/charmbracelet/glow/v2"
-
-func main() {
-	_ = glow.NewTermRenderer()
-}
-`
-	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0o644); err != nil {
-		t.Fatalf("write main.go: %v", err)
-	}
-
-	stdout, stderr, err := runGrep(t, dir)
-	if err != nil {
-		t.Fatalf("grep script should have PASSED on glow/v2 import; got exit %v\nstdout: %s\nstderr: %s",
 			err, stdout, stderr)
 	}
 	if !strings.Contains(stdout, "OK: no v1 leaks detected") {

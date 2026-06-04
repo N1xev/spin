@@ -353,8 +353,8 @@ func assertAppGoV2(t *testing.T, projectDir string) {
 	}
 	for _, want := range []string{
 		"package app",
-		"tea.View",     // v2 type, not the v1 `View() string` signature
-		"tea.NewView",  // v2 constructor
+		"tea.View",    // v2 type, not the v1 `View() string` signature
+		"tea.NewView", // v2 constructor
 	} {
 		if !bytes.Contains(viewGo, []byte(want)) {
 			t.Errorf("internal/app/view.go missing %q; got:\n%s", want, viewGo)
@@ -556,8 +556,10 @@ func assertNoV1Leaks(t *testing.T, projectDir, repoRootPath string) {
 func TestIntegrationScaffold_TUIAllLibs(t *testing.T) {
 	name := integrationProjectName + "-tui-all"
 	projectDir, repoRootPath := runSpinScaffold(t, name,
-		[]string{"--tui", "--bubbletea", "--bubbles", "--lipgloss",
-			"--huh", "--glamour", "--harmonica", "--log"})
+		[]string{
+			"--tui", "--bubbletea", "--bubbles", "--lipgloss",
+			"--huh", "--glamour", "--harmonica", "--log",
+		})
 
 	// Structure: thin entry + internal/app + internal/ui.
 	wantFiles := []string{
@@ -634,24 +636,24 @@ func TestIntegrationScaffold_TUIAllLibs(t *testing.T) {
 // TestIntegrationScaffold_CLIAllLibs scaffolds a CLI variant with every
 // charm v2 lib that has a CLI-side conditional block and asserts:
 //   - the restructured tree (cmd/<name>/main.go + internal/cmd/*.go) is
-//     emitted with one file per subcommand (hello, readme, ssh)
+//     emitted with one file per subcommand (hello, ssh)
 //   - main.go is a thin fang.Execute entry
-//   - hello and readme subcommands run end-to-end and produce the
-//     expected output (lipgloss-styled "Hello, world!" + glamour-rendered
-//     README)
+//   - hello subcommand runs end-to-end and produces the
+//     expected output (lipgloss-styled "Hello, world!")
 //   - the project builds with CGO_ENABLED=0 and has zero v1 leaks
 func TestIntegrationScaffold_CLIAllLibs(t *testing.T) {
 	name := integrationProjectName + "-cli-all"
 	projectDir, repoRootPath := runSpinScaffold(t, name,
-		[]string{"--cli", "--cobra", "--fang", "--lipgloss",
-			"--glamour", "--wish", "--log", "--viper"})
+		[]string{
+			"--cli", "--cobra", "--fang", "--lipgloss",
+			"--glamour", "--wish", "--log", "--viper",
+		})
 
 	// Structure: thin entry + internal/cmd subcommands + internal/ui.
 	wantFiles := []string{
 		filepath.Join("cmd", name, "main.go"),
 		filepath.Join("internal", "cmd", "root.go"),
 		filepath.Join("internal", "cmd", "hello.go"),
-		filepath.Join("internal", "cmd", "readme.go"),
 		filepath.Join("internal", "cmd", "ssh.go"),
 		filepath.Join("internal", "ui", "styles.go"),
 	}
@@ -679,7 +681,7 @@ func TestIntegrationScaffold_CLIAllLibs(t *testing.T) {
 	assertGoBuildAndTest(t, projectDir)
 	assertNoV1Leaks(t, projectDir, repoRootPath)
 
-	// Build the scaffolded CLI and exercise hello + readme subcommands.
+	// Build the scaffolded CLI and exercise the hello subcommand.
 	cliBin := filepath.Join(t.TempDir(), name)
 	build := exec.Command("go", "build", "-o", cliBin, "./cmd/"+name)
 	build.Dir = projectDir
@@ -697,31 +699,22 @@ func TestIntegrationScaffold_CLIAllLibs(t *testing.T) {
 	if !bytes.Contains(out, []byte("Hello, world!")) {
 		t.Errorf("hello world output missing 'Hello, world!':\n%s", out)
 	}
-
-	readme := exec.Command(cliBin, "readme")
-	readme.Dir = projectDir
-	out, err = readme.CombinedOutput()
-	if err != nil {
-		t.Errorf("%s readme failed: %v\n%s", name, err, out)
-	}
-	// Glamour-rendered README contains the project name as a heading.
-	if !bytes.Contains(out, []byte(name)) {
-		t.Errorf("readme output missing project name %q:\n%s", name, out)
-	}
 }
 
 // TestIntegrationScaffold_AllVariant scaffolds the --all variant
 // (TUI + CLI composed in one binary) with the full lib set and asserts:
 //   - the merged tree contains internal/app/*.go AND internal/cmd/*.go
-//   - the root help lists all 4 subcommands (tui, hello, readme, ssh)
-//   - hello and readme subcommands work end-to-end
+//   - the root help lists all 3 subcommands (tui, hello, ssh)
+//   - hello subcommand works end-to-end
 //   - tui subcommand exists in help (we do not exec the TUI itself
 //     because bubbletea needs a real TTY)
 func TestIntegrationScaffold_AllVariant(t *testing.T) {
 	name := integrationProjectName + "-all"
 	projectDir, repoRootPath := runSpinScaffold(t, name,
-		[]string{"--all", "--bubbletea", "--bubbles", "--lipgloss",
-			"--cobra", "--fang", "--huh", "--glamour", "--wish", "--log"})
+		[]string{
+			"--all", "--bubbletea", "--bubbles", "--lipgloss",
+			"--cobra", "--fang", "--huh", "--glamour", "--wish", "--log",
+		})
 
 	// Structure: thin entry + internal/app + internal/cmd + internal/ui.
 	for _, f := range []string{
@@ -731,7 +724,6 @@ func TestIntegrationScaffold_AllVariant(t *testing.T) {
 		filepath.Join("internal", "app", "view.go"),
 		filepath.Join("internal", "cmd", "root.go"),
 		filepath.Join("internal", "cmd", "hello.go"),
-		filepath.Join("internal", "cmd", "readme.go"),
 		filepath.Join("internal", "cmd", "ssh.go"),
 		filepath.Join("internal", "cmd", "tui.go"),
 		filepath.Join("internal", "ui", "styles.go"),
@@ -744,7 +736,7 @@ func TestIntegrationScaffold_AllVariant(t *testing.T) {
 	assertGoBuildAndTest(t, projectDir)
 	assertNoV1Leaks(t, projectDir, repoRootPath)
 
-	// Build + exercise root help (must list tui, hello, readme, ssh).
+	// Build + exercise root help (must list tui, hello, ssh).
 	allBin := filepath.Join(t.TempDir(), name)
 	build := exec.Command("go", "build", "-o", allBin, "./cmd/"+name)
 	build.Dir = projectDir
@@ -759,7 +751,7 @@ func TestIntegrationScaffold_AllVariant(t *testing.T) {
 	if err != nil {
 		t.Errorf("%s --help failed: %v\n%s", name, err, out)
 	}
-	for _, sub := range []string{"tui", "hello", "readme", "ssh"} {
+	for _, sub := range []string{"tui", "hello", "ssh"} {
 		if !bytes.Contains(out, []byte(sub)) {
 			t.Errorf("--help output missing subcommand %q:\n%s", sub, out)
 		}

@@ -1,6 +1,6 @@
 // Package prompt — Library catalog (INT-05 / Plan 02).
 //
-// The catalog is the single source of truth for the 13 charm libraries
+// The catalog is the single source of truth for the 11 charm libraries
 // that `spin new` can scaffold into a generated project. Both the huh
 // v2 backend (this plan) and the gum backend (Plan 03) consume this
 // catalog to:
@@ -58,21 +58,20 @@ type Library struct {
 // into a project. Order is alphabetical by Name so iteration order is
 // deterministic across runs (deterministic AGENTS.md output).
 //
-// The 13 entries are exactly the libraries from UI-SPEC
-// §"Library lookup table" minus ansi and runewidth (scaffolder-only
-// libraries; not user-facing in the generated project).
+// The 11 entries are exactly the libraries from UI-SPEC
+// §"Library lookup table" minus ansi, runewidth, glow, and modifiers
+// (scaffolder-only libraries; not user-facing in the generated project,
+// or removed in the glow/modifiers drop quick task).
 var LibCatalog = []Library{
 	{Name: "bubbles", Display: "Bubbles", DefaultFor: "", AlwaysOn: false},
 	{Name: "bubbletea", Display: "Bubble Tea", DefaultFor: "tui", AlwaysOn: true},
 	{Name: "cobra", Display: "Cobra", DefaultFor: "cli", AlwaysOn: true},
 	{Name: "fang", Display: "Fang", DefaultFor: "cli", AlwaysOn: true},
 	{Name: "glamour", Display: "Glamour", DefaultFor: "", AlwaysOn: false},
-	{Name: "glow", Display: "Glow", DefaultFor: "", AlwaysOn: false},
 	{Name: "harmonica", Display: "Harmonica", DefaultFor: "", AlwaysOn: false},
 	{Name: "huh", Display: "Huh", DefaultFor: "", AlwaysOn: false},
 	{Name: "lipgloss", Display: "Lip Gloss", DefaultFor: "", AlwaysOn: false},
 	{Name: "log", Display: "Log", DefaultFor: "", AlwaysOn: false},
-	{Name: "modifiers", Display: "x/modifiers", DefaultFor: "", AlwaysOn: false},
 	{Name: "viper", Display: "Viper", DefaultFor: "", AlwaysOn: false},
 	{Name: "wish", Display: "Wish", DefaultFor: "", AlwaysOn: false},
 }
@@ -136,7 +135,6 @@ var libBoolMirror = map[string]string{
 	"viper":     "Viper",
 	"huh":       "Huh",
 	"glamour":   "Glamour",
-	"glow":      "Glow",
 	"wish":      "Wish",
 	"log":       "Log",
 	"harmonica": "Harmonica",

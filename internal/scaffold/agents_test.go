@@ -153,7 +153,6 @@ func TestAGENTSmd_NoANSI(t *testing.T) {
 		Viper:   true,
 		Huh:     true,
 		Glamour: true,
-		Glow:    true,
 		Wish:    true,
 		Log:     true,
 		Year:    2026,
@@ -180,11 +179,11 @@ func TestAGENTSmd_NoANSI(t *testing.T) {
 	}
 }
 
-// TestCharmLibInfo_AllFifteen asserts charmLibInfo returns a non-empty
+// TestCharmLibInfo_AllThirteen asserts charmLibInfo returns a non-empty
 // module string for every key in the UI-SPEC §"Library lookup table
 // (canonical)". A missing entry would mean a regression in the lookup
 // table (e.g. a typo in the switch case).
-func TestCharmLibInfo_AllFifteen(t *testing.T) {
+func TestCharmLibInfo_AllThirteen(t *testing.T) {
 	fm := funcMap(&Project{AI: true})
 	fn, ok := fm["charmLibInfo"].(func(string, string) string)
 	if !ok {
@@ -192,9 +191,9 @@ func TestCharmLibInfo_AllFifteen(t *testing.T) {
 	}
 
 	wantKeys := []string{
-		"bubbletea", "bubbles", "lipgloss", "huh", "glamour", "glow",
+		"bubbletea", "bubbles", "lipgloss", "huh", "glamour",
 		"wish", "log", "harmonica", "cobra", "fang", "viper",
-		"modifiers", "ansi", "runewidth",
+		"ansi", "runewidth",
 	}
 	for _, key := range wantKeys {
 		if mod := fn(key, "module"); mod == "" {
