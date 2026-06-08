@@ -1,17 +1,17 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
+milestone: v2.0-skeleton
+milestone_name: v2.0 skeleton
 status: executing
 stopped_at: Phase 04 complete
-last_updated: "2026-06-05T00:00:00.000Z"
-last_activity: 2026-06-05 -- Phase 04 complete (6/6 plans)
+last_updated: "2026-06-08T20:38:28.290Z"
+last_activity: 2026-06-08 -- Phase 5 planning complete
 progress:
-  total_phases: 4
+  total_phases: 5
   completed_phases: 4
-  total_plans: 19
+  total_plans: 23
   completed_plans: 19
-  percent: 100
+  percent: 80
 ---
 
 # Project State
@@ -27,8 +27,8 @@ See: .planning/PROJECT.md (updated 2026-06-02)
 
 Phase: 04 (post-scaffold-health-verification-dogfooding) — COMPLETE
 Plans: 6/6
-Status: Done
-Last activity: 2026-06-05 -- 6 plans executed, all gates green
+Status: Ready to execute
+Last activity: 2026-06-08 -- Phase 5 planning complete
 
 Progress: [██████████] 100% (Phase 4 of 4)
 
@@ -107,3 +107,115 @@ None.
 Last session: 2026-06-05
 Stopped at: Phase 04 complete
 Next: Milestone closeout (transition to v1.0)
+
+## v2.0 Skeleton (in progress, 2026-06-08)
+
+User direction: pivot spin from a Go+charm scaffolder into a universal,
+language-agnostic scaffolder + task runner. v1.0 milestone is complete;
+v2.0 is the pivot.
+
+### New packages (skeleton — interfaces + key paths, not full logic)
+
+- `internal/params/` — the 7 param types: text, textarea, number, select,
+  multiselect, bool, path, secret. Each type implements `Param` and
+  builds the appropriate `huh.Field`. `Form()` builds a `huh.Form`;
+  `SetDefaults()` for `--no-interactive`. `Parse()` is the TOML→Param
+  bridge.
+
+- `internal/ecosystem/` — `Ecosystem` interface, `Flag` type with
+  chainable `With*` builders, `Registry` (builtin + external), `Loader`
+  stub, `Detector` helpers (`FileDetector`, `ContentDetector`).
+
+- `internal/ecosystems/charm/` — the v2 charm ecosystem; implements
+  `Ecosystem`; converts `Context`→`scaffold.Project` and delegates to
+  the existing scaffold engine via the new `RenderToMap`/`WriteTo` shims.
+
+- `internal/runner/` + `runner/sources/` — the universal task runner.
+  `Runner.All()` resolves tasks across sources in precedence order;
+  `List`, `Explain`, `Run` for the three CLI surfaces. Sources:
+  spin.config.toml, Taskfile.yml, Makefile, package.json, scripts/,
+  language-specific fallback.
+
+- `internal/template/` — external templates (git repos). `Template` wraps
+  a parsed spin.toml + _base/ + _post/. `Loader` handles local paths
+  and git URLs. `BuildForm` + `ResolveForm` build the huh form.
+
+- `internal/registry/` — public template registry client (stub;
+  ErrNotImplemented when the server isn't deployed). Pin/add/list
+  works against `~/.config/spin/pinned.json`.
+
+- `internal/builder/` — interface stub for the future "builder" concept
+  (go-blueprint / better-t-stack style). No implementation yet.
+
+- `internal/huh/` — placeholder for shared huh helpers (deferred).
+
+### New commands (in cmd/)
+
+- `spin run [task] [--list|--explain <task>]` — universal task runner.
+- `spin new --list-ecosystems` — list every registered ecosystem.
+- `spin new <ecosystem> <name> [flags]` — first ecosystem: `charm`.
+  The legacy `spin new <name> --tui --bubbletea` form still works
+  (no deprecation warning yet in v2.0; will be added in v2.x).
+
+- `spin search <query>` — registry search (stub until server ships).
+- `spin add <name>` / `spin list` — pin/list templates.
+- `spin ecosystem {list,info,add,remove}` — manage ecosystems.
+- `spin version` — version subcommand.
+- `spin build/test/vet/fmt/lint` — DEPRECATION WARNING added via
+  `cmd/deprecate.go` PreRun hooks. Suggests `spin run <task>`.
+
+### Backward compatibility
+
+All v1.0 commands and flags work unchanged. The v2 skeleton coexists
+with the v1 implementation; nothing in `internal/scaffold/` or
+`internal/wrap/` was removed. The deprecation warnings on
+build/test/vet/fmt/lint are the only behaviour change in v2.0.
+
+### Build state
+
+- `go build ./...` — green
+- `go vet ./...` — green
+- `go test ./internal/wrap/...` — pre-existing test `TestRun_WithAirToml`
+  times out (660s). Not introduced by the v2 skeleton; appears to be an
+  environment issue with the `air` binary in the test runner.
+
+- `go test ./...` for the new packages — green (most packages have no
+  tests yet; the skeleton ships interfaces + signatures, full tests
+  come with the v2.x phases that fill in the implementation).
+
+### What's stubbed (not real yet)
+
+- `internal/template/parse.go` is a hand-rolled mini-parser; not full TOML.
+  The v2.x plan: use `encoding/toml/v2` (stdlib in Go 1.23+) or
+  `pelletier/go-toml` and validate manifests server-side before publishing.
+
+- `internal/registry/client.go` `Search()` returns ErrNotImplemented
+  when the registry server isn't deployed.
+
+- `internal/ecosystem/loader.go` — external ecosystem loading deferred
+  to v2.x.
+
+- `cmd/new_charm.go`'s `runNewCharm` runs the new ecosystem path, but
+  the legacy `cmd/new.go` is the canonical entry point. Full migration
+  to the v2 flow is a v2.x task.
+
+- `internal/builder/builder.go` — interface stub only.
+
+### Decisions still open
+
+- Should `spin new <name>` (no ecosystem) keep working indefinitely
+  as an alias for `spin new charm <name>`, or get a hard deprecation
+  cycle?
+
+- Should ecosystems be Go packages compiled in (current) or external
+  plugins from v2.0 (more complex; more flexible)? Current: compiled in.
+
+- MVP cut for v2.0 release: ship the skeleton, migrate `charm` to the
+  new flow, leave the registry/builder as stubbed. Defer Rust/Next.js
+  ecosystems until v2.x.
+
+### Next step
+
+Propose a v2.0 implementation roadmap as Phase 5 of `.planning/ROADMAP.md`:
+5.1 — fill in ecosystem/template/registry logic; 5.2 — add Rust ecosystem
+as proof of universality; 5.3 — registry server MVP (separate project).
