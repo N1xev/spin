@@ -10,7 +10,8 @@ func Flags() []ecosystem.Flag {
 		// ── project type ───────────────────────────────────────
 		ecosystem.ChoiceFlag("type", "bin", []string{"bin", "lib", "example"}, "project-type").
 			WithHelp("Project type: bin (binary), lib (library), or example (single-file example).").
-			WithPrompt("Project type"),
+			WithPrompt("Project type").
+			WithAliases([]string{"bin", "lib", "example"}),
 
 		// ── metadata ───────────────────────────────────────────
 		ecosystem.StringFlag("edition", "2021", "metadata").

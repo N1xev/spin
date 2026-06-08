@@ -20,16 +20,7 @@ func (e *Ecosystem) Version() string { return "2.0.0" }
 func (e *Ecosystem) Flags() []ecosystem.Flag { return Flags() }
 
 // Render, PostScaffold, and Tasks are implemented in render.go / post.go /
-// tasks.go (Task 2). The method bodies declared here are placeholders that
-// keep `go build` green; Task 2 will overwrite them by defining Render,
-// PostScaffold, and Tasks in their own files.
-func (e *Ecosystem) Render(ctx ecosystem.Context) (map[string][]byte, error) {
-	return nil, nil
-}
-func (e *Ecosystem) PostScaffold(ctx ecosystem.Context, dir string) error {
-	return nil
-}
-func (e *Ecosystem) Tasks() map[string]string { return nil }
+// tasks.go. Compile-time check below.
 
 // Compile-time check that *Ecosystem satisfies the interface.
 var _ ecosystem.Ecosystem = (*Ecosystem)(nil)
