@@ -1,0 +1,57 @@
+# .github/workflows/dogfood.yml
+#
+# Smoke test for the spin scaffolder. Triggers when the scaffolder
+# itself or its templates change. The dogfood job scaffolds a
+# fixture project (the same kind of project the user would create
+# via `spin new`) and proves the scaffolder's end-to-end correctness
+# by building and testing the generated project.
+#
+# Per CONTEXT.md D-13 and ROADMAP success criterion #5:
+#   - Triggers on changes to internal/scaffold/templates/** and cmd/**
+#   - Runs `spin new spin --cli --cobra --fang` in a fresh temp dir
+#   - Then `CGO_ENABLED=0 go build ./...` + `go test ./...` on the result
+#   - Uploads the failure log as an artifact when the job fails
+name: dogfood
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'internal/scaffold/templates/**'
+      - 'cmd/**'
+      - 'scripts/dogfood.sh'
+      - '.github/workflows/dogfood.yml'
+  pull_request:
+    paths:
+      - 'internal/scaffold/templates/**'
+      - 'cmd/**'
+      - 'scripts/dogfood.sh'
+      - '.github/workflows/dogfood.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dogfood:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Run dogfood smoke test
+        run: bash scripts/dogfood.sh
+
+      - name: Upload failure log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dogfood-failure
+          path: |
+            ${{ github.workspace }}/bin/spin
+            /tmp/dogfood-*.log
+          if-no-files-found: ignore
