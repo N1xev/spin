@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/N1xev/spin/internal/version"
+	"github.com/example/spin/internal/version"
 )
 
 // TestAGENTSmd_NoMarkerOnLine1 asserts the file does NOT begin with the
