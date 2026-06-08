@@ -1,0 +1,39 @@
+# .github/workflows/ci.yml
+#
+# Base CI for the spin repo: build the binary's tests, run the
+# grep suite that catches template regressions (v1 charmbracelet
+# API/path leaks + deprecated .air.toml form). Mirrors the
+# local Taskfile.yml `test` + `grep-v1-leaks` targets so a green
+# run here matches a green `task test && task grep-v1-leaks`
+# on a developer's machine.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Run tests
+        run: go test ./... -count=1
+
+      - name: Run v1-leak grep suite
+        run: |
+          bash scripts/check-v1-leaks.sh ./internal/scaffold/templates
+          bash scripts/check-air-bin.sh ./internal/scaffold/templates
+          bash scripts/check-taskfile-setup.sh ./internal/scaffold/templates

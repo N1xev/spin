@@ -1,0 +1,12 @@
+# .github/dependabot.yml
+#
+# Weekly Go module update PRs. Mirrors the spin repo's existing
+# direct + indirect deps so security patches land promptly.
+# The `spin` Go module is in the repo root (single go.mod).
+version: 2
+
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
