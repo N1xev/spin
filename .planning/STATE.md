@@ -4,13 +4,13 @@ milestone: v2.0-skeleton
 milestone_name: v2.0 skeleton
 status: executing
 stopped_at: Phase 04 complete
-last_updated: "2026-06-08T20:38:28.290Z"
+last_updated: "2026-06-08T21:30:05.609Z"
 last_activity: 2026-06-08 -- Phase 5 planning complete
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 23
-  completed_plans: 19
+  completed_plans: 21
   percent: 80
 ---
 
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-06-02)
 
 ## Current Position
 
-Phase: 04 (post-scaffold-health-verification-dogfooding) — COMPLETE
-Plans: 6/6
-Status: Ready to execute
-Last activity: 2026-06-08 -- Phase 5 planning complete
+Phase: 05 (v2.0-universal-scaffolder-task-runner) — IN PROGRESS
+Plans: 2/4 complete (05-01, 05-02 done; 05-03, 05-04 pending)
+Status: Plan 02 complete; ready to execute 05-03
+Last activity: 2026-06-08 -- Plan 05-02 (ecosystem dispatch + template loader) complete
 
-Progress: [██████████] 100% (Phase 4 of 4)
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -68,6 +68,26 @@ Progress: [██████████] 100% (Phase 4 of 4)
 - D-13: dogfood CI job
 
 **Drops honored:** HLTH-02 (spin add) and HLTH-04 (file headers) per user direction.
+
+## Phase 5 Summary
+
+| Plan | Subject | Status |
+|------|---------|--------|
+| 05-01 | Rust ecosystem (cargo binary/lib/example) | ✓ complete |
+| 05-02 | Ecosystem dispatch + external template loader | ✓ complete |
+| 05-03 | Registry client hardening | pending |
+| 05-04 | Runner integration (cargo fallbacks + JSON) | pending |
+
+**Decisions delivered (so far):**
+
+- Charm + Rust ecosystems are the v2.0 first-class citizens; templates are second-class
+- Per-process one-time deprecation notice on `spin new <name>` (deprecationPrinted bool guard)
+- Template loader cache moved to `~/.config/spin/templates/` per XDG spec
+- `GIT_TERMINAL_PROMPT=0` always set so missing creds never block the scaffolder
+- `ResolveForm` applies defaults FIRST then user values (fixes `<nil>` interpolation bug)
+- `params.Value` unwrapped to raw primitives before `text/template` rendering
+- `spin.toml` removed from output via defensive `filepath.Walk` (catches nested copies)
+- Single source of truth for the registry: `cmd/ecosystem.go` `defaultRegistry()` (only one `NewRegistry` call site)
 
 ## Accumulated Context
 
