@@ -47,6 +47,30 @@ func isKnownEcosystem(name string) bool {
 	return false
 }
 
+// looksLikeV2Template returns true if the --template value looks
+// like a v2 git spec (URL or user/repo) rather than a v1 bundled
+// template name (e.g. "tui-bubbletea"). Heuristic: contains a "/"
+// (user/repo) or starts with a URL scheme.
+func looksLikeV2Template(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, prefix := range []string{"http://", "https://", "git@", "git://", "ssh://"} {
+		if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
+			return true
+		}
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] == '/' {
+			return true
+		}
+		if s[i] == ' ' {
+			return false
+		}
+	}
+	return false
+}
+
 var newCmd = &cobra.Command{
 	Use:   "new <name>",
 	Short: "Scaffold a new charmbracelet project",
