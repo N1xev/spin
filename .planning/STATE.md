@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0-skeleton
 milestone_name: v2.0 skeleton
 status: executing
-stopped_at: Phase 04 complete
-last_updated: "2026-06-08T21:30:05.609Z"
-last_activity: 2026-06-08 -- Phase 5 planning complete
+stopped_at: Phase 05 Plan 03 complete; ready to execute 05-04
+last_updated: "2026-06-09T08:22:51Z"
+last_activity: 2026-06-09 -- Plan 05-03 (registry client hardening) complete
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 23
-  completed_plans: 21
-  percent: 80
+  completed_plans: 22
+  percent: 92
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-06-02)
 ## Current Position
 
 Phase: 05 (v2.0-universal-scaffolder-task-runner) — IN PROGRESS
-Plans: 2/4 complete (05-01, 05-02 done; 05-03, 05-04 pending)
-Status: Plan 02 complete; ready to execute 05-03
-Last activity: 2026-06-08 -- Plan 05-02 (ecosystem dispatch + template loader) complete
+Plans: 3/4 complete (05-01, 05-02, 05-03 done; 05-04 pending)
+Status: Plan 03 complete; ready to execute 05-04
+Last activity: 2026-06-09 -- Plan 05-03 (registry client hardening) complete
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 92%
 
 ## Performance Metrics
 
@@ -75,7 +75,7 @@ Progress: [█████████░] 91%
 |------|---------|--------|
 | 05-01 | Rust ecosystem (cargo binary/lib/example) | ✓ complete |
 | 05-02 | Ecosystem dispatch + external template loader | ✓ complete |
-| 05-03 | Registry client hardening | pending |
+| 05-03 | Registry client hardening (friendly-failure search + clone-or-pin) | ✓ complete |
 | 05-04 | Runner integration (cargo fallbacks + JSON) | pending |
 
 **Decisions delivered (so far):**
@@ -88,6 +88,14 @@ Progress: [█████████░] 91%
 - `params.Value` unwrapped to raw primitives before `text/template` rendering
 - `spin.toml` removed from output via defensive `filepath.Walk` (catches nested copies)
 - Single source of truth for the registry: `cmd/ecosystem.go` `defaultRegistry()` (only one `NewRegistry` call site)
+- Registry default URL is `https://registry.spin.invalid/v1` (RFC 2606 reserved `.invalid` TLD, never resolves) so the friendly "not yet deployed" message is always shown in v2.0 without waiting for a 15s DNS timeout
+- `SPIN_REGISTRY_URL` is the canonical env var; `SPIN_REGISTRY` is honored as a fallback for any v2.0-skeleton caller
+- `ErrNotDeployed` is the v2.0 canonical name; `ErrNotImplemented` is kept as an alias
+- `Pinned.LocalPath` defaults to `CacheDir/templates/<name>` for older callers; new pins always carry a real path from `client.Add()`
+- `client.Pin` uses atomic temp-file-then-rename writes (writePinned) so a partial write never corrupts `~/.config/spin/pinned.json`
+- `client.Add` clones or copies BEFORE the caller writes the JSON — a failed clone never leaves a half-written pin file referencing a non-existent directory
+- `spin add` shorthand `user/repo` is rejected with a clear error (not a network attempt) until the public registry ships; the user is directed to a full git URL or a local path
+- `cmd/add.go` is relaxed to `MinimumNArgs(0)` so `spin add` (no args) prints the pinned list (matches `spin add --list`)
 
 ## Accumulated Context
 
@@ -124,9 +132,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-05
-Stopped at: Phase 04 complete
-Next: Milestone closeout (transition to v1.0)
+Last session: 2026-06-09
+Stopped at: Phase 05 Plan 03 complete; ready to execute 05-04
+Next: Phase 05 Plan 04 (runner integration: cargo fallbacks + JSON output)
 
 ## v2.0 Skeleton (in progress, 2026-06-08)
 
@@ -160,9 +168,13 @@ v2.0 is the pivot.
   a parsed spin.toml + _base/ + _post/. `Loader` handles local paths
   and git URLs. `BuildForm` + `ResolveForm` build the huh form.
 
-- `internal/registry/` — public template registry client (stub;
-  ErrNotImplemented when the server isn't deployed). Pin/add/list
-  works against `~/.config/spin/pinned.json`.
+- `internal/registry/` — public template registry client.
+  `Search()` returns `ErrNotDeployed` with a friendly message when
+  the server is unreachable (REG-05, REG-08). `Add()` handles
+  local paths (symlink-then-copyDir) and git URLs (shallow clone
+  with `GIT_TERMINAL_PROMPT=0`); shorthand `user/repo` returns a
+  clear error. `Pin`/`Unpin` work against `~/.config/spin/pinned.json`
+  with atomic writes (REG-06, REG-07).
 
 - `internal/builder/` — interface stub for the future "builder" concept
   (go-blueprint / better-t-stack style). No implementation yet.
@@ -209,8 +221,11 @@ build/test/vet/fmt/lint are the only behaviour change in v2.0.
   The v2.x plan: use `encoding/toml/v2` (stdlib in Go 1.23+) or
   `pelletier/go-toml` and validate manifests server-side before publishing.
 
-- `internal/registry/client.go` `Search()` returns ErrNotImplemented
-  when the registry server isn't deployed.
+- `internal/registry/client.go` `Search()` returns `ErrNotDeployed`
+  with a friendly message when the registry server isn't deployed.
+  `Add()` handles local paths and git URLs; `user/repo` shorthand is
+  rejected with a clear error. `Pin`/`Unpin` work against
+  `~/.config/spin/pinned.json` with atomic writes.
 
 - `internal/ecosystem/loader.go` — external ecosystem loading deferred
   to v2.x.
