@@ -92,7 +92,7 @@ Build a Go project scaffolder that delivers the "perfect first run" promise — 
   - [x] **05-01-PLAN.md** (Wave 1): Rust ecosystem - internal/ecosystems/rust/ with Flags, Validate, Render, PostScaffold, Tasks; registered in defaultRegistry; cmd/new_rust.go dispatch
   - [x] **05-02-PLAN.md** (Wave 1): Ecosystem dispatch + template loader - cmd/new.go deprecation shim + ecosystem-name detection; upgraded internal/template/loader.go (XDG cache, GIT_TERMINAL_PROMPT=0); new post_hook.go with RunPostHook; RenderToWithPost deletes spin.toml; registry unit tests
   - [x] **05-03-PLAN.md** (Wave 1): Registry client hardening - friendly-failure Search; SPIN_REGISTRY_URL env override; real spin add (clone or local-symlink); spin list shows LocalPath; 11 unit tests
-  - [ ] **05-04-PLAN.md** (Wave 2, depends on 01-03): Runner integration - ecosystem source in defaultSourceChain (cargo fallbacks win); --list/--explain JSON output; Task.Env field; cross-cutting unit tests
+  - [x] **05-04-PLAN.md** (Wave 2, depends on 01-03): Runner integration - ecosystem source in defaultSourceChain (cargo fallbacks win); --list/--explain JSON output; Task.Env field; cross-cutting unit tests
 
 ## Progress
 
@@ -105,4 +105,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 2. CLI Variant + Wrappers + Extended Library Coverage + External Templates | 4/4 | Complete   | 2026-06-03 |
 | 3. Interactive Prompts (gum) + AI/AGENTS.md | 4/4 | Complete   | 2026-06-04 |
 | 4. Post-Scaffold Health + Verification + Dogfooding | 6/6 | Complete   | 2026-06-05 |
-| 5. v2.0 Universal Scaffolder & Task Runner | 3/4 | Executing  | 2026-06-09 |
+| 5. v2.0 Universal Scaffolder & Task Runner | 4/4 | Complete   | 2026-06-09 |

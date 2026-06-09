@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0-skeleton
 milestone_name: v2.0 skeleton
 status: executing
-stopped_at: Phase 05 Plan 03 complete; ready to execute 05-04
-last_updated: "2026-06-09T08:22:51Z"
-last_activity: 2026-06-09 -- Plan 05-03 (registry client hardening) complete
+stopped_at: Phase 05 Plan 04 complete; phase 05 complete
+last_updated: "2026-06-09T08:57:00Z"
+last_activity: 2026-06-09 -- Plan 05-04 (runner integration: ecosystem source + JSON) complete
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 23
-  completed_plans: 22
-  percent: 92
+  completed_plans: 23
+  percent: 100
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-06-02)
 
 ## Current Position
 
-Phase: 05 (v2.0-universal-scaffolder-task-runner) — IN PROGRESS
-Plans: 3/4 complete (05-01, 05-02, 05-03 done; 05-04 pending)
-Status: Plan 03 complete; ready to execute 05-04
-Last activity: 2026-06-09 -- Plan 05-03 (registry client hardening) complete
+Phase: 05 (v2.0-universal-scaffolder-task-runner) — COMPLETE
+Plans: 4/4 complete (05-01, 05-02, 05-03, 05-04 done)
+Status: Plan 04 complete; phase 05 complete; milestone v2.0-skeleton done
+Last activity: 2026-06-09 -- Plan 05-04 (runner integration: ecosystem source + JSON) complete
 
-Progress: [█████████░] 92%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -76,7 +76,7 @@ Progress: [█████████░] 92%
 | 05-01 | Rust ecosystem (cargo binary/lib/example) | ✓ complete |
 | 05-02 | Ecosystem dispatch + external template loader | ✓ complete |
 | 05-03 | Registry client hardening (friendly-failure search + clone-or-pin) | ✓ complete |
-| 05-04 | Runner integration (cargo fallbacks + JSON) | pending |
+| 05-04 | Runner integration (cargo fallbacks + JSON) | ✓ complete |
 
 **Decisions delivered (so far):**
 
@@ -96,6 +96,11 @@ Progress: [█████████░] 92%
 - `client.Add` clones or copies BEFORE the caller writes the JSON — a failed clone never leaves a half-written pin file referencing a non-existent directory
 - `spin add` shorthand `user/repo` is rejected with a clear error (not a network attempt) until the public registry ships; the user is directed to a full git URL or a local path
 - `cmd/add.go` is relaxed to `MinimumNArgs(0)` so `spin add` (no args) prints the pinned list (matches `spin add --list`)
+- Ecosystem source at Order=5 wires the rust ecosystem's `Tasks()` into the runner's source chain, so `spin run build` in a Cargo project invokes `cargo build` (Phase 5 success criterion 4 load-bearing verified)
+- `Task.Env []string` field added for the v2.0 env-var contract; surfaces in `Explain` (human + JSON); Execute is a follow-up
+- spin.config.toml inline-table form: `{ command, description, env }` (RUN-14); shorthand `name = "cmd"` still works
+- `--list --json` and `--explain X --json` wired via `ListJSON` / `ExplainJSON` (stdlib `encoding/json`); ExplainJSON encodes `ErrNotFound` as `{"error":"..."}`
+- 25 new unit tests across runner, runner/sources, params, and template (all passing in <0.05s combined; zero regressions in v1 commands)
 
 ## Accumulated Context
 
@@ -133,8 +138,8 @@ None.
 ## Session Continuity
 
 Last session: 2026-06-09
-Stopped at: Phase 05 Plan 03 complete; ready to execute 05-04
-Next: Phase 05 Plan 04 (runner integration: cargo fallbacks + JSON output)
+Stopped at: Phase 05 Plan 04 complete; phase 05 complete; milestone v2.0-skeleton DONE
+Next: Milestone v2.0-skeleton is complete. Phase 5 success criteria all met. Future: v2.x roadmap (Builder, external ecosystems, hosted registry).
 
 ## v2.0 Skeleton (in progress, 2026-06-08)
 
