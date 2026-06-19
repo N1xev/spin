@@ -3,7 +3,7 @@
 #
 # Greps a scaffolded (or any) Go project for v1 charmbracelet API leaks.
 # This is the second line of defense after the post-scaffold `go build`
-# smoke test — it catches patterns that compile but are semantically wrong
+# smoke test -- it catches patterns that compile but are semantically wrong
 # (e.g., hard-coded v1-looking code, deprecated `.air.toml` `build.bin`).
 #
 # Per RESEARCH §11, the patterns cover 22 v1 -> v2 forbidden APIs in Go
@@ -16,6 +16,14 @@
 #
 # Exit 0 if no v1 pattern is found; exit 1 (with the offending lines
 # printed to stderr) otherwise. Missing directory exits 2.
+#
+# Allow-list:
+#   This script has no --allow flag by design. v1 leaks are
+#   always-avoidable in v2 code, so a maintainer who needs to
+#   suppress a match should either fix the source or update this
+#   script's deny-list with a comment explaining the exception.
+#   Adding a per-run --allow would create "I disabled the check
+#   in my local run" patterns that are easy to copy into CI.
 set -euo pipefail
 
 ROOT="${1:-}"
@@ -35,9 +43,9 @@ fi
 # of these is a v1 leak and must be caught.
 #
 # Deliberately EXCLUDED from this list (and therefore allowed):
-#   - github.com/charmbracelet/harmonica — still on github.com; v0.2.0
+#   - github.com/charmbracelet/harmonica -- still on github.com; v0.2.0
 #     pre-dates the migration. See 02-RESEARCH.md §2.1.
-#   - github.com/charmbracelet/glow/v2 — the v2 line of the glow binary
+#   - github.com/charmbracelet/glow/v2 -- the v2 line of the glow binary
 #     lives on github.com; charm.land/glow/v2 does not exist.
 #
 # The closing-quote anchor (`"`) on each pattern means a template like
