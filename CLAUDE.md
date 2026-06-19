@@ -3,20 +3,19 @@
 
 **spin**
 
-`spin` is a Go project scaffold CLI for the charmbracelet v2 ecosystem. It generates ready-to-run Go projects — TUI apps, CLI tools, or both — pre-wired with the right charmbracelet libraries, modern Go tooling (cobra, fang, gum), hot reload (air), and the prism test runner. One command produces a project that builds, tests, and runs without extra setup. Built with cobra + fang + gum so the tool itself demonstrates the charmbracelet experience.
+`spin` is a language-agnostic scaffolder for external templates. One CLI turns any external template (a directory with a `spin.toml` manifest and a `_base/` tree of overlays) into a runnable project: Go, Rust, TypeScript, Python, anything. The template's language, framework, and build tool are entirely the author's choice; `spin` doesn't know or care. `spin new <name> --template <spec>` produces a project that builds, tests, and runs without extra setup.
 
-**Core Value:** Generate a perfect, runnable Go project using charmbracelet v2 libraries with a single command — `spin new myapp --tui --bubbletea` produces a project that `go run`s cleanly on first try.
+**Core Value:** Generate a runnable project from any external template with one command. `spin new myapp --template go-cli && cd myapp && go run .` produces a project that builds, tests, and runs without extra setup -- regardless of language, framework, or build tool. The template author owns the details; `spin` owns the load / prompt / render / post-hook pipeline.
 
 ### Constraints
 
-- **Tech stack**: Go 1.22+ (use 1.23 if available); built with cobra + fang + gum; consumes charmbracelet v2 libs only — Why: user specified charm-only, modern Go
-- **Distribution**: single static binary; install via `go install github.com/<org>/spin@latest` — Why: standard Go CLI distribution, no runtime deps
-- **Templates**: embedded via `go:embed` (default) + `--template-repo` for external override — Why: works offline by default, flexible for advanced users
-- **Test runner**: `prism` (https://github.com/DaltonSW/prism), not `go test` directly — Why: user requested, better DX for parallel/colored output
-- **Formatter**: `gofumpt` (primary) with `goimports`; fall back to `gofmt` if gofumpt not installed — Why: stricter formatting is the modern Go default
-- **Hot reload**: `air` with a sensible `.air.toml` — Why: user requested, industry standard
-- **No CGO**: scaffolded projects should build with `CGO_ENABLED=0` — Why: cross-compile and minimal container sizes
-- **Charm v2 only**: do not import v1 paths or APIs — Why: v1 deprecated, v2 is current; researched via context7
+- **Scope**: language-agnostic. Templates can target any language or framework that has a `spin.toml` and a `_base/` tree. `spin` does not assume Go, charmbracelet, or any other ecosystem. -- Why: templates are the only extension surface
+- **Distribution**: single static binary; install via `go install github.com/N1xev/spin@latest` -- Why: standard Go CLI distribution, no runtime deps
+- **Templates**: external only. No embedded defaults; no `spin new go` vs `spin new rust` form. The user picks a template (local path, git URL, or pinned name) and spin renders it. -- Why: keeps the scaffolder small and the author in control
+- **Two pipelines**: the template pipeline (`spin new`) and the registry pipeline (`spin add` / `spin list` / `spin update` / `spin remove` / `spin search`) share one Template type and one filesystem layout but are otherwise independent. -- Why: search and offline use are different concerns
+- **Single static binary**: no plugins, no init scripts, no companion daemon. -- Why: install once, run anywhere
+- **CGO off**: `CGO_ENABLED=0` is the default. Cross-compile and minimal container sizes. -- Why: standard Go CLI distribution
+- **Spin's own stack**: built with cobra + fang + lipgloss + huh. This is an implementation choice for `spin` itself, not a constraint on what templates can produce. Templates may use any libraries. -- Why: charm v2 is the right choice for the scaffolder's UI; templates are free to pick their own stack
 <!-- GSD:project-end -->
 
 <!-- GSD:stack-start source:research/STACK.md -->
@@ -31,18 +30,18 @@
 | Bubbles | `charm.land/bubbles/v2` | v2.0.0 | TUI components: spinner, textinput, viewport, list, table, paginator, progress, timer, textarea, help, key, cursor, stopwatch | v2 line; `runeutil` and `memoization` removed; requires Go 1.25.0+ |
 | Huh | `charm.land/huh/v2` | v2.0.0 | Interactive forms/prompts (accessible) | v2 stable; integrates with `charm.land/bubbletea/v2` + `charm.land/lipgloss/v2` |
 | Glamour | `charm.land/glamour/v2` | v2 line | Stylesheet-based markdown renderer for terminal | v2 stable; `glamour.Render()` and `NewTermRenderer` API unchanged in spirit |
-| Glow | `github.com/charmbracelet/glow/v2` (binary) | v2 line | Markdown reader CLI — install as binary, shell out via `gum`-style exec | Scaffolded projects shell out to `glow` for readme rendering |
+| Glow | `github.com/charmbracelet/glow/v2` (binary) | v2 line | Markdown reader CLI -- install as binary, shell out via `gum`-style exec | Scaffolded projects shell out to `glow` for readme rendering |
 | Wish | `charm.land/wish/v2` (+ subpackages `bubbletea`, `logging`, `activeterm`) | v2 line | SSH server framework with bubbletea middleware | v2 stable; subpackages follow `charm.land/wish/v2/<sub>` |
 | Log | `charm.land/log/v2` | v2.0.0 | Minimal colorful leveled structured logging | v2 stable; `log.Default()`/`SetDefault()` + `Options{...}` |
-| Crush | `github.com/charmbracelet/crush` | current | Terminal AI assistant — scaffolded projects may include `crush` config | Provided as a binary; embed for the AI/AGENTS layer |
+| Crush | `github.com/charmbracelet/crush` | current | Terminal AI assistant -- scaffolded projects may include `crush` config | Provided as a binary; embed for the AI/AGENTS layer |
 | charmbracelet/x | `github.com/charmbracelet/x` (single module, many subpackages) | current (experimental) | ANSI parser/generator, VT emulator, `pony` UI DSL, term utilities | Experimental; pin a specific tag in generated `go.mod` |
 | go-runewidth | `github.com/mattn/go-runewidth` | current | East-Asian-aware display width | Transitive of charm stack; rarely direct dep |
 ### (b) Libraries `spin` itself uses
 | Library | Module path | Version | Purpose | Why |
 |---------|-------------|---------|---------|-----|
 | Cobra | `github.com/spf13/cobra` | v1.9.1 (latest) | CLI subcommand/flag framework | De facto Go CLI standard; underpins kubectl, hugo, gh, docker |
-| Fang | `charm.land/fang/v2` | v2 line | Styled help, errors, completions, manpages, version theming — drop-in for cobra's default | Drop-in `fang.Execute(ctx, rootCmd)`; gives `spin --help` a charm-style look out of the box; requires cobra v1.9+ |
-| Lip Gloss | `charm.land/lipgloss/v2` | v2 | Styling scaffolder output (success messages, "Created at ./foo", etc.) | Reuses the same lib we scaffold into projects — dogfooding |
+| Fang | `charm.land/fang/v2` | v2 line | Styled help, errors, completions, manpages, version theming -- drop-in for cobra's default | Drop-in `fang.Execute(ctx, rootCmd)`; gives `spin --help` a charm-style look out of the box; requires cobra v1.9+ |
+| Lip Gloss | `charm.land/lipgloss/v2` | v2 | Styling scaffolder output (success messages, "Created at ./foo", etc.) | Reuses the same lib we scaffold into projects -- dogfooding |
 | Huh | `charm.land/huh/v2` | v2 | Optional in-process prompts (when gum not available) | Huh is a Go library; gum is a shell-out binary. Huh is the in-process fallback for TTY-required runs |
 | Log | `charm.land/log/v2` | v2 | Scaffolder logging (`log.Info("created", "path", ...)`) | Same library we ship in projects; consistent look |
 | Viper | `github.com/spf13/viper` | v1.20.x (opt-in) | Config-file support for scaffolder | Only wired when user passes `--viper`; do not import unconditionally (per spec) |
@@ -72,22 +71,22 @@
 ## Alternatives Considered
 | Layer | Recommended | Alternative | When to use the alternative |
 |-------|-------------|-------------|-----------------------------|
-| CLI framework | cobra + fang | urfave/cli | Never for this project — spec explicitly excludes urfave/cli; fang is the charmbracelet polish layer |
-| TUI framework (generated projects) | bubbletea v2 | tview, ratatui | Never for this project — spec explicitly excludes both; spin is opinionated about charm |
+| CLI framework | cobra + fang | urfave/cli | Never for this project -- spec explicitly excludes urfave/cli; fang is the charmbracelet polish layer |
+| TUI framework (generated projects) | bubbletea v2 | tview, ratatui | Never for this project -- spec explicitly excludes both; spin is opinionated about charm |
 | TUI components | bubbles v2 | hand-rolled | Use hand-rolled only for components bubbles doesn't ship (rare) |
-| Interactive prompts (scaffolder) | gum (subprocess) + huh v2 (in-process) | survey, promptui | Never — spec is charm-only |
+| Interactive prompts (scaffolder) | gum (subprocess) + huh v2 (in-process) | survey, promptui | Never -- spec is charm-only |
 | Config (scaffolder) | viper (opt-in) | envconfig, koanf | Use koanf only if a user asks for a viper replacement; default off |
-| Hot reload | air | wgo, realize | Never for scaffolded projects — spec mandates air |
+| Hot reload | air | wgo, realize | Never for scaffolded projects -- spec mandates air |
 | Test runner | prism | gotestsum, richgo | Use gotestsum only if prism install fails; spec mandates prism |
 | Formatter | gofumpt + goimports | gofmt only | gofmt only as last-resort fallback when gofumpt not installed |
-| Distribution | goreleaser v2 | manual `go build` | Never — spec mandates goreleaser |
+| Distribution | goreleaser v2 | manual `go build` | Never -- spec mandates goreleaser |
 | Logging (generated) | charmbracelet/log v2 | zap, slog, zerolog | slog is acceptable for non-charm projects; charm-log matches the v2 stack |
 | Width calc | go-runewidth | uniseg | go-runewidth is the charm transitive; not worth swapping |
 ## What NOT to Use
 | Avoid | Why | Use instead |
 |-------|-----|-------------|
 | `github.com/charmbracelet/bubbletea` (v1 import path) | Deprecated; charmbracelet migrated all v2 modules to `charm.land` vanity. v1 gets no fixes. | `charm.land/bubbletea/v2` |
-| `github.com/charmbracelet/lipgloss` (v1) | Same — moved to `charm.land/lipgloss/v2`; subpackages `table`/`tree`/`list` followed | `charm.land/lipgloss/v2` (+ subpackages) |
+| `github.com/charmbracelet/lipgloss` (v1) | Same -- moved to `charm.land/lipgloss/v2`; subpackages `table`/`tree`/`list` followed | `charm.land/lipgloss/v2` (+ subpackages) |
 | `github.com/charmbracelet/bubbles/...` (v1) | v1 is unmaintained; v2 dropped `runeutil` and `memoization` | `charm.land/bubbles/v2/<component>` |
 | `github.com/charmbracelet/huh` (v1) | v2 stable; v1 paths changed | `charm.land/huh/v2` |
 | `github.com/charmbracelet/wish` (v1) | v2 uses `charm.land/wish/v2` and subpackages (`bubbletea`, `logging`, `activeterm`) | `charm.land/wish/v2` |
@@ -97,7 +96,7 @@
 | `urfave/cli` | Spec excludes; cobra + fang is the charmbracelet default | cobra + fang |
 | `tview` | Spec excludes; non-charm TUI framework | bubbletea v2 + bubbles v2 |
 | `ratatui` (Rust port) | Spec excludes; not even Go | bubbletea v2 |
-| `charm.land/gum/v2` (does not exist) | `gum` has no Go library — only the CLI binary. Trying to import will fail. | Shell out to `gum` binary via `os/exec` |
+| `charm.land/gum/v2` (does not exist) | `gum` has no Go library -- only the CLI binary. Trying to import will fail. | Shell out to `gum` binary via `os/exec` |
 | `Bubble Tea v1` import path `github.com/charmbracelet/bubbletea` | v1 uses `View() string`; v2 uses `View() tea.View`; migrating is a project-wide rewrite | Start v2; never look back |
 | `Bubble Tea v1` `tea.WithAltScreen()` program option | In v2, AltScreen/MouseMode are fields on `tea.View`, not program options. `NewProgram` signature is simplified. | Set `v.AltScreen = true` on the `tea.View` returned from `View()` |
 ## Stack Patterns by Variant
@@ -118,7 +117,7 @@
 - Log a one-time warning that install `prism` for colored/parallel output
 - `spin fmt` falls back to `gofmt`
 - Same fall-back pattern as prism
-## Go Version Tension — call out for roadmap
+## Go Version Tension -- call out for roadmap
 - `spin` itself: does not need charm v2 at runtime; Go 1.23 is sufficient and
 - Scaffolded projects that pull in `charm.land/bubbles/v2`: official docs
 - Pin `go 1.23` in `spin`'s own `go.mod`.
@@ -133,7 +132,7 @@
 | huh v2 | inherits from bubbletea + lipgloss | upgrade guide |
 | lipgloss v2 | unknown floor; `go 1.22` likely works | not explicitly stated |
 | wish v2 | inherits from bubbletea | upgrade guide |
-| log v2 | standard library only — no floor | upgrade guide |
+| log v2 | standard library only -- no floor | upgrade guide |
 | glamour v2 | unknown floor | not explicitly stated |
 | cobra v1.9.1 | Go 1.18+ | spf13/cobra README |
 | viper v1.20.x | Go 1.20+ | spf13/viper README |
@@ -143,26 +142,26 @@
 | fang v2 | cobra v1.9+ | fang upgrade guide |
 | charmbracelet/x | experimental; pin a tag | charmbracelet/x README |
 ## Sources (verified 2026-06-02)
-- `/charmbracelet/bubbletea` — v2 import paths, `tea.View` API change, KeyPressMsg/MouseClickMsg typing (HIGH)
-- `/charmbracelet/lipgloss` — v2 vanity domain, subpackage paths (HIGH)
-- `/charmbracelet/bubbles` — v2 import paths, Go 1.25.0 floor, removed `runeutil`/`memoization` (HIGH)
-- `/charmbracelet/huh` — v2 upgrade steps; charm.land migration (HIGH)
-- `/charmbracelet/glamour` — `charm.land/glamour/v2` path; `glamour.Render()`/`NewTermRenderer` (HIGH)
-- `/charmbracelet/glow` — `github.com/charmbracelet/glow/v2` install (HIGH)
-- `/charmbracelet/wish` — v2 import paths; subpackages follow `charm.land/wish/v2/<sub>` (HIGH)
-- `/charmbracelet/log` — `charm.land/log/v2`, `Default()`/`SetDefault()` API (HIGH)
-- `/charmbracelet/fang` — `charm.land/fang/v2`; `fang.Execute(ctx, cmd)` drop-in (HIGH)
-- `/charmbracelet/gum` — **binary-only**; no Go library; install via `go install github.com/charmbracelet/gum@latest` (HIGH)
-- `/charmbracelet/crush` — internal packages only; treat as binary (HIGH)
-- `/charmbracelet/x` — `ansi` subpackage API; experimental; `pony` UI DSL; `vt` emulator (HIGH)
-- `/charmbracelet/bubbletea-app-template` — `.goreleaser.yaml` `version: 2`; `go 1.24.2`; `CGO_ENABLED=0` (HIGH)
-- `/spf13/cobra` — v1.9.1 install; flag definitions; init pattern (HIGH)
-- `/spf13/viper` — v1.20.x; mapstructure v2 import (HIGH)
-- `/air-verse/air` — `go install github.com/air-verse/air@latest`; Go 1.25+; `.air.toml` schema (HIGH)
-- `/mvdan/gofumpt` — `mvdan.cc/gofumpt@latest` install; `gofumpt -l -w .` (HIGH)
-- `/daltonsw/prism` — `go install go.dalton.dog/prism@latest`; Go 1.24+; `prism`, `prism -v`, `prism -f` flags (HIGH)
-- `/goreleaser/goreleaser` — `go install github.com/goreleaser/goreleaser/v2@latest`; Go 1.26+; `version: 2` schema (HIGH)
-- `/mattn/go-runewidth` — `RUNEWIDTH_EASTASIAN` env var; `IsEastAsian()` (MEDIUM — for width calc only)
+- `/charmbracelet/bubbletea` -- v2 import paths, `tea.View` API change, KeyPressMsg/MouseClickMsg typing (HIGH)
+- `/charmbracelet/lipgloss` -- v2 vanity domain, subpackage paths (HIGH)
+- `/charmbracelet/bubbles` -- v2 import paths, Go 1.25.0 floor, removed `runeutil`/`memoization` (HIGH)
+- `/charmbracelet/huh` -- v2 upgrade steps; charm.land migration (HIGH)
+- `/charmbracelet/glamour` -- `charm.land/glamour/v2` path; `glamour.Render()`/`NewTermRenderer` (HIGH)
+- `/charmbracelet/glow` -- `github.com/charmbracelet/glow/v2` install (HIGH)
+- `/charmbracelet/wish` -- v2 import paths; subpackages follow `charm.land/wish/v2/<sub>` (HIGH)
+- `/charmbracelet/log` -- `charm.land/log/v2`, `Default()`/`SetDefault()` API (HIGH)
+- `/charmbracelet/fang` -- `charm.land/fang/v2`; `fang.Execute(ctx, cmd)` drop-in (HIGH)
+- `/charmbracelet/gum` -- **binary-only**; no Go library; install via `go install github.com/charmbracelet/gum@latest` (HIGH)
+- `/charmbracelet/crush` -- internal packages only; treat as binary (HIGH)
+- `/charmbracelet/x` -- `ansi` subpackage API; experimental; `pony` UI DSL; `vt` emulator (HIGH)
+- `/charmbracelet/bubbletea-app-template` -- `.goreleaser.yaml` `version: 2`; `go 1.24.2`; `CGO_ENABLED=0` (HIGH)
+- `/spf13/cobra` -- v1.9.1 install; flag definitions; init pattern (HIGH)
+- `/spf13/viper` -- v1.20.x; mapstructure v2 import (HIGH)
+- `/air-verse/air` -- `go install github.com/air-verse/air@latest`; Go 1.25+; `.air.toml` schema (HIGH)
+- `/mvdan/gofumpt` -- `mvdan.cc/gofumpt@latest` install; `gofumpt -l -w .` (HIGH)
+- `/daltonsw/prism` -- `go install go.dalton.dog/prism@latest`; Go 1.24+; `prism`, `prism -v`, `prism -f` flags (HIGH)
+- `/goreleaser/goreleaser` -- `go install github.com/goreleaser/goreleaser/v2@latest`; Go 1.26+; `version: 2` schema (HIGH)
+- `/mattn/go-runewidth` -- `RUNEWIDTH_EASTASIAN` env var; `IsEastAsian()` (MEDIUM -- for width calc only)
 ## Confidence Assessment
 | Area | Confidence | Reason |
 |------|------------|--------|

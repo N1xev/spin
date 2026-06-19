@@ -25,7 +25,7 @@ type Client struct {
 
 // New builds a Client. The index URL is read from SPIN_REGISTRY_URL
 // (preferred) or SPIN_REGISTRY (fallback for v2.0-skeleton callers),
-// and defaults to DefaultIndexURL — a known-unreachable host so the
+// and defaults to DefaultIndexURL -- a known-unreachable host so the
 // friendly "not yet deployed" message is shown until the real
 // registry server is deployed.
 func New() *Client {
@@ -93,7 +93,7 @@ func (c *Client) SearchWithLimit(query string, limit int) (*SearchResult, error)
 
 // isNetworkError reports whether err is a DNS failure, connection
 // refused, timeout, or other "could not reach the server" condition
-// — as opposed to a protocol-level error after the connection was
+// -- as opposed to a protocol-level error after the connection was
 // established. Such errors all map to ErrNotDeployed so the CLI
 // shows a friendly message instead of a stack trace.
 func isNetworkError(err error) bool {
@@ -131,17 +131,22 @@ func isNetworkError(err error) bool {
 
 // ─── Add / Pin / Unpin ────────────────────────────────────────────
 
-// Add resolves a spec (local path, git URL, or — in the future — a
-// registry shorthand) into a Pinned template. The clone/copy is
-// performed before the Pinned record is returned, so the caller can
-// write it to pinned.json only on success.
+// Add resolves a spec (local path, git URL, or GitHub user/repo
+// shorthand) into a Pinned template. The clone/copy is performed
+// before the Pinned record is returned, so the caller can write it
+// to pinned.json only on success.
 //
-// In v2.0 the registry shorthand ("user/repo") is NOT supported
-// because the server isn't deployed. Add returns a clear error
-// directing the user to a full git URL or a local path.
+// "user/repo" is transparently expanded to https://github.com/
+// user/repo.git -- that's the obvious thing a user will try, and
+// there is no useful reason to force them to type the full URL. The
+// shorthand is a thin convenience on top of addGit; it does NOT
+// require the registry server to be deployed.
 func (c *Client) Add(spec string) (*Pinned, error) {
 	if spec == "" {
 		return nil, fmt.Errorf("registry: add: empty spec")
+	}
+	if isShorthand(spec) {
+		spec = expandShorthand(spec)
 	}
 	switch {
 	case isLocalPath(spec):
@@ -149,8 +154,28 @@ func (c *Client) Add(spec string) (*Pinned, error) {
 	case isGitURL(spec):
 		return c.addGit(spec)
 	default:
-		return nil, fmt.Errorf("registry: shorthand %q is not yet supported; use a full git URL (https://...) or a local path (/path/to/template)", spec)
+		return nil, fmt.Errorf("registry: cannot resolve spec %q; expected a local path, a git URL, or a user/repo shorthand", spec)
 	}
+}
+
+// isShorthand reports whether spec looks like "user/repo" -- exactly
+// one slash, no scheme, no leading dot/tilde, no second slash (so
+// paths like "foo/bar/baz" or URLs like "git@host:foo/bar" are not
+// mistaken for it). Both sides must be non-empty.
+func isShorthand(s string) bool {
+	if s == "" || isLocalPath(s) || isGitURL(s) {
+		return false
+	}
+	first := strings.IndexByte(s, '/')
+	if first <= 0 || first == len(s)-1 {
+		return false
+	}
+	return strings.IndexByte(s[first+1:], '/') < 0
+}
+
+// expandShorthand turns "user/repo" into the canonical GitHub URL.
+func expandShorthand(s string) string {
+	return "https://github.com/" + s + ".git"
 }
 
 func (c *Client) addLocal(spec string) (*Pinned, error) {
@@ -199,7 +224,7 @@ func (c *Client) addGit(spec string) (*Pinned, error) {
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		return nil, fmt.Errorf("registry: add git: mkdir templates: %w", err)
 	}
-	dest := filepath.Join(templatesDir, sanitiseRepoName(spec))
+	dest := filepath.Join(templatesDir, SanitiseRepoName(spec))
 
 	// Remove any previous clone.
 	if err := os.RemoveAll(dest); err != nil {
@@ -304,6 +329,13 @@ func gitHeadSHA(dir string) (string, error) {
 	return s, nil
 }
 
+// CopyTreeForTest is a test-only helper that exposes copyDir
+// outside the package. The leading lowercase `c` would normally
+// stay unexported; cmd/update_test.go uses this to seed the
+// pinned LocalPath with a known-good initial copy. Production
+// code should call (c *Client).Refresh or (c *Client).Add.
+func CopyTreeForTest(src, dst string) error { return copyDir(src, dst) }
+
 func isLocalPath(s string) bool {
 	return len(s) > 0 && (s[0] == '/' || s[0] == '.' || s[0] == '~')
 }
@@ -317,16 +349,24 @@ func isGitURL(s string) bool {
 	return false
 }
 
-// sanitiseRepoName extracts the repo basename from a git URL. E.g.
-//   "https://github.com/foo/bar.git"  -> "bar"
-//   "git@github.com:foo/bar.git"      -> "bar"
-func sanitiseRepoName(rawURL string) string {
+// SanitiseRepoName extracts the repo basename from a git URL. E.g.
+//
+//	"https://github.com/foo/bar.git"  -> "bar"
+//	"git@github.com:foo/bar.git"      -> "bar"
+//	"github.com/foo/bar"              -> "bar"
+//
+// The result is used as a directory name under the cache dir, so it
+// must be safe across filesystems: lowercase, no scheme, no .git
+// suffix. The function is the single source of truth for this
+// transformation; both this package and internal/template call it
+// to keep cache layout consistent.
+func SanitiseRepoName(rawURL string) string {
 	base := rawURL
 	// Drop the scheme / protocol prefix so we can find the last "/"
 	// or ":" separator.
 	for _, prefix := range []string{"https://", "http://", "git://", "ssh://"} {
-		if strings.HasPrefix(base, prefix) {
-			base = strings.TrimPrefix(base, prefix)
+		if after, ok := strings.CutPrefix(base, prefix); ok {
+			base = after
 			break
 		}
 	}
@@ -349,7 +389,7 @@ func (c *Client) PinnedPath() string {
 }
 
 // ListPinned returns the persisted Pinned entries. A missing file
-// is not an error — it returns (nil, nil), which the CLI formats as
+// is not an error -- it returns (nil, nil), which the CLI formats as
 // "No pinned templates".
 func (c *Client) ListPinned() ([]Pinned, error) {
 	b, err := os.ReadFile(c.PinnedPath())
@@ -392,7 +432,7 @@ func (c *Client) Pin(p Pinned) error {
 }
 
 // Unpin removes the Pinned record with the given name (if any). It
-// does NOT remove the on-disk clone/copy — the user can do that
+// does NOT remove the on-disk clone/copy -- the user can do that
 // manually if they want.
 func (c *Client) Unpin(name string) error {
 	all, _ := c.ListPinned()
@@ -403,6 +443,65 @@ func (c *Client) Unpin(name string) error {
 		}
 	}
 	return c.writePinned(out)
+}
+
+// Refresh re-clones (or re-copies) the on-disk cache for a pinned
+// template in place, then updates the pin record's Version with the
+// newly resolved HEAD SHA (or "local" for local-path sources). The
+// LocalPath is preserved so any code that referenced it by path
+// still works. If the pin has gone missing on disk, the user is
+// told to run `spin add` again rather than getting a half-built
+// clone back.
+//
+// `pin` is passed by value so callers can decide whether to keep
+// the returned record (call Pin with it) or just inspect it.
+func (c *Client) Refresh(pin Pinned) (Pinned, error) {
+	if pin.Name == "" {
+		return Pinned{}, fmt.Errorf("registry: refresh: empty pin name")
+	}
+	if pin.LocalPath == "" {
+		return Pinned{}, fmt.Errorf("registry: refresh: pin %q has no LocalPath; re-run `spin add`", pin.Name)
+	}
+
+	// Branch on source kind. Local paths are re-copied in place
+	// (cheap, no network). Git URLs re-clone on top of the existing
+	// dir -- `git fetch` would also work, but a full re-clone is
+	// simpler and matches the freshness the user expects.
+	//
+	// Note: we do NOT require pin.LocalPath to exist. `cmd.update`
+	// moves it aside to a .bak snapshot for rollback; from Refresh's
+	// point of view a missing LocalPath is just a fresh clone.
+	switch {
+	case isLocalPath(pin.Source):
+		// Best-effort: blow away the cached copy and recopy from src.
+		// If the source is also missing, the user can re-pin; we
+		// don't want to silently keep a stale copy.
+		if _, err := os.Stat(pin.Source); err != nil {
+			return Pinned{}, fmt.Errorf("registry: refresh: source %s is gone: %w", pin.Source, err)
+		}
+		if err := os.RemoveAll(pin.LocalPath); err != nil {
+			return Pinned{}, fmt.Errorf("registry: refresh: clear %s: %w", pin.LocalPath, err)
+		}
+		if err := copyDir(pin.Source, pin.LocalPath); err != nil {
+			return Pinned{}, fmt.Errorf("registry: refresh: copy %s: %w", pin.Source, err)
+		}
+		pin.Version = "local"
+	case isGitURL(pin.Source):
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", pin.Source, pin.LocalPath)
+		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return Pinned{}, fmt.Errorf("git clone %s: %s: %w", pin.Source, strings.TrimSpace(string(out)), err)
+		}
+		pin.Version = "git"
+		if sha, _ := gitHeadSHA(pin.LocalPath); sha != "" {
+			pin.Version = sha
+		}
+	default:
+		return Pinned{}, fmt.Errorf("registry: refresh: %q has unknown source %q", pin.Name, pin.Source)
+	}
+	return pin, nil
 }
 
 // writePinned writes the pinned list atomically: marshal to JSON,
