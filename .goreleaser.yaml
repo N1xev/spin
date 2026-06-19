@@ -1,0 +1,96 @@
+# .goreleaser.yaml -- goreleaser v2 config for the spin CLI.
+#
+# Triggers: .github/workflows/release.yml runs on tags matching v*.
+# Output: a multi-arch binary archive on every GitHub release.
+#
+# Docs: https://goreleaser.com/customization/version/2/
+
+version: 2
+
+project_name: spin
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: spin
+    main: .
+    binary: spin
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows ARM64 is not a real target. Skip it.
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/N1xev/spin/internal/version.Version={{.Version}}
+      - -X github.com/N1xev/spin/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/N1xev/spin/internal/version.Date={{.CommitDate}}
+
+archives:
+  - id: spin
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: N1xev
+    name: spin
+  prerelease: auto
+  draft: false
+  name_template: "{{ .ProjectName }} v{{ .Version }}"
+  header: |
+    ## spin {{ .Tag }}
+    Released {{ .Date }}
+    Built with Go {{ .Env.GOVERSION }}.
+  footer: |
+    ## Install
+
+    ```
+    go install github.com/N1xev/spin/cmd/spin@{{ .Tag }}
+    ```
+
+    Or download a binary below.
+
+brews:
+  # Homebrew tap at N1xev/homebrew-tap. The maintainer creates the
+  # tap repo once; goreleaser then opens a PR on every release.
+  - repository:
+      owner: N1xev
+      name: homebrew-tap
+    homepage: https://github.com/N1xev/spin
+    description: Language-agnostic scaffolder for external templates
+    install: |
+      bin.install "spin"
+    test: |
+      system "#{bin}/spin version"
