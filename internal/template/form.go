@@ -5,7 +5,7 @@ import (
 
 	"charm.land/huh/v2"
 
-	"github.com/example/spin/internal/params"
+	"github.com/N1xev/spin/internal/params"
 )
 
 // BuildForm constructs a huh.Form from the template's spin.toml params.
@@ -25,7 +25,7 @@ func (t *Template) BuildForm(values map[string]any) (*huh.Form, error) {
 	}
 	form := params.Form(ps)
 	// After Run, walk the params and copy their Values into values.
-	// We attach a callback by using huh's Key() — but huh doesn't have
+	// We attach a callback by using huh's Key() -- but huh doesn't have
 	// a generic "post-run" hook. So we expose a separate helper.
 	return form, nil
 }

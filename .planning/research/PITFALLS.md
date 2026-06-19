@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-`spin` sits at a uniquely failure-prone intersection: it must (a) be a usable Go scaffolder (template execution, file generation, embed pitfalls), (b) ship the v2 charm stack which is mid-major-version churn (paths, signatures, type system), and (c) dogfood the same stack it generates. The most damaging mistakes are v1 API leakage into generated projects — they compile, look right, then break the first time the user runs the program. The second cluster is scaffolder mechanics: `go:embed` glob semantics, template FuncMap ordering, and the absence of any built-in non-TTY handling in `bubbletea`/`gum`. The third cluster is generated-project drift: once a project is on disk, no mechanism exists to update it when `spin` itself changes.
+`spin` sits at a uniquely failure-prone intersection: it must (a) be a usable Go scaffolder (template execution, file generation, embed pitfalls), (b) ship the v2 charm stack which is mid-major-version churn (paths, signatures, type system), and (c) dogfood the same stack it generates. The most damaging mistakes are v1 API leakage into generated projects -- they compile, look right, then break the first time the user runs the program. The second cluster is scaffolder mechanics: `go:embed` glob semantics, template FuncMap ordering, and the absence of any built-in non-TTY handling in `bubbletea`/`gum`. The third cluster is generated-project drift: once a project is on disk, no mechanism exists to update it when `spin` itself changes.
 
 ## Critical Pitfalls
 
@@ -28,7 +28,7 @@ LLM training data is dense with v1 examples. Old blog posts and StackOverflow an
 - Any `tea.KeyCtrlC`, `tea.WithAltScreen()`, or `lipgloss.DefaultRenderer()` reference.
 - `View() string` signature on a Bubble Tea model (v2 returns `tea.View`).
 
-**Phase to address:** Phase 1 (template authoring) and Phase 2 (verification harness) — both must be in place before any user-facing release.
+**Phase to address:** Phase 1 (template authoring) and Phase 2 (verification harness) -- both must be in place before any user-facing release.
 
 ---
 
@@ -63,7 +63,7 @@ These will either fail to compile, silently no-op, or panic at runtime when `Mou
 - `case " ":` branch.
 - `tea.MouseButtonLeft` (or any `MouseButton*`).
 
-**Phase to address:** Phase 1 (templates) — this is a per-template hygiene issue, not a runtime check.
+**Phase to address:** Phase 1 (templates) -- this is a per-template hygiene issue, not a runtime check.
 
 ---
 
@@ -122,11 +122,11 @@ The color-system redesign is large and documentation migrated gradually. v1-styl
 
 **What goes wrong:**
 Scaffolder embeds `templates/*.tmpl` via `go:embed` and parses with `template.ParseFS(embedFS, "templates/*.tmpl")`. Several silent failures follow:
-- `ParseFS` uses `path.Match` (forward-slash globs) — Windows backslashes in patterns match nothing.
+- `ParseFS` uses `path.Match` (forward-slash globs) -- Windows backslashes in patterns match nothing.
 - Template names come from `filepath.Base` of filenames. `templates/admin/page.tmpl` and `templates/public/page.tmpl` collide and one clobbers the other; the loser is silently unreachable.
 - `t.Execute(w, data)` fails if `t`'s name doesn't match a base filename in the parsed set. Must use `ExecuteTemplate(w, "name", data)`.
 - `Funcs(funcMap)` must be called *before* `Parse`/`ParseFS`. Calling it after only overwrites existing entries; the new functions are not available to templates that haven't been parsed yet.
-- Default `Option("missingkey=invalid")` silently prints `<no value>` for a typo in a template key — a frequent source of "why is my generated file showing `<no value>`?".
+- Default `Option("missingkey=invalid")` silently prints `<no value>` for a typo in a template key -- a frequent source of "why is my generated file showing `<no value>`?".
 
 **Why it happens:**
 The Go template package's design is well-documented but its failure modes are silent. Embed paths look filesystem-y but actually use a different rule set.
@@ -145,22 +145,22 @@ The Go template package's design is well-documented but its failure modes are si
 - A generated file containing the literal string `<no value>`.
 - Custom template functions that always return empty strings in dev builds.
 
-**Phase to address:** Phase 1 (template engine) and Phase 2 (test coverage) — both required before any user sees a generated project.
+**Phase to address:** Phase 1 (template engine) and Phase 2 (test coverage) -- both required before any user sees a generated project.
 
 ---
 
 ### Pitfall 6: `gum` interactive prompts fail or hang in non-TTY environments (CI, piped stdin, subshells)
 
 **What goes wrong:**
-`gum input`, `gum choose`, `gum confirm`, `gum filter` require a TTY. In GitHub Actions, GitLab CI, plain cron jobs, or any context where stdin/stdout isn't a terminal (including `spin new foo | tee log.txt` or `spin new foo < /dev/null`), `gum` either errors out, hangs forever, or — depending on the command — silently produces empty output that the scaffolder then writes verbatim into a Go file (project compiles to an empty `name`).
+`gum input`, `gum choose`, `gum confirm`, `gum filter` require a TTY. In GitHub Actions, GitLab CI, plain cron jobs, or any context where stdin/stdout isn't a terminal (including `spin new foo | tee log.txt` or `spin new foo < /dev/null`), `gum` either errors out, hangs forever, or -- depending on the command -- silently produces empty output that the scaffolder then writes verbatim into a Go file (project compiles to an empty `name`).
 
 **Why it happens:**
-Gum is built on Bubble Tea, which "assumes control of stdin and stdout" (per the Bubble Tea README). There is no documented `--no-interactive` flag. The README has no CI guidance. The way gum is typically used in automation is by piping a finite input to a `filter` / `choose` — but the *user* still has to press a key to confirm.
+Gum is built on Bubble Tea, which "assumes control of stdin and stdout" (per the Bubble Tea README). There is no documented `--no-interactive` flag. The README has no CI guidance. The way gum is typically used in automation is by piping a finite input to a `filter` / `choose` -- but the *user* still has to press a key to confirm.
 
 **How to avoid:**
 - Detect non-TTY at the top of `spin new` with `isatty.IsTerminal(os.Stdin)` (or `golang.org/x/term`). If not a TTY, refuse to enter prompt mode and emit a clear error: "interactive prompts require a TTY; pass --tui / --cli / --all and --cobra / --fang etc. explicitly, or run from a real terminal."
 - Provide a `--no-interactive` flag (alias: `--yes` / `--batch`) that skips all gum calls and uses cobra-flag values, defaulting unspecified flags to "all-on" for the chosen project type.
-- If `gum` is not on `PATH`, fall back to huh (a Go-native TUI form library) when running inside `spin` itself — but better: detect with `exec.LookPath("gum")` and either fail clearly or fall back to huh.
+- If `gum` is not on `PATH`, fall back to huh (a Go-native TUI form library) when running inside `spin` itself -- but better: detect with `exec.LookPath("gum")` and either fail clearly or fall back to huh.
 - Document this in `spin new --help` and in the README so CI users don't trip on it.
 
 **Warning signs:**
@@ -169,7 +169,7 @@ Gum is built on Bubble Tea, which "assumes control of stdin and stdout" (per the
 - Generated `main.go` containing the literal word `<no value>` or a `name` constant set to the empty string.
 - Spin itself hanging in a piped shell.
 
-**Phase to address:** Phase 1 (scaffolder CLI) — must be the first interactive feature, with the non-TTY guard in place from day one.
+**Phase to address:** Phase 1 (scaffolder CLI) -- must be the first interactive feature, with the non-TTY guard in place from day one.
 
 ---
 
@@ -208,7 +208,7 @@ Templates either omit versions, use pseudo-versions, or copy pinned versions fro
 - Pin exact versions known to compile together in the template. Document the test matrix in the template repo.
 - Include a generated `go.sum` (or instruct the user to run `go mod download`); don't rely on `go mod tidy` to "find" the right versions.
 - Set `go 1.25.0` (the minimum required by fang v2 / gofumpt / air) in the generated `go.mod`'s `go` directive and document this in the README. fang v2 specifically declares `go 1.25.0` in its own go.mod.
-- Add a post-generation step in `spin new` that runs `go build ./...` against the generated project before declaring success — fail the scaffolder loudly if the build is broken.
+- Add a post-generation step in `spin new` that runs `go build ./...` against the generated project before declaring success -- fail the scaffolder loudly if the build is broken.
 
 **Warning signs:**
 - A generated `go.mod` line without a `/vX` suffix for a charm v2 module.
@@ -239,7 +239,7 @@ The fang v2 go.mod has tight constraints; mixing older cobra releases is the def
 - `go.sum` containing two different `cobra` versions (transitive + direct).
 - "could not determine kind of name for C.cmd" build errors after a cobra upgrade.
 
-**Phase to address:** Phase 1 (scaffolder CLI) — the scaffolder itself uses these, so it must be pinned correctly before templates can copy from it.
+**Phase to address:** Phase 1 (scaffolder CLI) -- the scaffolder itself uses these, so it must be pinned correctly before templates can copy from it.
 
 ---
 
@@ -274,7 +274,7 @@ Air's `.air.toml` schema is a moving target. The default scaffolded config is of
 ### Pitfall 11: `prism` requires Go 1.24+ and has no CI/non-TTY story
 
 **What goes wrong:**
-`spin test` shells out to `prism`. Prism requires Go 1.24 or later (it uses `go test -json` introduced in that version). On a user machine with Go 1.22, `prism` fails immediately with a confusing "feature requires Go 1.24+" error — the scaffolder doesn't pre-check, so the user gets a stack trace. Additionally, prism has no documented CI output mode; in GitHub Actions the colored bar output can pollute log capture.
+`spin test` shells out to `prism`. Prism requires Go 1.24 or later (it uses `go test -json` introduced in that version). On a user machine with Go 1.22, `prism` fails immediately with a confusing "feature requires Go 1.24+" error -- the scaffolder doesn't pre-check, so the user gets a stack trace. Additionally, prism has no documented CI output mode; in GitHub Actions the colored bar output can pollute log capture.
 
 **Why it happens:**
 Prism is a thin wrapper around `go test -json` and assumes the user has a recent Go. The scaffolder is responsible for detecting a compatible Go version.
@@ -290,7 +290,7 @@ Prism is a thin wrapper around `go test -json` and assumes the user has a recent
 - CI logs filled with escape codes from prism's output.
 - Generated `Taskfile.yml` calling `prism` with no fallback target.
 
-**Phase to address:** Phase 1 (scaffolder CLI) — the version check belongs in the wrapper. Phase 2 (docs) for the CI guidance.
+**Phase to address:** Phase 1 (scaffolder CLI) -- the version check belongs in the wrapper. Phase 2 (docs) for the CI guidance.
 
 ---
 
@@ -320,7 +320,7 @@ Gofumpt requires `go install mvdan.cc/gofumpt@latest`, which itself requires Go 
 ### Pitfall 13: Generated `AGENTS.md` goes stale as the project grows
 
 **What goes wrong:**
-`spin new --ai` writes an `AGENTS.md` with project type, key commands, and a "what this is" blurb. Two weeks later, the user has added a `migrations/` directory, a Dockerfile, a CI workflow, and a different test runner — and `AGENTS.md` is still describing the freshly-generated state. AI assistants then confidently do the wrong thing because the file is a fossil.
+`spin new --ai` writes an `AGENTS.md` with project type, key commands, and a "what this is" blurb. Two weeks later, the user has added a `migrations/` directory, a Dockerfile, a CI workflow, and a different test runner -- and `AGENTS.md` is still describing the freshly-generated state. AI assistants then confidently do the wrong thing because the file is a fossil.
 
 **Why it happens:**
 AGENTS.md has no formal spec, no version, no schema. There is no standard machine-readable way to say "this section is auto-generated by spin, regenerate via `spin update-agents`". Competing formats (`CLAUDE.md`, `.cursorrules`, `.github/copilot-instructions.md`) may appear alongside.
@@ -330,7 +330,7 @@ AGENTS.md has no formal spec, no version, no schema. There is no standard machin
 - Provide a `spin agents` subcommand that re-emits the file (project authors can run it after they update dependencies or change structure).
 - Make the AI-mode opt-in (the PROJECT spec already does this via `--ai`); the file is never the default.
 - Keep the file's content focused on: how to build, how to test, what framework versions are pinned, and the file layout. Avoid auto-generating "architecture" descriptions that the user will want to keep current.
-- Don't ship an `AGENTS.md` claim that the standard is versioned or that spin "supports" it as a spec — it is a convention.
+- Don't ship an `AGENTS.md` claim that the standard is versioned or that spin "supports" it as a spec -- it is a convention.
 
 **Warning signs:**
 - Generated AGENTS.md that mentions specific source files by name (those will move).
@@ -344,7 +344,7 @@ AGENTS.md has no formal spec, no version, no schema. There is no standard machin
 ### Pitfall 14: Breaking generated projects when `spin` itself updates
 
 **What goes wrong:**
-A user runs `spin new myapp --tui --bubbletea` on day 1. Three weeks later, they upgrade `spin` (via `go install ...@latest`). They then re-run `spin new myappv2 --tui --bubbletea` and notice the new template has improved examples, but their `myapp` is on the old template. Worse, a template refactor in spin changes a *file path* or *import path* inside the template — anyone who patched their generated project to use the new pattern now has a confusing diff if they try to manually backport.
+A user runs `spin new myapp --tui --bubbletea` on day 1. Three weeks later, they upgrade `spin` (via `go install ...@latest`). They then re-run `spin new myappv2 --tui --bubbletea` and notice the new template has improved examples, but their `myapp` is on the old template. Worse, a template refactor in spin changes a *file path* or *import path* inside the template -- anyone who patched their generated project to use the new pattern now has a confusing diff if they try to manually backport.
 
 **Why it happens:**
 The PROJECT spec explicitly puts "auto-updating generated projects" out of scope: "regenerate instead." That's the right call for v1, but it creates an upgrade cliff: there is no safe way to bring an old project up to the new template.
@@ -369,7 +369,7 @@ The PROJECT spec explicitly puts "auto-updating generated projects" out of scope
 ### Pitfall 15: Generated project uses CGO accidentally → cross-compile breaks
 
 **What goes wrong:**
-PROJECT.md says scaffolded projects "should build with CGO_ENABLED=0". A generated TUI accidentally pulls in a CGO-requiring dep (e.g., a SQLite driver, a TTS lib, or — more insidiously — a charmbracelet v1 lipgloss that had CGO helpers in some transitive path). The user runs `go build` on macOS and it works, then `docker build` (Linux) fails because CGO is disabled in the build environment, and they don't know why.
+PROJECT.md says scaffolded projects "should build with CGO_ENABLED=0". A generated TUI accidentally pulls in a CGO-requiring dep (e.g., a SQLite driver, a TTS lib, or -- more insidiously -- a charmbracelet v1 lipgloss that had CGO helpers in some transitive path). The user runs `go build` on macOS and it works, then `docker build` (Linux) fails because CGO is disabled in the build environment, and they don't know why.
 
 **Why it happens:**
 CGO is a transitive concern. Pinning deps doesn't make them CGO-free; the dep tree does.
@@ -393,14 +393,14 @@ CGO is a transitive concern. Pinning deps doesn't make them CGO-free; the dep tr
 
 | Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
 |----------|-------------------|----------------|-----------------|
-| Skip `go mod tidy` after generation | Faster scaffold | Un-pinned transitive deps; "works for me" syndrome | Never — always run tidy |
+| Skip `go mod tidy` after generation | Faster scaffold | Un-pinned transitive deps; "works for me" syndrome | Never -- always run tidy |
 | Hardcode charm v2 versions in `go.mod` (no `replace` directives) | Simple | Cannot test against local charm source | MVP-OK; revisit for v2 |
-| Embed templates as `//go:embed templates/*.tmpl` with no per-template go file generation | Less code | Filename collisions silently clobber templates | Never — use unique base names |
+| Embed templates as `//go:embed templates/*.tmpl` with no per-template go file generation | Less code | Filename collisions silently clobber templates | Never -- use unique base names |
 | Use `os.Exit(1)` directly in cobra `RunE` errors | Trivial | Tests can't intercept; no deferred cleanup | Acceptable for `main` only; wrap in `os.Exit(fang.Execute(...))` |
 | Hard-pin cobra to v1.9.1 in scaffolder | Avoids fang v2 conflict | Slower to adopt cobra improvements | Acceptable while fang v2 is the consumer |
 | Single `.air.toml` shared across project types | Less work | TUI vs CLI needs differ; some include_ext drift | Only if both project types use the same hot-reload pattern |
 | Auto-add `AGENTS.md` to every project | Matches "AI friendly" trend | Drifts; becomes noise; some users hate AI files | Default OFF (per PROJECT spec) |
-| Skip post-scaffold `go build` smoke test | Faster UX | Ship templates that don't compile; brand damage | Never — this is the core value prop |
+| Skip post-scaffold `go build` smoke test | Faster UX | Ship templates that don't compile; brand damage | Never -- this is the core value prop |
 | Bundle a single "default" template and skip the `--template` flag | Less to maintain | Power users can't customize; PROJECT requires the flag | Default template is required, others can come later |
 
 ## Integration Gotchas
@@ -538,23 +538,23 @@ CGO is a transitive concern. Pinning deps doesn't make them CGO-free; the dep tr
 ## Sources
 
 ### Verified (HIGH confidence)
-- [Bubble Tea v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) — `View() string` → `View() tea.View`, key message interface, mouse interface, removed program options
-- [Lip Gloss v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) — `Color` function, `Renderer` removal, `HasDarkBackground` signature, `WithWhitespaceStyle`
-- [Huh v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/huh/blob/main/UPGRADE_GUIDE_V2.md) — v2 import paths, accessible mode at form level
-- [Fang v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/fang/blob/main/UPGRADE_GUIDE_V2.md) — `WithColorSchemeFunc`, lipgloss v2 dependency
-- [Fang go.mod (raw)](https://raw.githubusercontent.com/charmbracelet/fang/main/go.mod) — requires `cobra v1.9.1`, `go 1.25.0`
-- [Air documentation (Context7)](https://context7.com/air-verse/air/llms.txt) — `build.bin` deprecated → `build.entrypoint`; Go 1.25+ required; WSL escaping
-- [Prism README (Context7)](https://github.com/daltonsw/prism/blob/main/README.md) — Go 1.24+ required; drop-in `go test` replacement
-- [Gofumpt README](https://github.com/mvdan/gofumpt) — Go 1.25+ to build; skips `vendor` and `testdata` by default; `-extra` flag
-- [Go `text/template` package docs (Context7)](https://pkg.go.dev/text/template) — `ParseFS` uses `path.Match`, Funcs-before-Parse, template name collisions, missingkey options
-- [GoReleaser Go builder docs](https://goreleaser.com/customization/builds/builders/go/) — `targets: go_first_class`, `CGO_ENABLED=0`, `mod_timestamp`, `ldflags` version stamping
+- [Bubble Tea v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) -- `View() string` → `View() tea.View`, key message interface, mouse interface, removed program options
+- [Lip Gloss v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) -- `Color` function, `Renderer` removal, `HasDarkBackground` signature, `WithWhitespaceStyle`
+- [Huh v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/huh/blob/main/UPGRADE_GUIDE_V2.md) -- v2 import paths, accessible mode at form level
+- [Fang v1→v2 Upgrade Guide (Context7)](https://github.com/charmbracelet/fang/blob/main/UPGRADE_GUIDE_V2.md) -- `WithColorSchemeFunc`, lipgloss v2 dependency
+- [Fang go.mod (raw)](https://raw.githubusercontent.com/charmbracelet/fang/main/go.mod) -- requires `cobra v1.9.1`, `go 1.25.0`
+- [Air documentation (Context7)](https://context7.com/air-verse/air/llms.txt) -- `build.bin` deprecated → `build.entrypoint`; Go 1.25+ required; WSL escaping
+- [Prism README (Context7)](https://github.com/daltonsw/prism/blob/main/README.md) -- Go 1.24+ required; drop-in `go test` replacement
+- [Gofumpt README](https://github.com/mvdan/gofumpt) -- Go 1.25+ to build; skips `vendor` and `testdata` by default; `-extra` flag
+- [Go `text/template` package docs (Context7)](https://pkg.go.dev/text/template) -- `ParseFS` uses `path.Match`, Funcs-before-Parse, template name collisions, missingkey options
+- [GoReleaser Go builder docs](https://goreleaser.com/customization/builds/builders/go/) -- `targets: go_first_class`, `CGO_ENABLED=0`, `mod_timestamp`, `ldflags` version stamping
 
 ### Verified (MEDIUM confidence)
-- [Gum README (Context7)](https://github.com/charmbracelet/gum/blob/main/README.md) — interactive TUI; no documented `--no-interactive`; assumes TTY
-- [Cobra GitHub page](https://github.com/spf13/cobra) — pin to v1.9.1 to match fang v2
-- [Charm.land homepage](https://charm.land/) — current library list; no v2 stack version statement on marketing page
+- [Gum README (Context7)](https://github.com/charmbracelet/gum/blob/main/README.md) -- interactive TUI; no documented `--no-interactive`; assumes TTY
+- [Cobra GitHub page](https://github.com/spf13/cobra) -- pin to v1.9.1 to match fang v2
+- [Charm.land homepage](https://charm.land/) -- current library list; no v2 stack version statement on marketing page
 
-### Inferred (LOW confidence — needs source-level confirmation)
+### Inferred (LOW confidence -- needs source-level confirmation)
 - Bubble Tea program's non-TTY behavior: README explicitly says "assumes control of stdin and stdout" but does not document the non-TTY failure mode. The behavior described here is inferred from the "use delve in headless mode" debugging guidance and from the gum README's lack of CI guidance.
 - AGENTS.md as a stable standard: GitHub repo has 21.9k stars but no versioned spec, no formal governance. The "drift" warning is based on the absence of these signals, not on a documented instability.
 - Prism CI behavior: no CI-specific documentation in the README; behavior inferred from `--no-color` flag existence and the use of lipgloss (which honors `NO_COLOR`).

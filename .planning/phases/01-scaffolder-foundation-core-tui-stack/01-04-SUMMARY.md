@@ -19,7 +19,7 @@ provides:
   - "scripts/check-v1-leaks.sh: bash CI grep suite (22 v1 Go patterns + 1 deprecated air pattern) with TOOL-03 + PITFALLS #1-4 + #10 coverage"
   - "Taskfile.yml: dev workflow with grep-v1-leaks, test, build, lint, clean targets"
   - "internal/scaffold/grep_test.go: 3 tests covering the grep suite's clean / fail-v1-import / fail-deprecated-air branches"
-  - "internal/scaffold/integration_test.go: TOOL-05 end-to-end test (TestIntegrationScaffold) plus 2 cross-cutting sub-tests (NoBubblesGoVersion, LicenseVariants) — scaffolds, builds, tests, greps; covers every TOOL-05 REQ-ID"
+  - "internal/scaffold/integration_test.go: TOOL-05 end-to-end test (TestIntegrationScaffold) plus 2 cross-cutting sub-tests (NoBubblesGoVersion, LicenseVariants) -- scaffolds, builds, tests, greps; covers every TOOL-05 REQ-ID"
   - "spin repo polish: README.md (user-facing entry point), .gitignore (excludes /spin, /bin/, /tmp/, /dist/, *.exe, IDE dirs), .golangci.yml (gofmt+goimports+govet+errcheck+staticcheck+unused+ineffassign+misspell+gocritic), LICENSE (MIT)"
 affects:
   - "phase-02 (CLI variant + extended libs) - integration test pattern extends cleanly to cover --cli + --cobra + --fang + --huh variants"
@@ -34,8 +34,8 @@ tech-stack:
   patterns:
     - "Bash test invocation via os/exec - tests use exec.Command(\"bash\", scriptPath, targetDir) to run scripts/check-v1-leaks.sh; gives Go-test coverage of the bash script's exit-code + stderr contract"
     - "Test helper runSpinScaffold(t, name, flags) builds the spin binary, chdirs into a t.TempDir(), runs spin new, and returns the project dir + repo root - the canonical Phase 1+ E2E pattern"
-    - "Black-box binary test that builds spin to os.TempDir() (NOT t.TempDir() — its 0700 perms break downstream tooling in some sandboxes; same workaround as cmd/help_test.go TTY test)"
-    - "Repo polish as a single feature commit: README + .gitignore + .golangci.yml + LICENSE ship together because they're all configuration/doc — no code dependencies between them"
+    - "Black-box binary test that builds spin to os.TempDir() (NOT t.TempDir() -- its 0700 perms break downstream tooling in some sandboxes; same workaround as cmd/help_test.go TTY test)"
+    - "Repo polish as a single feature commit: README + .gitignore + .golangci.yml + LICENSE ship together because they're all configuration/doc -- no code dependencies between them"
 
 key-files:
   created:
@@ -50,10 +50,10 @@ key-files:
   modified: []
 
 key-decisions:
-  - "Pattern count: 22 Go patterns + 1 air pattern (per plan's expansion from 17 in RESEARCH §11). Catches msg.Type/Runes/Alt/X/Y as v1 struct-field accesses even though they could match unrelated `msg` structs in tests — accepted per RESEARCH §11.2 (refine in Phase 2 by scoping to Bubble Tea files only)"
+  - "Pattern count: 22 Go patterns + 1 air pattern (per plan's expansion from 17 in RESEARCH §11). Catches msg.Type/Runes/Alt/X/Y as v1 struct-field accesses even though they could match unrelated `msg` structs in tests -- accepted per RESEARCH §11.2 (refine in Phase 2 by scoping to Bubble Tea files only)"
   - "Bash script lives at scripts/ (not internal/scaffold/scripts/) because the Taskfile target `task grep-v1-leaks` references it from the spin repo root; future CI jobs can also call it directly"
   - "TestIntegrationScaffold uses deterministic project name 'spin-integration-myapp' (matches a valid Go module path segment) so failures are reproducible"
-  - "go.mod assertion forbids the v1 lib paths (github.com/charmbracelet/bubbletea, lipgloss, bubbles, huh, glamour, glow, wish, log, fang) but ALLOWS the github.com/charmbracelet/x/... indirect transitive deps that go mod tidy pulls in — x/... is the current experimental namespace per CLAUDE.md tech stack, NOT a v1 leak"
+  - "go.mod assertion forbids the v1 lib paths (github.com/charmbracelet/bubbletea, lipgloss, bubbles, huh, glamour, glow, wish, log, fang) but ALLOWS the github.com/charmbracelet/x/... indirect transitive deps that go mod tidy pulls in -- x/... is the current experimental namespace per CLAUDE.md tech stack, NOT a v1 leak"
   - "Lipgloss pin assertion: `charm.land/lipgloss/v2 v2.0.0` (post-tidy), not `v2.0.0-beta.2` (the template's literal). go mod tidy rewrites the pin to the latest matching (v2.0.0); this is correct go behavior per Plan 03 deviation"
   - "Spin repo LICENSE is MIT (not the org-name-based placeholder the templates use) - the spin repo MIT license applies to spin itself, the templates use whatever name the user passes"
 
@@ -89,9 +89,9 @@ completed: 2026-06-02
 - `scripts/check-v1-leaks.sh` (executable, bash) catches 22 v1 Go patterns (v1 import paths, `View() string`, `tea.WithAltScreen`, `tea.WithMouseCellMotion`, `tea.EnterAltScreen/HideCursor/ExitAltScreen`, `lipgloss.NewRenderer/DefaultRenderer/SetDefaultRenderer/AdaptiveColor{`/`ColorProfile(`/`HasDarkBackground()`, `tea.KeyCtrlC`, `tea.MouseButtonLeft/Right/Middle`, `msg.Type/Runes/Alt/X/Y`) plus 1 deprecated `.air.toml` `build.bin = "tmp/main"` pattern. Wired as `task grep-v1-leaks` in `Taskfile.yml`.
 - `internal/scaffold/grep_test.go` covers the 3 grep branches (templates clean / v1 import detected / deprecated air detected) via `exec.Command("bash", scriptPath, targetDir)`. All 3 pass.
 - `internal/scaffold/integration_test.go` ships 3 sub-tests that together prove Phase 1 works end-to-end:
-  - `TestIntegrationScaffold` — scaffolds `spin-integration-myapp --tui --bubbletea --bubbles --lipgloss`, asserts 11 file/structure/content properties (go.mod has the right v2 pins + go 1.25.0 + no v1 lib paths; main.go uses v2 API; internal/ui/styles.go uses `lipgloss.NewStyle`; .air.toml uses `build.entrypoint`; Taskfile.yml has the `setup:` target wiring all 4 tool installs; LICENSE is MIT with current year; README has Next steps + Prerequisites; .gitignore has tmp/ + bin/; .git/ has exactly 1 commit; `go build ./...` + `go test ./...` both exit 0; v1-leak grep exits 0)
-  - `TestIntegrationScaffold_NoBubblesGoVersion` — scaffolds with `--tui --bubbletea` only (no `--bubbles`); asserts go.mod does NOT bump to 1.25.0 (TOOL-02)
-  - `TestIntegrationScaffold_LicenseVariants` — scaffolds 3 projects with `--license mit`, `--license apache-2.0`, `--license none`; asserts LICENSE content matches (or file is absent for `none`)
+  - `TestIntegrationScaffold` -- scaffolds `spin-integration-myapp --tui --bubbletea --bubbles --lipgloss`, asserts 11 file/structure/content properties (go.mod has the right v2 pins + go 1.25.0 + no v1 lib paths; main.go uses v2 API; internal/ui/styles.go uses `lipgloss.NewStyle`; .air.toml uses `build.entrypoint`; Taskfile.yml has the `setup:` target wiring all 4 tool installs; LICENSE is MIT with current year; README has Next steps + Prerequisites; .gitignore has tmp/ + bin/; .git/ has exactly 1 commit; `go build ./...` + `go test ./...` both exit 0; v1-leak grep exits 0)
+  - `TestIntegrationScaffold_NoBubblesGoVersion` -- scaffolds with `--tui --bubbletea` only (no `--bubbles`); asserts go.mod does NOT bump to 1.25.0 (TOOL-02)
+  - `TestIntegrationScaffold_LicenseVariants` -- scaffolds 3 projects with `--license mit`, `--license apache-2.0`, `--license none`; asserts LICENSE content matches (or file is absent for `none`)
 - `README.md` is a polished user-facing entry point: What it does, Install, Quick start (with the canonical `spin new myapp --tui --bubbletea --bubbles --lipgloss` example), Status (Phase 1 of 4 complete), Requirements (Go 1.23+ for spin, Go 1.25.0+ for generated --bubbles projects), Documentation (links to .planning/), Development (task test, task grep-v1-leaks), Charm v2 only, License.
 - `.gitignore` excludes the spin binary, `bin/`, `tmp/`, `dist/`, `*.exe`, IDE dirs, and test scratch dirs. `.golangci.yml` enables gofmt+goimports+govet+errcheck+staticcheck+unused+ineffassign+misspell+gocritic. `LICENSE` is MIT for the spin repo itself.
 - **End-to-end smoke test PASSED**: from a clean `/tmp/smoke-test/`, built the spin binary, ran `spin new foo --tui --bubbletea --bubbles --lipgloss`, then `cd foo && CGO_ENABLED=0 go build ./... && go test ./...`, then `bash scripts/check-v1-leaks.sh /tmp/smoke-test/foo`. All three exit 0.
@@ -102,9 +102,9 @@ completed: 2026-06-02
 2. **Task 2: TOOL-05 integration test (integration_test.go with 3 sub-tests)** - `3a3eec2` (feat)
 3. **Task 3: spin repo polish (README.md + .gitignore + .golangci.yml + LICENSE)** - `6359aac` (feat)
 
-**Plan metadata:** No separate docs commit — summary committed as part of plan completion.
+**Plan metadata:** No separate docs commit -- summary committed as part of plan completion.
 
-_Note: TDD was applied at the task level (one feat commit per task with tests written first within the task). All 3 tasks landed green on first run except for 2 minor assertion fixes in the integration test (lipgloss pin and v1-path scope — see Deviations)._
+_Note: TDD was applied at the task level (one feat commit per task with tests written first within the task). All 3 tasks landed green on first run except for 2 minor assertion fixes in the integration test (lipgloss pin and v1-path scope -- see Deviations)._
 
 ## Files Created/Modified
 
@@ -140,7 +140,7 @@ _Note: TDD was applied at the task level (one feat commit per task with tests wr
 
 **2. [Rule 1 - Bug] Integration test asserted go.mod does NOT contain `github.com/charmbracelet/` but `go mod tidy` adds indirect deps under `github.com/charmbracelet/x/...`**
 - **Found during:** Task 2 (first run of TestIntegrationScaffold, same test run as #1)
-- **Issue:** Plan said the go.mod assertion "Does NOT contain `github.com/charmbracelet/`". But after `go mod tidy` runs, the scaffolded go.mod pulls in indirect transitive deps like `github.com/charmbracelet/x/ansi`, `github.com/charmbracelet/x/term`, etc. — these are the current `charmbracelet/x` experimental namespace per CLAUDE.md tech stack, NOT v1 leaks. The test false-positived on every scaffold.
+- **Issue:** Plan said the go.mod assertion "Does NOT contain `github.com/charmbracelet/`". But after `go mod tidy` runs, the scaffolded go.mod pulls in indirect transitive deps like `github.com/charmbracelet/x/ansi`, `github.com/charmbracelet/x/term`, etc. -- these are the current `charmbracelet/x` experimental namespace per CLAUDE.md tech stack, NOT v1 leaks. The test false-positived on every scaffold.
 - **Fix:** Tightened the forbidden list to the specific v1 library paths (bubbletea, lipgloss, bubbles, huh, glamour, glow, wish, log, fang) at `github.com/charmbracelet/<lib>`. The v1-leak check on the project's .go files is handled by the bash script (assertNoV1Leaks), so this go.mod assertion is just an extra safety net for the direct-require block.
 - **Files modified:** internal/scaffold/integration_test.go
 - **Verification:** TestIntegrationScaffold passes; the go.mod contains `github.com/charmbracelet/x/...` indirect deps (allowed) but no `github.com/charmbracelet/bubbletea` etc. (forbidden)
@@ -148,7 +148,7 @@ _Note: TDD was applied at the task level (one feat commit per task with tests wr
 
 ---
 
-**Total deviations:** 2 auto-fixed (2 Rule 1 — both bug fixes in test assertions; no architectural changes)
+**Total deviations:** 2 auto-fixed (2 Rule 1 -- both bug fixes in test assertions; no architectural changes)
 **Impact on plan:** Both auto-fixes were test-assertion adjustments, not changes to the scaffolder or the v1-leak check itself. The bash script (22 patterns + 1 air pattern), the integration test's 11 structural assertions, and the repo polish all landed as planned. The forbidden-pattern list in the test was narrowed to be precise about what constitutes a v1 leak (v1 library paths) vs what doesn't (current experimental namespace).
 
 ## Issues Encountered
@@ -167,7 +167,7 @@ None - no external service configuration required. The CI grep suite and integra
   - The `runSpinScaffold(t, name, flags)` helper + `assertNoV1Leaks` pattern extend to cover `--cli`, `--cobra`, `--fang`, `--viper`, `--huh`, etc. by adding more `assert*` helpers
   - `scripts/check-v1-leaks.sh` is generic enough to catch v1 leaks in any project (not just Phase 1 TUI scaffolds)
   - The Taskfile + .golangci.yml + README + .gitignore are reusable across all subsequent plans
-  - The Walking Skeleton's `os.TempDir()` (not `t.TempDir()`) workaround is now documented in 2 places (cmd/help_test.go TTY test + integration_test.go E2E helper) — no ambiguity for future plans
+  - The Walking Skeleton's `os.TempDir()` (not `t.TempDir()`) workaround is now documented in 2 places (cmd/help_test.go TTY test + integration_test.go E2E helper) -- no ambiguity for future plans
 - Phase 3 (interactive prompts) needs the `runSpinScaffold` helper to support the `--no-interactive` flag (currently all tests scaffold with full TUI flags; Phase 3 will add a sub-test that omits the flags and asserts the defaults are used). One-line addition to the helper.
 - Phase 4 (`spin doctor` + `spin add` + `spin update`) can call `scripts/check-v1-leaks.sh` as the v1-leak health check inside `spin doctor`. The script's contract (exits 0/1, prints offending lines) is exactly what a doctor subcommand needs.
 - Known gap: the integration test scaffolds a single project per test (deterministic name); if two sub-tests run in parallel they could collide. Currently they run sequentially because `t.Parallel()` is not called, so this is fine for now. Future tests that add parallelism need unique project names.
@@ -184,10 +184,10 @@ PASSED.
 - `scripts/check-v1-leaks.sh` exits 1 when given a v1 import (verified by TestGrepV1Leaks_CatchesV1Import)
 - `scripts/check-v1-leaks.sh` exits 1 when given a deprecated `.air.toml` (verified by TestGrepV1Leaks_CatchesDeprecatedAir)
 - `task grep-v1-leaks` defined in Taskfile.yml (or `bash scripts/check-v1-leaks.sh ./internal/scaffold/templates` runs the same check)
-- TestIntegrationScaffold scaffolds with all 3 TUI libs, validates 11 file/structure/content assertions, runs go build + go test + v1-leak grep — all green
+- TestIntegrationScaffold scaffolds with all 3 TUI libs, validates 11 file/structure/content assertions, runs go build + go test + v1-leak grep -- all green
 - TestIntegrationScaffold_NoBubblesGoVersion confirms TOOL-02: --tui --bubbletea (no --bubbles) does NOT bump go.mod to 1.25.0
 - TestIntegrationScaffold_LicenseVariants confirms license flag works for mit, apache-2.0, none
-- **End-to-end smoke test from clean /tmp**: `cd /tmp/smoke-test && spin new foo --tui --bubbletea --bubbles --lipgloss && cd foo && CGO_ENABLED=0 go build ./... && go test ./... && bash scripts/check-v1-leaks.sh /tmp/smoke-test/foo` — all 3 steps exit 0
+- **End-to-end smoke test from clean /tmp**: `cd /tmp/smoke-test && spin new foo --tui --bubbletea --bubbles --lipgloss && cd foo && CGO_ENABLED=0 go build ./... && go test ./... && bash scripts/check-v1-leaks.sh /tmp/smoke-test/foo` -- all 3 steps exit 0
 - All generated imports use `charm.land/<lib>/v2` paths
 - README.md exists with `## Quick start` and `## Status` sections and the canonical `spin new myapp --tui --bubbletea --bubbles --lipgloss` example
 - `.gitignore` excludes the spin binary, `bin/`, `tmp/`, `dist/`, `*.exe` (verified via `git check-ignore -v`)

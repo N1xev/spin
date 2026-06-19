@@ -7,7 +7,7 @@ preset: none
 created: 2026-06-03
 ---
 
-# Phase 3 — UI Design Contract
+# Phase 3 -- UI Design Contract
 
 > Visual and interaction contract for the two surfaces Phase 3 adds:
 > (A) the interactive scaffolder prompt sequence (`gum` + `huh v2` fallback)
@@ -54,8 +54,8 @@ Declared values (column widths are always multiples of 4 where possible):
 | 3xl | 64 col | page-level (reserved; not used in prompts) |
 
 Exceptions:
-- gum `choose` widget renders at 60 cols wide by default — we keep the default (no override).
-- gum `input` renders at 40 cols wide — we keep the default.
+- gum `choose` widget renders at 60 cols wide by default -- we keep the default (no override).
+- gum `input` renders at 40 cols wide -- we keep the default.
 - Prompt question text may wrap to 80 cols; gum handles this internally.
 
 ---
@@ -84,7 +84,7 @@ Exceptions:
 ## Color (ANSI palette)
 
 The scaffolder uses charm/log v2 for stderr and gum's default palette for
-prompts. No custom colors — gum's defaults are the design.
+prompts. No custom colors -- gum's defaults are the design.
 
 | Role | Palette | Usage |
 |------|---------|-------|
@@ -111,7 +111,7 @@ Prompts only fire when ALL of the following are true:
 2. `isatty.IsTerminal(os.Stdin)` returns true (INT-03).
 3. The user has NOT passed `--no-interactive` / `--yes` / `--batch` (INT-02).
 4. We are not running inside a CI environment (`$CI`, `$GITHUB_ACTIONS`,
-   `$GITLAB_CI`, `$BUILDKITE`, `$CIRCLECI` all unset) — CI is treated as
+   `$GITLAB_CI`, `$BUILDKITE`, `$CIRCLECI` all unset) -- CI is treated as
    non-TTY even if stdin is a tty (defense in depth, INT-03).
 
 If any condition fails, prompts are skipped and any missing required field
@@ -120,7 +120,7 @@ that `spin new myapp` in CI fails fast with a clear message).
 
 ### Prompt sequence
 
-The order is fixed. Each prompt is independent — a user can Ctrl-C / Esc at
+The order is fixed. Each prompt is independent -- a user can Ctrl-C / Esc at
 any point and `spin` exits 130 (per Phase 2 conventions) with no FS writes.
 
 | # | Field | Widget | Default | When skipped |
@@ -128,7 +128,7 @@ any point and `spin` exits 130 (per Phase 2 conventions) with no FS writes.
 | 1 | Project type | `gum choose` | `TUI` (1st option) | `--tui` / `--cli` / `--all` already set |
 | 2 | Project name (only if args empty in `cobra.Args`) | `gum input` | empty | positional arg already provided |
 | 3 | Module path | `gum input` | pre-filled with `<name>` | `--module` already set |
-| 4 | Library multi-select | `gum choose --no-limit` | pre-checked: variant defaults | none — always asked, but defaults match variant |
+| 4 | Library multi-select | `gum choose --no-limit` | pre-checked: variant defaults | none -- always asked, but defaults match variant |
 | 5 | License | `gum choose` | `MIT` | `--license` already set |
 | 6 | Template | `gum choose` | `tui-bubbletea` (or the matching variant default) | `--template` already set |
 | 7 | External template repo | `gum input --placeholder="(skip to use embedded)"` | empty | `--template-repo` already set |
@@ -481,7 +481,7 @@ user prompt" downstream of `Fill`.
 
 | Registry | Blocks Used | Safety Gate |
 |----------|-------------|-------------|
-| not applicable | none | not applicable (no shadcn, no third-party UI registries — Go CLI only) |
+| not applicable | none | not applicable (no shadcn, no third-party UI registries -- Go CLI only) |
 
 The phase adds NO third-party UI library blocks. The only new dependency
 in Phase 3 is the in-process `charm.land/huh/v2` (which is the existing

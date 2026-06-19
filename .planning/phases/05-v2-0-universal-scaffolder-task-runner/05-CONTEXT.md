@@ -10,7 +10,7 @@
 Phase 5 fills in the v2.0 skeleton that was built on 2026-06-08. The skeleton defines the package layout, interfaces, and CLI surface; this phase delivers the implementation, the migrations, and the second ecosystem (rust) that proves universality.
 
 **In scope:**
-- Filling in the ecosystem interface — full Validate/Render/PostScaffold/Tasks implementations
+- Filling in the ecosystem interface -- full Validate/Render/PostScaffold/Tasks implementations
 - Migrating the v1 charm scaffolder to be a first-class citizen in the new flow (no behavior change for `spin new <name> --tui --bubbletea`)
 - Adding a second ecosystem (rust) that wires `cargo build/test/run/clippy/fmt` through `spin run`
 - Filling in the external template loader: git clone, spin.toml parse, huh form, render, post-hooks, delete spin.toml
@@ -19,7 +19,7 @@ Phase 5 fills in the v2.0 skeleton that was built on 2026-06-08. The skeleton de
 
 **Out of scope (v2.x or later):**
 - External ecosystem loading (Go plugins)
-- The `Builder` concept (question tree with custom renderers) — interface stub only
+- The `Builder` concept (question tree with custom renderers) -- interface stub only
 - Hosted registry server (separate project)
 - Tauri/Next/Nuxt/Vue/React/Flutter/Dart/C#/Java ecosystems
 - TUI mode for the scaffolder itself
@@ -30,17 +30,17 @@ Phase 5 fills in the v2.0 skeleton that was built on 2026-06-08. The skeleton de
 <decisions>
 ## Implementation Decisions
 
-### A. Architecture — three concepts, locked
+### A. Architecture -- three concepts, locked
 
 Three concepts differentiate v2.0 from v1.0:
 
-- **Ecosystem** — a compiled-in Go package under `internal/ecosystems/<name>/` that implements the `Ecosystem` interface. Knows how to scaffold for one language/stack. Charm and rust are the first two. External loading (plugins) is v2.x.
-- **Template** — an external git repo with `spin.toml` + `_base/` + overlays + post-hooks. Loaded by the template package. Self-describes via `spin.toml`.
-- **Builder** — a question-tree renderer with custom renderers per node. Interface stub only in v2.0; full implementation is v2.x.
+- **Ecosystem** -- a compiled-in Go package under `internal/ecosystems/<name>/` that implements the `Ecosystem` interface. Knows how to scaffold for one language/stack. Charm and rust are the first two. External loading (plugins) is v2.x.
+- **Template** -- an external git repo with `spin.toml` + `_base/` + overlays + post-hooks. Loaded by the template package. Self-describes via `spin.toml`.
+- **Builder** -- a question-tree renderer with custom renderers per node. Interface stub only in v2.0; full implementation is v2.x.
 
 The user explicitly wants all three in the long-term vision, with ecosystems as first-class citizens (sponsor model), templates as second-class, and builders as third-class.
 
-### B. Task runner source precedence — locked
+### B. Task runner source precedence -- locked
 
 `spin run <task>` resolves from the highest-precedence source first:
 
@@ -55,7 +55,7 @@ This is the same precedence model as Task/Just/Make. Explicit project config win
 
 `spin.config.toml` is simple: `[tasks] key = "shell command"` plus optional `description` and `env`. Lives in the project root.
 
-### C. Template params — 7+ types, huh v2 backend — locked
+### C. Template params -- 7+ types, huh v2 backend -- locked
 
 7 user-facing types per the conversation, plus 1 bonus (textarea):
 
@@ -72,13 +72,13 @@ This is the same precedence model as Task/Just/Make. Explicit project config win
 
 When stdin is a TTY, the params are presented as a huh form. In non-TTY (`--no-interactive`), defaults are applied silently. `spin.toml` is deleted from the output after a successful render.
 
-### D. Charm as first-class ecosystem — locked
+### D. Charm as first-class ecosystem -- locked
 
 `spin new <name>` (no ecosystem) must keep working for v1 users. In v2.0 it routes to `charm` with a one-time deprecation notice. The new canonical form is `spin new charm <name> --tui --bubbletea --bubbles --lipgloss`.
 
 The charm ecosystem wraps the existing `scaffold.Project` (no rewrite of v1 templates). Conversion: `Context` → `scaffold.Project` → `RenderToMap()` → `WriteTo(dir)`. Flags declared in `internal/ecosystems/charm/flags.go` (already present in skeleton).
 
-### E. Rust as second ecosystem — locked
+### E. Rust as second ecosystem -- locked
 
 Rust proves universality. The second ecosystem ships in Phase 5 because:
 - It's the most-Go-like language (compiles, modules, Cargo.toml)
@@ -93,7 +93,7 @@ Rust proves universality. The second ecosystem ships in Phase 5 because:
 
 The rust ecosystem's `Tasks()` returns the cargo fallbacks so `spin run` works out of the box.
 
-### F. External template loader — locked
+### F. External template loader -- locked
 
 External templates (e.g. `github.com/charmbracelet/spin-charm-api`) work as follows:
 1. `spin new <name> --template <user/repo>` resolves the template ref to a git URL
@@ -106,7 +106,7 @@ External templates (e.g. `github.com/charmbracelet/spin-charm-api`) work as foll
 
 Path-traversal safe: reject any output path containing `..` segments. This is already enforced in the skeleton's `template.RenderTo()`.
 
-### G. Registry — client now, server later — locked
+### G. Registry -- client now, server later -- locked
 
 `spin search <query>` calls a hosted registry server. The server is a separate project; until it ships, the client must:
 - Return a friendly message ("registry not yet deployed, see github.com/example/spin-registry")
@@ -116,7 +116,7 @@ Path-traversal safe: reject any output path containing `..` segments. This is al
 
 `spin add <user/repo>` pins to `~/.config/spin/pinned.json` (one-line JSON, atomic write). `spin list` reads it and shows the resolved local path under `~/.config/spin/templates/`.
 
-### H. Backward compat — locked
+### H. Backward compat -- locked
 
 All v1.0 commands and flags work unchanged. The v2.0 additions are additive:
 - `spin new <name>` (no ecosystem) → routes to charm with a one-time deprecation notice
@@ -125,7 +125,7 @@ All v1.0 commands and flags work unchanged. The v2.0 additions are additive:
 
 The deprecation path is implemented in `cmd/deprecate.go` (already in skeleton) as PreRun hooks on the legacy commands.
 
-### I. New ecosystem flag model — locked
+### I. New ecosystem flag model -- locked
 
 Each ecosystem declares its flags via the `Flag` type in `internal/ecosystem/flag.go` (already in skeleton):
 
@@ -136,7 +136,7 @@ ecosystem.NewChoiceFlag("type", "Project type", []string{"tui", "cli", "lib"}).W
 
 The CLI binds these flags dynamically via `pflag.Flag` `VisitAll` (already implemented in `cmd/new_charm.go`'s `runNewCharm`). Values land in `Context.Flags` for the renderer.
 
-### J. Migration of the v1 CLI surface — locked
+### J. Migration of the v1 CLI surface -- locked
 
 The legacy `cmd/new.go` (`spin new <name> --tui ...`) becomes a thin shim that:
 1. Prints a deprecation notice (one line, stderr)
@@ -158,11 +158,11 @@ This phase is judged on the 5 success criteria in ROADMAP.md:
 ### Claude's Discretion
 
 - Exact error messages and exit codes
-- TOML parser choice — the skeleton's hand-rolled mini-parser is fine; full `encoding/toml/v2` is fine too if it lands cleaner
+- TOML parser choice -- the skeleton's hand-rolled mini-parser is fine; full `encoding/toml/v2` is fine too if it lands cleaner
 - Huh field keybindings for each param type
 - Default cargo edition / rust-version (suggest 2021 / 1.75)
 - Naming of internal helper functions in each ecosystem
-- Whether the rust ecosystem's task fallbacks live in a constant in `internal/runner/sources/fallback.go` (cargo branch) or in the ecosystem's `Tasks()` method (preferred — keeps language-specific defaults in the ecosystem)
+- Whether the rust ecosystem's task fallbacks live in a constant in `internal/runner/sources/fallback.go` (cargo branch) or in the ecosystem's `Tasks()` method (preferred -- keeps language-specific defaults in the ecosystem)
 - Test coverage strategy: prefer `go test ./...` for unit tests, integration tests for end-to-end (`go run` a generated project)
 
 </decisions>
@@ -173,40 +173,40 @@ This phase is judged on the 5 success criteria in ROADMAP.md:
 **Downstream agents MUST read these before planning or implementing.**
 
 ### v2.0 skeleton (just built)
-- `.planning/STATE.md` lines 111–207 — full v2.0 skeleton section: packages, commands, build state, what's stubbed
-- `internal/params/param.go` — Param interface, Spec, Value
-- `internal/params/{text,textarea,number,select,multiselect,bool,path,secret}.go` — concrete Param impls
-- `internal/params/{form,parse}.go` — Form builder + TOML bridge
-- `internal/ecosystem/ecosystem.go` — Ecosystem interface, Context, Detector
-- `internal/ecosystem/flag.go` — Flag type with chainable With* builders
-- `internal/ecosystem/registry.go` — thread-safe Registry
-- `internal/ecosystems/charm/flags.go` — 25+ charm flags
-- `internal/ecosystems/charm/{validate,render,post}.go` — charm lifecycle
-- `internal/runner/{source,list,execute,explain}.go` — task runner core
-- `internal/runner/sources/{spinconfig,taskfile,makefile,packagejson,scripts,fallback,os}.go` — source chain
-- `internal/template/{template,spin_toml,parse,form,loader,engine}.go` — external template loader
-- `internal/registry/{client,search,types}.go` — registry client
-- `internal/builder/builder.go` — interface stub
-- `cmd/{run,new_charm,new_extras,ecosystem,search,add,list,version,deprecate}.go` — v2.0 commands
+- `.planning/STATE.md` lines 111–207 -- full v2.0 skeleton section: packages, commands, build state, what's stubbed
+- `internal/params/param.go` -- Param interface, Spec, Value
+- `internal/params/{text,textarea,number,select,multiselect,bool,path,secret}.go` -- concrete Param impls
+- `internal/params/{form,parse}.go` -- Form builder + TOML bridge
+- `internal/ecosystem/ecosystem.go` -- Ecosystem interface, Context, Detector
+- `internal/ecosystem/flag.go` -- Flag type with chainable With* builders
+- `internal/ecosystem/registry.go` -- thread-safe Registry
+- `internal/ecosystems/charm/flags.go` -- 25+ charm flags
+- `internal/ecosystems/charm/{validate,render,post}.go` -- charm lifecycle
+- `internal/runner/{source,list,execute,explain}.go` -- task runner core
+- `internal/runner/sources/{spinconfig,taskfile,makefile,packagejson,scripts,fallback,os}.go` -- source chain
+- `internal/template/{template,spin_toml,parse,form,loader,engine}.go` -- external template loader
+- `internal/registry/{client,search,types}.go` -- registry client
+- `internal/builder/builder.go` -- interface stub
+- `cmd/{run,new_charm,new_extras,ecosystem,search,add,list,version,deprecate}.go` -- v2.0 commands
 
 ### v1.0 baseline (must not regress)
-- `.planning/ROADMAP.md` — Phases 1–4 success criteria
-- `internal/scaffold/{scaffold,template}.go` — the existing scaffold engine the charm ecosystem wraps
-- `cmd/{new,build,test,vet,fmt,lint,doctor,update}.go` — v1.0 commands (kept working)
-- `internal/wrap/{run,build,test,vet,fmt,lint,detect}.go` — v1.0 toolchain wrappers
+- `.planning/ROADMAP.md` -- Phases 1–4 success criteria
+- `internal/scaffold/{scaffold,template}.go` -- the existing scaffold engine the charm ecosystem wraps
+- `cmd/{new,build,test,vet,fmt,lint,doctor,update}.go` -- v1.0 commands (kept working)
+- `internal/wrap/{run,build,test,vet,fmt,lint,detect}.go` -- v1.0 toolchain wrappers
 
 ### Project docs
-- `.planning/PROJECT.md` — updated 2026-06-08 for v2.0 pivot (core value, active reqs, decisions)
-- `.planning/REQUIREMENTS.md` — v2.0 reqs added (ECO-*, TPL-12..18, RUN-09..14, REG-05..08, BC-01..03)
-- `CLAUDE.md` — stack pins, charm v2 paths, Go version floors
+- `.planning/PROJECT.md` -- updated 2026-06-08 for v2.0 pivot (core value, active reqs, decisions)
+- `.planning/REQUIREMENTS.md` -- v2.0 reqs added (ECO-*, TPL-12..18, RUN-09..14, REG-05..08, BC-01..03)
+- `CLAUDE.md` -- stack pins, charm v2 paths, Go version floors
 
 </canonical_refs>
 
 <specifics>
 ## Specific Ideas
 
-- The rust ecosystem's `Tasks()` should return `{"build": "cargo build", "test": "cargo test", "run": "cargo run", "clippy": "cargo clippy", "fmt": "cargo fmt"}` — these then merge with the source chain at the fallback level
-- Charm's `Tasks()` returns the existing v1.0 wrappers (`air` for `dev`, `prism` for `test`, `gofumpt` for `fmt`, etc.) — backward compat
+- The rust ecosystem's `Tasks()` should return `{"build": "cargo build", "test": "cargo test", "run": "cargo run", "clippy": "cargo clippy", "fmt": "cargo fmt"}` -- these then merge with the source chain at the fallback level
+- Charm's `Tasks()` returns the existing v1.0 wrappers (`air` for `dev`, `prism` for `test`, `gofumpt` for `fmt`, etc.) -- backward compat
 - The registry client's `Search()` should return a structured `Result` slice with `Name`, `Description`, `Language`, `Stars`, `URL`; the CLI formats it as a table
 - `spin new <name> --template <ref>` can be combined with an ecosystem: `spin new rust <name> --template <ref>` is also valid (template overlays on the ecosystem)
 - The post-hook shell command is rendered with `text/template` against the resolved param values, so a post-hook can do `cargo init --name {{.project_name}}` after the params form runs
@@ -215,7 +215,7 @@ This phase is judged on the 5 success criteria in ROADMAP.md:
 - The deprecation notice for `spin new <name>` is a one-time message (rate-limited via a per-process bool), not per-invocation spam
 - The v1 templates in `internal/scaffold/templates/` (26 files) are reused verbatim by the charm ecosystem; no rewrite
 - The template loader's `Loader()` already does git clone with `GIT_TERMINAL_PROMPT=0`; needs to be filled in for real (clone, cache, refresh)
-- The `Builder` interface stub has a single method `Build(ctx, questions) (Context, error)` — no implementation in v2.0
+- The `Builder` interface stub has a single method `Build(ctx, questions) (Context, error)` -- no implementation in v2.0
 
 </specifics>
 

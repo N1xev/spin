@@ -1,0 +1,49 @@
+package params
+
+import (
+	"fmt"
+
+	"charm.land/huh/v2"
+)
+
+type MultiSelectParam struct {
+	name    string
+	prompt  string
+	options []string
+	def     []string
+	value   []string
+}
+
+func NewMultiSelect(name, prompt string, options, def []string) *MultiSelectParam {
+	return &MultiSelectParam{name: name, prompt: prompt, options: options, def: def}
+}
+
+func (p *MultiSelectParam) Name() string   { return p.name }
+func (p *MultiSelectParam) Type() Type     { return TypeMultiSelect }
+func (p *MultiSelectParam) Prompt() string { return p.prompt }
+func (p *MultiSelectParam) Default() any   { return p.def }
+func (p *MultiSelectParam) Apply(v Value)  { p.value = v.List }
+func (p *MultiSelectParam) Value() Value   { return Value{List: p.value} }
+func (p *MultiSelectParam) Hmm() string    { return p.String() }
+
+func (p *MultiSelectParam) HuhField() huh.Field {
+	opts := make([]huh.Option[string], 0, len(p.options))
+	for _, o := range p.options {
+		opt := huh.NewOption(o, o)
+		for _, d := range p.def {
+			if o == d {
+				opt = opt.Selected(true)
+			}
+		}
+		opts = append(opts, opt)
+	}
+	return huh.NewMultiSelect[string]().
+		Key(p.name).
+		Title(orPrompt(p.name, p.prompt)).
+		Options(opts...).
+		Value(&p.value)
+}
+
+func (p *MultiSelectParam) String() string {
+	return fmt.Sprintf("%s (multiselect, default %v, options %v)", p.name, p.def, p.options)
+}

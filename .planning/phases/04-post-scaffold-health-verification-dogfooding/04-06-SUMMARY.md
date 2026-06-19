@@ -18,10 +18,10 @@ requires:
   - phase: 04-05-strip-generated-by-markers
     provides: marker-free templates so the dogfood fixture's gofmt check would not flake
 provides:
-  - .github/workflows/ci.yml — base CI (go test + grep suite) on push/PR to main
-  - .github/workflows/dogfood.yml — scaffolder smoke-test job triggered on template/cmd changes
-  - scripts/dogfood.sh — local-runnable form of the dogfood job (build spin -> scaffold fixture -> go mod tidy + CGO=0 go build + go test -> v1-leak grep)
-  - .github/dependabot.yml — weekly Go module update PRs
+  - .github/workflows/ci.yml -- base CI (go test + grep suite) on push/PR to main
+  - .github/workflows/dogfood.yml -- scaffolder smoke-test job triggered on template/cmd changes
+  - scripts/dogfood.sh -- local-runnable form of the dogfood job (build spin -> scaffold fixture -> go mod tidy + CGO=0 go build + go test -> v1-leak grep)
+  - .github/dependabot.yml -- weekly Go module update PRs
 affects: []
 
 # Tech tracking
@@ -32,7 +32,7 @@ tech-stack:
     - actions/upload-artifact@v4
   patterns:
     - "scripts/dogfood.sh mirrors the Go-side wrap integration test at the shell level so the pipeline is runnable in CI and locally"
-    - "run_step helper captures each step's output to a tmpfile and dumps the last 50 lines on failure — same spirit as the Go-side CombinedOutput tail in internal/wrap/integration_test.go"
+    - "run_step helper captures each step's output to a tmpfile and dumps the last 50 lines on failure -- same spirit as the Go-side CombinedOutput tail in internal/wrap/integration_test.go"
     - "GitHub Actions workflows pinned to first-party @v4/@v5 actions; no third-party actions, no go install of unknown packages"
     - "permissions: { contents: read } at workflow/job level for least-privilege token scope"
 
@@ -47,7 +47,7 @@ key-files:
 key-decisions:
   - "Use --module github.com/example/spin-fixture as a hardcoded override so the dogfood fixture never collides with the spin repo's real github.com/example/spin module path (this is the form already proven correct in the v1-leak check scripts' comment block)"
   - "Trigger paths for dogfood include scripts/dogfood.sh and the workflow file itself so any tampering or fix is automatically re-verified on the next PR"
-  - "Artifact upload path is `${{ github.workspace }}/bin/spin` + `/tmp/dogfood-*.log` with `if-no-files-found: ignore` — the script always cleans its own tempdir on success, so an empty upload is the expected happy path and should not fail the job"
+  - "Artifact upload path is `${{ github.workspace }}/bin/spin` + `/tmp/dogfood-*.log` with `if-no-files-found: ignore` -- the script always cleans its own tempdir on success, so an empty upload is the expected happy path and should not fail the job"
   - "ci.yml is intentionally minimal (go test + grep suite, no dogfood) so the base test job stays fast and predictable; the dogfood step is opt-in via path filter, matching the `task test` + `task grep-v1-leaks` split in Taskfile.yml"
 
 requirements-completed: []
@@ -81,21 +81,21 @@ completed: 2026-06-08
 
 ## Task Commits
 
-1. **Task 1: Add scripts/dogfood.sh — reusable smoke-test pipeline** - `674be8b` (ci)
+1. **Task 1: Add scripts/dogfood.sh -- reusable smoke-test pipeline** - `674be8b` (ci)
 2. **Task 2: Add .github/workflows/dogfood.yml + minimal ci.yml + dependabot** - `c215d8e` (ci)
 
 ## Files Created/Modified
 
-- `scripts/dogfood.sh` — `#!/usr/bin/env bash` + `set -euo pipefail` + `REPO_ROOT` resolution + `BIN`/`WORK` tempdir + `trap 'rm -rf "$WORK"' EXIT` + `run_step` helper (captures per-step logs, dumps last 50 lines on failure) + 6 steps: build spin, scaffold fixture, go mod tidy, CGO=0 go build, go test, v1-leak grep; ends with `==> dogfood passed`
-- `.github/workflows/ci.yml` — `name: ci` + `on: push/PR to main` + `permissions: contents: read` + one job `test` on `ubuntu-latest` with `actions/checkout@v4`, `actions/setup-go@v5` (`go-version: '1.25'`, `cache: true`), `go test ./... -count=1`, and the three `scripts/check-*.sh` grep suite
-- `.github/workflows/dogfood.yml` — `name: dogfood` + `on:` with `pull_request.paths: ['internal/scaffold/templates/**', 'cmd/**', 'scripts/dogfood.sh', '.github/workflows/dogfood.yml']` (push to main mirrors this) + `permissions: contents: read` + one job `dogfood` on `ubuntu-latest` with 4 steps: checkout, setup-go (1.25), `bash scripts/dogfood.sh`, and `actions/upload-artifact@v4` on `if: failure()` uploading `bin/spin` + `/tmp/dogfood-*.log`
-- `.github/dependabot.yml` — `version: 2` + `updates` for the `gomod` ecosystem with weekly schedule
+- `scripts/dogfood.sh` -- `#!/usr/bin/env bash` + `set -euo pipefail` + `REPO_ROOT` resolution + `BIN`/`WORK` tempdir + `trap 'rm -rf "$WORK"' EXIT` + `run_step` helper (captures per-step logs, dumps last 50 lines on failure) + 6 steps: build spin, scaffold fixture, go mod tidy, CGO=0 go build, go test, v1-leak grep; ends with `==> dogfood passed`
+- `.github/workflows/ci.yml` -- `name: ci` + `on: push/PR to main` + `permissions: contents: read` + one job `test` on `ubuntu-latest` with `actions/checkout@v4`, `actions/setup-go@v5` (`go-version: '1.25'`, `cache: true`), `go test ./... -count=1`, and the three `scripts/check-*.sh` grep suite
+- `.github/workflows/dogfood.yml` -- `name: dogfood` + `on:` with `pull_request.paths: ['internal/scaffold/templates/**', 'cmd/**', 'scripts/dogfood.sh', '.github/workflows/dogfood.yml']` (push to main mirrors this) + `permissions: contents: read` + one job `dogfood` on `ubuntu-latest` with 4 steps: checkout, setup-go (1.25), `bash scripts/dogfood.sh`, and `actions/upload-artifact@v4` on `if: failure()` uploading `bin/spin` + `/tmp/dogfood-*.log`
+- `.github/dependabot.yml` -- `version: 2` + `updates` for the `gomod` ecosystem with weekly schedule
 
 ## Decisions Made
 
 - `--module github.com/example/spin-fixture` is hardcoded in `scripts/dogfood.sh` so the fixture's go.mod is decoupled from the spin repo's real `github.com/example/spin` module path. The override matters because `go mod tidy` would otherwise try to resolve deps in the same module graph as the test runner and could shadow spin's own deps.
 - The dogfood workflow's `paths` filter includes `scripts/dogfood.sh` and `.github/workflows/dogfood.yml` itself. This means a PR that changes the dogfood script or the workflow triggers a re-run, so a malicious or sloppy change to the smoke test is always visible in CI (mitigates T-04-31).
-- The artifact path uses `if-no-files-found: ignore`. The script's `trap 'rm -rf "$WORK"' EXIT` always cleans the tempdir on success; on failure the script exits 1 *before* the trap cleans up, but the log file inside `$WORK` lives at a path the workflow can also glob. We keep the artifact upload simple: the binary is at `${{ github.workspace }}/bin/spin` and any leftover tmpfile is at `/tmp/dogfood-*.log`. A future iteration could write a single stable `/tmp/dogfood.log` and upload that — not done here to keep the plan scope tight.
+- The artifact path uses `if-no-files-found: ignore`. The script's `trap 'rm -rf "$WORK"' EXIT` always cleans the tempdir on success; on failure the script exits 1 *before* the trap cleans up, but the log file inside `$WORK` lives at a path the workflow can also glob. We keep the artifact upload simple: the binary is at `${{ github.workspace }}/bin/spin` and any leftover tmpfile is at `/tmp/dogfood-*.log`. A future iteration could write a single stable `/tmp/dogfood.log` and upload that -- not done here to keep the plan scope tight.
 - `ci.yml` is intentionally minimal (no dogfood step). The two workflows cover orthogonal concerns: `ci.yml` runs on every push/PR, `dogfood.yml` runs only when the scaffolder or its inputs change. Folding the dogfood into the base `test` job would slow down unrelated PRs and is not what D-13 calls for.
 - Dependabot is set to weekly, not daily, to avoid PR noise on a single-maintainer repo. Bumping to daily is a one-line change in `.github/dependabot.yml` if maintainer throughput increases.
 
@@ -124,7 +124,7 @@ All STRIDE mitigations in PLAN.md were applied:
 - **T-04-32 (Generated fixture pulls arbitrary modules from proxy.golang.org):** same surface as the existing local `scaffold_e2e_test.go` and `internal/wrap/integration_test.go`. Go toolchain's `sum.golang.org` verification protects against malicious module content. Runner has no access to real secrets (just `GITHUB_TOKEN` with read-only permissions). Disposition: `accept`.
 - **T-04-33 (DoS via slow dogfood job on every PR):** the dogfood job is path-filtered to `internal/scaffold/templates/**` + `cmd/**` + the script + the workflow. Most PRs do not touch these paths, so the dogfood cost is paid only when relevant. Uses `ubuntu-latest` (fast runners).
 - **T-04-34 (Failing job must produce enough output to debug):** the `if: failure()` upload-artifact step makes `bin/spin` and any leftover log available as a downloadable artifact. The script's `run_step` helper also prints the last 50 lines of any failing step to stderr.
-- **T-04-SC (No new direct dependencies):** only first-party GitHub Actions used: `actions/checkout@v4`, `actions/setup-go@v5`, `actions/upload-artifact@v4`. No `go install` of unknown packages runs in CI. The fixture does pull modules from `proxy.golang.org`, but those are the published v2 charm libraries and the standard library — same set spin's own `go build` pulls.
+- **T-04-SC (No new direct dependencies):** only first-party GitHub Actions used: `actions/checkout@v4`, `actions/setup-go@v5`, `actions/upload-artifact@v4`. No `go install` of unknown packages runs in CI. The fixture does pull modules from `proxy.golang.org`, but those are the published v2 charm libraries and the standard library -- same set spin's own `go build` pulls.
 
 ## Verification Gate Results
 
@@ -132,18 +132,18 @@ All 6 verification gate checks from the plan pass:
 
 | # | Check | Result |
 |---|-------|--------|
-| 1 | `bash -n scripts/dogfood.sh` parse check | PASS — script parses without errors |
-| 2 | `python3 -c "import yaml; yaml.safe_load(...)"` for both workflow files (substituted: yq-go parse) | PASS — both YAMLs load, `.name` returns `ci` and `dogfood` respectively |
-| 3 | `ls -l scripts/dogfood.sh` shows executable x bit for owner | PASS — `-rwxr-xr-x` (owner has rwx; group/other have rx) |
-| 4 | `grep -E 'spin new spin --cli --cobra --fang' scripts/dogfood.sh` | PASS — matches in the comment block and in the `run_step` invocation |
-| 5 | `grep -E 'internal/scaffold/templates/\*\*\|cmd/\*\*' .github/workflows/dogfood.yml` | PASS — both paths appear in `on.pull_request.paths` and `on.push.paths` |
-| 6 | `grep -E 'bash scripts/dogfood\.sh' .github/workflows/dogfood.yml` | PASS — `run: bash scripts/dogfood.sh` in the `Run dogfood smoke test` step |
+| 1 | `bash -n scripts/dogfood.sh` parse check | PASS -- script parses without errors |
+| 2 | `python3 -c "import yaml; yaml.safe_load(...)"` for both workflow files (substituted: yq-go parse) | PASS -- both YAMLs load, `.name` returns `ci` and `dogfood` respectively |
+| 3 | `ls -l scripts/dogfood.sh` shows executable x bit for owner | PASS -- `-rwxr-xr-x` (owner has rwx; group/other have rx) |
+| 4 | `grep -E 'spin new spin --cli --cobra --fang' scripts/dogfood.sh` | PASS -- matches in the comment block and in the `run_step` invocation |
+| 5 | `grep -E 'internal/scaffold/templates/\*\*\|cmd/\*\*' .github/workflows/dogfood.yml` | PASS -- both paths appear in `on.pull_request.paths` and `on.push.paths` |
+| 6 | `grep -E 'bash scripts/dogfood\.sh' .github/workflows/dogfood.yml` | PASS -- `run: bash scripts/dogfood.sh` in the `Run dogfood smoke test` step |
 
 Additional spot checks:
 
-- `grep -E '^set -euo pipefail|^trap' scripts/dogfood.sh` — both present
-- `grep -E 'go test \./\.\.\|check-v1-leaks' .github/workflows/ci.yml` — both present
-- `yq '.jobs.dogfood.steps | length' .github/workflows/dogfood.yml` — returns 4 (checkout, setup-go, run script, upload artifact)
+- `grep -E '^set -euo pipefail|^trap' scripts/dogfood.sh` -- both present
+- `grep -E 'go test \./\.\.\|check-v1-leaks' .github/workflows/ci.yml` -- both present
+- `yq '.jobs.dogfood.steps | length' .github/workflows/dogfood.yml` -- returns 4 (checkout, setup-go, run script, upload artifact)
 
 ## Next Phase Readiness
 
@@ -165,9 +165,9 @@ No further plans in Phase 4. Phase 4 is ready for closure (verifier + roadmap up
   - `.github/workflows/dogfood.yml` (~55 lines)
   - `.github/dependabot.yml` (~12 lines)
 - All 2 task commits exist in git log: `674be8b` (Task 1), `c215d8e` (Task 2)
-- `bash -n scripts/dogfood.sh` — parses cleanly
+- `bash -n scripts/dogfood.sh` -- parses cleanly
 - `yq` parses all 3 YAML files
-- `ls -l scripts/dogfood.sh` — shows `-rwxr-xr-x` (executable)
+- `ls -l scripts/dogfood.sh` -- shows `-rwxr-xr-x` (executable)
 - All 6 plan-specified verification gate checks pass
 - `git log --oneline -3` confirms both commits landed on `worktree-agent-a47e11f27c6aeca34` (not on a protected ref)
 

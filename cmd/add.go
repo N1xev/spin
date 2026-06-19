@@ -1,32 +1,25 @@
 package cmd
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
-	"github.com/example/spin/internal/registry"
+	"github.com/N1xev/spin/internal/registry"
 )
 
 var addCmd = &cobra.Command{
-	Use:   "add <name>",
-	Short: "Pin a template locally so you can scaffold it without a network",
-	Long: `Pin a template from the registry (or a local path or git URL) so
-` + "`spin new`" + ` can use it offline. Pinned templates are stored in
-~/.config/spin/pinned.json.
+	Use:   "add <spec>",
+	Short: "Pin a template locally for offline use",
+	Long:  "Pin a template (local path or git URL) so `spin new` can use it offline. Pinned templates are stored in ~/.config/spin/pinned.json and cached under ~/.config/spin/templates/.",
+	Example: `  # Pin from a local path (no network)
+  spin add ~/code/templates/go-cli
 
-When the spec is a local path (starts with /, ., or ~) it is added
-without any network call. When the spec is a git URL (http://,
-https://, git@, git://, ssh://) it is shallow-cloned into
-~/.config/spin/templates/. The "user/repo" registry shorthand is
-not yet supported (the public registry is not deployed) — use a
-full git URL or a local path.
+  # Pin from a git URL (shallow-cloned, GIT_TERMINAL_PROMPT=0)
+  spin add https://github.com/me/go-cli-template.git
 
-Examples:
-  spin add /path/to/my-template
-  spin add https://github.com/charmbracelet/spin-charm-api.git
+  # List pinned templates
   spin add --list`,
 	Args:          cobra.MinimumNArgs(0),
 	RunE:          runAdd,
@@ -63,10 +56,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 
 	// Print a human-friendly confirmation that mentions the on-disk
 	// location and the kind of source (cloned git repo vs local).
-	kind := "cloned"
+	kind := "cloned to"
 	if pinned.Version == "local" {
 		kind = "local at"
 	}
-	fmt.Printf("✓ added %s (%s %s)\n", pinned.Name, kind, pinned.LocalPath)
+	printSuccess("added %s (%s %s)", pinned.Name, kind, pinned.LocalPath)
 	return nil
 }

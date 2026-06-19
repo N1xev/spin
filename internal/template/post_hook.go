@@ -6,15 +6,17 @@ import (
 	"os/exec"
 	"text/template"
 
-	"github.com/example/spin/internal/params"
+	"github.com/N1xev/spin/internal/params"
 )
 
-// RunPostHook executes the template's [post] hook (if any) after the
-// files have been written to disk. The command is rendered against
-// the resolved param + flag values (so `{{.project_name}}`
-// interpolates correctly), then run via `sh -c` in dir.
+// RunPostHook executes the template's [[post]] steps (if any) after
+// the files have been written to disk. Each step's `run` is rendered
+// against the resolved param + flag values (so `{{.project_name}}`
+// interpolates correctly), then run via `sh -c` in dir. Steps run
+// in order; the hook stops on the first failure and returns that
+// error (with the failing command and its combined output).
 //
-// If SpinToml.Post.Run is empty, this is a no-op.
+// An empty or missing post section is a no-op.
 //
 // The post-hook runs AFTER files are written, BEFORE the spin.toml
 // is removed from the output directory. This ordering lets the hook
@@ -26,22 +28,25 @@ func RunPostHook(t *Template, values map[string]any, dir string) error {
 	if t == nil || t.SpinToml == nil {
 		return nil
 	}
-	cmdStr := t.SpinToml.Post.Run
-	if cmdStr == "" {
+	steps := t.SpinToml.Post
+	if len(steps) == 0 {
 		return nil
 	}
-	// Unwrap params.Value wrappers so the template sees raw
-	// strings/ints/bools, not the {String Int Bool List Path}
-	// struct dump.
-	rendered, err := renderHook(cmdStr, unwrapValues(values))
-	if err != nil {
-		return fmt.Errorf("post-hook: render: %w", err)
-	}
-	c := exec.Command("sh", "-c", rendered)
-	c.Dir = dir
-	out, err := c.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("post-hook %q failed: %s: %w", rendered, string(out), err)
+	resolved := unwrapValues(values)
+	for i, step := range steps {
+		if step.Run == "" {
+			continue
+		}
+		rendered, err := renderHook(step.Run, resolved)
+		if err != nil {
+			return fmt.Errorf("post-hook step %d: render: %w", i+1, err)
+		}
+		c := exec.Command("sh", "-c", rendered)
+		c.Dir = dir
+		out, err := c.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("post-hook step %d %q failed: %s: %w", i+1, rendered, string(out), err)
+		}
 	}
 	return nil
 }

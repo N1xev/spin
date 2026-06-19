@@ -84,7 +84,7 @@ func TestFangTTYEmitsANSI(t *testing.T) {
 	out, err := run.CombinedOutput()
 	if err != nil {
 		// Nix / restricted-shell environments often fail to exec the
-		// binary through script. Skip rather than fail — the non-TTY
+		// binary through script. Skip rather than fail -- the non-TTY
 		// test (TestFangStyledHelp) already verifies fang is wired.
 		if strings.Contains(string(out), "Permission denied") {
 			t.Skipf("script cannot exec binary in this environment: %v", err)
@@ -96,17 +96,18 @@ func TestFangTTYEmitsANSI(t *testing.T) {
 	}
 }
 
-// TestUnknownFlagSuggestion verifies that `spin new <name> --bubbltea`
-// (typo: missing 'e') returns non-zero and stderr contains the
-// suggestion `--bubbletea`. Cobra's `SuggestionsMinimumDistance = 2`
-// is what enables this; fang styles the suggestion.
-func TestUnknownFlagSuggestion(t *testing.T) {
-	out, exitCode := runSpinExit(t, "new", "myapp", "--bubbltea")
+// TestUnknownSubcommandSuggestion verifies that `spin seach <q>`
+// (typo of `search`) returns non-zero and stderr contains the
+// suggestion `search`. Cobra's `SuggestionsMinimumDistance = 2`
+// applies to subcommand suggestions, which is what the field is
+// actually for in cobra 1.10.x. Fang styles the suggestion.
+func TestUnknownSubcommandSuggestion(t *testing.T) {
+	out, exitCode := runSpinExit(t, "seach", "go")
 	if exitCode == 0 {
-		t.Fatalf("expected non-zero exit for unknown flag; got 0\n%s", out)
+		t.Fatalf("expected non-zero exit for unknown subcommand; got 0\n%s", out)
 	}
-	if !bytes.Contains(out, []byte("--bubbletea")) {
-		t.Errorf("expected suggestion '--bubbletea' in error output; got:\n%s", out)
+	if !bytes.Contains(out, []byte("search")) {
+		t.Errorf("expected suggestion 'search' in error output; got:\n%s", out)
 	}
 }
 

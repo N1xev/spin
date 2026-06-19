@@ -26,8 +26,8 @@ key_findings:
   - "huh v2 constructors are not generic at the Input/Confirm level (NewInput() *Input, NewConfirm() *Confirm) but ARE generic at the Select/MultiSelect level (NewSelect[T comparable]() *Select[T]). Initial draft used NewInput[string]() everywhere; the build flagged the v1-style generic usage."
   - "go mod tidy correctly removes `charm.land/huh/v2` from go.mod when no source file imports it. Task 1 (catalog only) shipped without the dep; the dep landed in Task 3 when huh.go imported it. This is a small deviation from the plan's Task 1 'go get + go mod tidy' instruction, but is the correct Go-mod behavior."
   - "huh v2 fields' internal state (e.g., Option.selected) is not exposed publicly. The form-construction tests had to be limited to skip-when-set predicates and pre-selection helpers, not internal form introspection. .Run()-level tests are TTY-only and deferred to a future test suite using huh v2's WithInput/WithOutput form options."
-  - "Project.Lipgloss is NOT a per-lib bool field — lipgloss lives only in p.Libs. Initial test fixture used `Lipgloss: true` and the build caught it. Per-lib bool fields are only the 9 in boolFlagOverlayMap: Cobra, Fang, Viper, Huh, Glamour, Glow, Wish, Log, Harmonica."
-one_line_summary: "Library catalog (13 charm libs), huh v2 form layer with 8 ask* prompts, Project.AllLibs() union helper, and Fill dispatch — the in-process TUI backend that activates when gum is not on $PATH"
+  - "Project.Lipgloss is NOT a per-lib bool field -- lipgloss lives only in p.Libs. Initial test fixture used `Lipgloss: true` and the build caught it. Per-lib bool fields are only the 9 in boolFlagOverlayMap: Cobra, Fang, Viper, Huh, Glamour, Glow, Wish, Log, Harmonica."
+one_line_summary: "Library catalog (13 charm libs), huh v2 form layer with 8 ask* prompts, Project.AllLibs() union helper, and Fill dispatch -- the in-process TUI backend that activates when gum is not on $PATH"
 ---
 
 # Phase 3 Plan 2: Huh v2 fallback form layer + AllLibs + Fill dispatch
@@ -38,8 +38,8 @@ Plan 01 no-op `Fill` body with a dispatch to `fillWithHuh` and adds
 the supporting infrastructure (Library catalog, AllLibs helper, the
 8 step-by-step form functions).
 
-The plan also adds `*scaffold.Project.AllLibs()` — the union of
-`p.Libs` and the per-lib bools — which is the single source of
+The plan also adds `*scaffold.Project.AllLibs()` -- the union of
+`p.Libs` and the per-lib bools -- which is the single source of
 truth fix for Pitfall 4 in 03-RESEARCH.md (parallel sources of
 truth caused AGENTS.md to omit libs the user enabled via flags).
 
@@ -58,14 +58,14 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
 | Task | Name | Commit | Files |
 |------|------|--------|-------|
 | 1 | Add Library catalog (13 charm libs) + LibsForType | 3c857c9 | internal/prompt/{catalog,catalog_test}.go |
-| 2 | Add Project.AllLibs() — union of p.Libs and per-lib bools | 39194c6 | internal/scaffold/{project,project_test}.go |
-| 3 | Implement huh v2 form layer — 8 ask* functions + fillWithHuh | aa18a53 | go.mod, go.sum, internal/prompt/{huh,huh_test}.go |
+| 2 | Add Project.AllLibs() -- union of p.Libs and per-lib bools | 39194c6 | internal/scaffold/{project,project_test}.go |
+| 3 | Implement huh v2 form layer -- 8 ask* functions + fillWithHuh | aa18a53 | go.mod, go.sum, internal/prompt/{huh,huh_test}.go |
 | 4 | Wire Fill to dispatch to fillWithHuh + nil-guard | 1a4e8d8 | internal/prompt/{prompt,prompt_test}.go |
 
 ## Accomplishments
 
 - **Library catalog** (catalog.go): `Library{Name, Display, DefaultFor, AlwaysOn}`,
-  `LibCatalog` (13 entries — bubbletea, bubbles, cobra, fang, glamour,
+  `LibCatalog` (13 entries -- bubbletea, bubbles, cobra, fang, glamour,
   glow, harmonica, huh, lipgloss, log, modifiers, viper, wish),
   `LibsForType(typ)` (variant defaults; "all" is the union of tui+cli),
   `DefaultLibsFor` alias, `libBoolMirror` (Name → field name for the
@@ -102,21 +102,21 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
 ## Files Created/Modified
 
 ### Created
-- `internal/prompt/catalog.go` — Library struct, LibCatalog, LibsForType, DefaultLibsFor, libBoolMirror
-- `internal/prompt/catalog_test.go` — TestLibCatalog_UniqueNames, _Sorted, TestLibsForType, TestDefaultLibsFor
-- `internal/prompt/huh.go` — 8 ask* functions, fillWithHuh, preSelectedLibs, setBoolFieldByName, templateOptionsFor
-- `internal/prompt/huh_test.go` — Skip-when-set tests, preSelectedLibs tests, templateOptionsFor tests, setBoolFieldByName test
-- `internal/scaffold/project_test.go` — TestProject_AllLibs_* (5 cases)
+- `internal/prompt/catalog.go` -- Library struct, LibCatalog, LibsForType, DefaultLibsFor, libBoolMirror
+- `internal/prompt/catalog_test.go` -- TestLibCatalog_UniqueNames, _Sorted, TestLibsForType, TestDefaultLibsFor
+- `internal/prompt/huh.go` -- 8 ask* functions, fillWithHuh, preSelectedLibs, setBoolFieldByName, templateOptionsFor
+- `internal/prompt/huh_test.go` -- Skip-when-set tests, preSelectedLibs tests, templateOptionsFor tests, setBoolFieldByName test
+- `internal/scaffold/project_test.go` -- TestProject_AllLibs_* (5 cases)
 
 ### Modified
-- `go.mod` / `go.sum` — added `charm.land/huh/v2 v2.0.3` direct + 30+ transitive deps
-- `internal/scaffold/project.go` — added `"sort"` import, added `AllLibs()` method
-- `internal/prompt/prompt.go` — replaced no-op Fill body with fillWithHuh dispatch; added nil-guard; updated package doc
-- `internal/prompt/prompt_test.go` — replaced TestFillNoop with TestFill_NoInteractiveReturns and TestFill_NilProject; updated file header comment
+- `go.mod` / `go.sum` -- added `charm.land/huh/v2 v2.0.3` direct + 30+ transitive deps
+- `internal/scaffold/project.go` -- added `"sort"` import, added `AllLibs()` method
+- `internal/prompt/prompt.go` -- replaced no-op Fill body with fillWithHuh dispatch; added nil-guard; updated package doc
+- `internal/prompt/prompt_test.go` -- replaced TestFillNoop with TestFill_NoInteractiveReturns and TestFill_NilProject; updated file header comment
 
 ## Decisions Made
 
-1. **`huh.NewInput()` not `huh.NewInput[string]()`** — huh v2's
+1. **`huh.NewInput()` not `huh.NewInput[string]()`** -- huh v2's
    `NewInput()` and `NewConfirm()` are not generic (they return
    `*huh.Input` and `*huh.Confirm`). The v1-style `NewInput[string]()`
    syntax used in the 03-RESEARCH.md examples is not valid for
@@ -126,7 +126,7 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
    research example blindly; the build caught it and the code was
    corrected.
 
-2. **`go.mod` deferred to Task 3, not Task 1** — Task 1 (catalog)
+2. **`go.mod` deferred to Task 3, not Task 1** -- Task 1 (catalog)
    does not import huh v2. `go mod tidy` correctly removes the dep
    from go.mod when nothing imports it. The plan's "go get +
    go mod tidy in Task 1" instruction is a small mis-order: the
@@ -136,7 +136,7 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
    result (charm.land/huh/v2 is in go.mod by plan end).
 
 3. **`LibsForType("all")` returns the union of tui + cli defaults**
-   — the plan says `DefaultFor` is a single variant string ("tui",
+   -- the plan says `DefaultFor` is a single variant string ("tui",
    "cli", "all", or ""), and `LibsForType("all")` should "contain
    all three" (bubbletea, cobra, fang). With single-value
    `DefaultFor`, no entry would match "all" unless I special-case
@@ -145,7 +145,7 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
    the union). The special case is one line in `LibsForType` and
    is documented.
 
-4. **test for `Project.Lipgloss`** — initial draft of
+4. **test for `Project.Lipgloss`** -- initial draft of
    `TestPreSelectedLibs_FlagSet` used `Lipgloss: true` to simulate
    a --lipgloss flag. But `Lipgloss` is NOT a per-lib bool field
    (it's only in `p.Libs`). The 9 per-lib bools are Cobra, Fang,
@@ -153,13 +153,13 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
    rewritten to use `Libs: []string{"lipgloss"}` instead.
 
 5. **`preSelectedLibs` returns a non-nil empty slice for zero
-   Project** — consistent with `AllLibs()`. The initial
+   Project** -- consistent with `AllLibs()`. The initial
    `var out []string` returned nil; the test caught it and the
    function was changed to `out := []string{}`. This makes the
    range-over-result idiom safe without nil-checks (mirrors the
    `slices.Sort` invariant that templates assume).
 
-6. **Form construction tests, not .Run() tests** — huh v2's
+6. **Form construction tests, not .Run() tests** -- huh v2's
    `Option.selected` field is private; the public API does not
    expose the pre-selection state. .Run()-level tests need a TTY
    (or a test program with `WithInput`/`WithOutput` form options).
@@ -168,7 +168,7 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
    tests (skip predicates, pre-selected sets). The TTY-only tests
    are deferred to a future suite (documented in huh_test.go).
 
-7. **`Fill` adds a nil-guard before dispatch** — `Fill(nil)`
+7. **`Fill` adds a nil-guard before dispatch** -- `Fill(nil)`
    returns nil without panic. This is defensive: `cmd/new.go`
    calls `prompt.Fill(p)` with a non-nil `p` after `ResolveFlags`,
    but other callers (tests, future spin subcommands) might pass
@@ -182,7 +182,7 @@ truth caused AGENTS.md to omit libs the user enabled via flags).
 
 **Issue:** The plan's action template and 03-RESEARCH.md Example 5
 show `huh.NewInput[string]()`. In huh v2, `NewInput` and `NewConfirm`
-are NOT generic — they return `*huh.Input` and `*huh.Confirm` with
+are NOT generic -- they return `*huh.Input` and `*huh.Confirm` with
 `Value(*string)` and `Value(*bool)` respectively. `NewSelect` and
 `NewMultiSelect` ARE generic (`NewSelect[T comparable]()`, etc.).
 
@@ -220,7 +220,7 @@ goal is achieved).
 
 **Issue:** Initial `TestPreSelectedLibs_FlagSet` fixture used
 `Lipgloss: true` to simulate a --lipgloss flag. But `Project`
-has no `Lipgloss` field — lipgloss lives only in `p.Libs`. The
+has no `Lipgloss` field -- lipgloss lives only in `p.Libs`. The
 9 per-lib bools are Cobra, Fang, Viper, Huh, Glamour, Glow,
 Wish, Log, Harmonica.
 
@@ -287,19 +287,19 @@ pre-selected, matching the `AllLibs()` invariant.
 - `go test ./cmd/...` all pass (TestNew, TestFang*, TestUnknown, TestVersion, TestRootCmd)
 - `gofumpt -l internal/prompt/ internal/scaffold/project.go internal/scaffold/project_test.go` clean
 - `grep -nR "github.com/charmbracelet/bubbletea\|github.com/charmbracelet/huh" --include="*.go" internal/prompt/` returns no matches (charm v2 paths only)
-- `go test ./... -count=1 -timeout 120s -short` — all packages pass except the pre-existing `TestFmt_GofumptMissing_NoStrict` (environment-dependent: this test fails when gofumpt is installed in $PATH. Per Plan 01's note, it was failing at the base commit too. Not a regression from this plan.)
+- `go test ./... -count=1 -timeout 120s -short` -- all packages pass except the pre-existing `TestFmt_GofumptMissing_NoStrict` (environment-dependent: this test fails when gofumpt is installed in $PATH. Per Plan 01's note, it was failing at the base commit too. Not a regression from this plan.)
 
 ## Known Stubs
 
 None. Plan 02 completes the huh v2 backend and the AllLibs helper.
-The `prompt.Fill` is no longer a no-op — it dispatches to
+The `prompt.Fill` is no longer a no-op -- it dispatches to
 `fillWithHuh` which implements the 8-step UI-SPEC prompt sequence.
 
 The remaining stub is the gum backend, which Plan 03 adds
 (at the bottom of `Fill`, before the `return fillWithHuh(p)` line).
 
 The `.Run()`-level huh form tests are deferred (documented in
-huh_test.go header comment) — they require a TTY or a
+huh_test.go header comment) -- they require a TTY or a
 `tea.WithInput`/`tea.WithOutput` test-double setup that is out
 of scope for the unit suite. The form-construction smoke tests
 catch the most likely regression (constructor signature changes).
@@ -355,8 +355,8 @@ catch the most likely regression (constructor signature changes).
 
 ```
 1a4e8d8 feat(03-02): wire Fill to dispatch to fillWithHuh + nil-guard
-aa18a53 feat(03-02): implement huh v2 form layer — 8 ask* functions + fillWithHuh
-39194c6 feat(03-02): add Project.AllLibs() — union of p.Libs and per-lib bools
+aa18a53 feat(03-02): implement huh v2 form layer -- 8 ask* functions + fillWithHuh
+39194c6 feat(03-02): add Project.AllLibs() -- union of p.Libs and per-lib bools
 3c857c9 feat(03-02): add Library catalog (13 charm libs) + LibsForType
 ```
 

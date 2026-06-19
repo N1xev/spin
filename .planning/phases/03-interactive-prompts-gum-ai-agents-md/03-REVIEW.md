@@ -85,14 +85,14 @@ The most material findings are in the concurrency/testability story (mutable pac
 
 **Files:** `internal/prompt/prompt.go:93, 100`, `internal/prompt/gum.go:47, 58`
 **Issue:** The prompt package exposes four package-level mutable variables as test seams:
-- `gumLookPath` (prompt.go:93) — reassigned per-test in `prompt_backend_test.go`
-- `gumVersionCheck` (prompt.go:100) — reassigned per-test
-- `gumRunner` (gum.go:47) — reassigned per-test in `gum_test.go`
-- `gumCtx` (gum.go:58) — swapped by `fillWithGum` at entry and restored via `defer`
+- `gumLookPath` (prompt.go:93) -- reassigned per-test in `prompt_backend_test.go`
+- `gumVersionCheck` (prompt.go:100) -- reassigned per-test
+- `gumRunner` (gum.go:47) -- reassigned per-test in `gum_test.go`
+- `gumCtx` (gum.go:58) -- swapped by `fillWithGum` at entry and restored via `defer`
 
 The `gumCtx` swap is especially subtle: `fillWithGum` mutates the global during a 5-minute window. If two tests in the same package invoke `fillWithGum` concurrently, one test's `prevCtx` save/restore would clobber the other's. All current tests in `gum_test.go` and `prompt_backend_test.go` are safe because none of them use `t.Parallel()`, but the global pattern makes that contract implicit. A future maintainer adding `t.Parallel()` to a `fillWithGum`-driven test would introduce a data race that would not surface until CI parallelism increased.
 
-**Fix:** Move the seams onto a struct (e.g. `type promptDeps struct { lookPath func(string)(string,error); versionCheck func(string) error; runner func(context.Context, ...string) (string, error) }`) and have the prompt functions take a `*promptDeps` receiver or read it from a per-`Fill` context. For `gumCtx`, store the context on the local call stack only — there is no need for a package-level mutable var since the wrappers (`gumChoose`, `gumInput`, etc.) already capture it via closure when they call `gumRunner(gumCtx, args...)`. Convert the wrappers to take a `ctx context.Context` parameter and pass it through, eliminating the global entirely.
+**Fix:** Move the seams onto a struct (e.g. `type promptDeps struct { lookPath func(string)(string,error); versionCheck func(string) error; runner func(context.Context, ...string) (string, error) }`) and have the prompt functions take a `*promptDeps` receiver or read it from a per-`Fill` context. For `gumCtx`, store the context on the local call stack only -- there is no need for a package-level mutable var since the wrappers (`gumChoose`, `gumInput`, etc.) already capture it via closure when they call `gumRunner(gumCtx, args...)`. Convert the wrappers to take a `ctx context.Context` parameter and pass it through, eliminating the global entirely.
 
 ## Warnings
 

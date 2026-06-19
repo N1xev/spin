@@ -83,7 +83,7 @@ The 2 critical code review findings are acknowledged as advisory, not blockers:
 | BC-02   | `spin new <name>` (no ecosystem) routes to charm with one-time deprecation notice            | ✓ VERIFIED | `cmd/new.go:170-172` `printDeprecationNotice(); return runLegacy(cmd, args)`. `deprecationPrinted` bool guard. |
 | BC-03   | `spin build/test/vet/fmt/lint` print deprecation notice suggesting `spin run <task>` but still execute | ✓ VERIFIED | `cmd/deprecate.go:20-24,26-53` PreRun hook + `deprecateForward` calls `r.Run(...)`. Behavioral: `spin build` printed `⚠  'spin build' is deprecated; use 'spin run build' instead (will be removed in v3.0)` and ran. |
 
-**Coverage:** 36/36 (ECO-01..12 = 12, TPL-12..18 = 7, RUN-09..14 = 6, REG-05..08 = 4, BC-01..03 = 3) — total 32 unique IDs, all satisfied.
+**Coverage:** 36/36 (ECO-01..12 = 12, TPL-12..18 = 7, RUN-09..14 = 6, REG-05..08 = 4, BC-01..03 = 3) -- total 32 unique IDs, all satisfied.
 
 ### Required Artifacts (verified against PLAN frontmatter)
 
@@ -122,7 +122,7 @@ The 2 critical code review findings are acknowledged as advisory, not blockers:
 | `cmd/run.go` | `defaultSourceChain` includes ecosystem tasks | ✓ VERIFIED | `sources.NewEcosystemTasks(defaultRegistry().All())` at Order=5. JSON routing for `--list --json` and `--explain --json`. |
 | `internal/runner/source.go` | Runner exposes --list, --explain, resolves by name; merge order stable | ✓ VERIFIED | `Task` struct with `Env []string`. `merge` picks higher-Order. |
 | `internal/runner/sources/fallback.go` | Hardcoded go/cargo/pytest/deno fallbacks | ✓ VERIFIED | Cargo tasks appear in `fallback:go.mod` when no Cargo.toml-aware source matches; otherwise the ecosystem source wins. |
-| `internal/runner/runner_test.go` | 6 unit tests | ✓ VERIFIED | SourcePrecedence, Resolve_NotFound, List_EmptyDir, Explain_ShowsCommand, List_ColumnAlignment, Merge_DedupByName — all pass. |
+| `internal/runner/runner_test.go` | 6 unit tests | ✓ VERIFIED | SourcePrecedence, Resolve_NotFound, List_EmptyDir, Explain_ShowsCommand, List_ColumnAlignment, Merge_DedupByName -- all pass. |
 | `internal/runner/sources/ecosystem_test.go` | End-to-end test for ecosystemTasks source | ✓ VERIFIED | `TestEcosystemTasks_RustBeatsFallback` (plus 3 more). |
 
 ### Key Link Verification
@@ -143,10 +143,10 @@ The 2 critical code review findings are acknowledged as advisory, not blockers:
 
 | Artifact | Data Variable | Source | Produces Real Data | Status |
 | -------- | ------------- | ------ | ------------------ | ------ |
-| `cmd/run.go:runRun` `r.Run(ctx, taskName, ...)` | `taskName` from `args[0]` | CLI args (cobra `ArbitraryArgs`) | Yes — `spin run build` in a Cargo.toml dir resolves to `cargo build` (from `internal/ecosystems/rust/tasks.go` via `internal/runner/sources/ecosystem.go`). `r.All()` collects from all `Detect`-matching sources and `merge` picks the higher-Order. | ✓ FLOWING |
-| `cmd/add.go:runAdd` `c.Add(args[0])` | `args[0]` (spec) | CLI args | Yes — `client.Add` either `os.Symlink` to a local path (real filesystem) or `exec.Command("git", "clone", ...)` (real network). Returns `*Pinned` with `LocalPath` set to the on-disk path. | ✓ FLOWING |
-| `cmd/list.go:execList` `c.ListPinned()` | pinned entries | `~/.config/spin/pinned.json` | Yes — JSON file is read on every call; new pins are visible immediately. | ✓ FLOWING |
-| `internal/template/template.go:RenderToWithPost` `Render(values)` | `values` map | CLI flags + huh form (or defaults) | Yes — `text/template` interpolates `{{.project_name}}` to the actual project name. | ✓ FLOWING |
+| `cmd/run.go:runRun` `r.Run(ctx, taskName, ...)` | `taskName` from `args[0]` | CLI args (cobra `ArbitraryArgs`) | Yes -- `spin run build` in a Cargo.toml dir resolves to `cargo build` (from `internal/ecosystems/rust/tasks.go` via `internal/runner/sources/ecosystem.go`). `r.All()` collects from all `Detect`-matching sources and `merge` picks the higher-Order. | ✓ FLOWING |
+| `cmd/add.go:runAdd` `c.Add(args[0])` | `args[0]` (spec) | CLI args | Yes -- `client.Add` either `os.Symlink` to a local path (real filesystem) or `exec.Command("git", "clone", ...)` (real network). Returns `*Pinned` with `LocalPath` set to the on-disk path. | ✓ FLOWING |
+| `cmd/list.go:execList` `c.ListPinned()` | pinned entries | `~/.config/spin/pinned.json` | Yes -- JSON file is read on every call; new pins are visible immediately. | ✓ FLOWING |
+| `internal/template/template.go:RenderToWithPost` `Render(values)` | `values` map | CLI flags + huh form (or defaults) | Yes -- `text/template` interpolates `{{.project_name}}` to the actual project name. | ✓ FLOWING |
 
 ### Behavioral Spot-Checks
 
@@ -197,7 +197,7 @@ No BLOCKER anti-patterns found. No `TBD/FIXME/XXX` debt markers found in phase 5
 
 The 2 critical code review findings (CR-01, CR-02) from `05-REVIEW.md` are flagged here as advisory, not blockers:
 
-1. **CR-01 (Template.Render walk abort):** The `filepath.Walk` in `internal/template/template.go:54-82` returns any `walkErr` from the walk function, which means a single broken symlink in a template's `_base/` aborts the entire render. Templates don't normally ship broken symlinks, and the live test paths all pass. The recommended fix is to filter `walkErr` (return `nil` for transient stat failures). This is a robustness improvement, not a correctness regression — the same defensive pattern is already in the registry client's atomic-write.
+1. **CR-01 (Template.Render walk abort):** The `filepath.Walk` in `internal/template/template.go:54-82` returns any `walkErr` from the walk function, which means a single broken symlink in a template's `_base/` aborts the entire render. Templates don't normally ship broken symlinks, and the live test paths all pass. The recommended fix is to filter `walkErr` (return `nil` for transient stat failures). This is a robustness improvement, not a correctness regression -- the same defensive pattern is already in the registry client's atomic-write.
 
 2. **CR-02 (RunPostHook empty-dir guard):** `internal/template/post_hook.go:25-47` does not validate that `dir != ""`. An empty `dir` causes `c.Dir = ""`, which Go treats as "use the current process's working directory" rather than failing loudly. The live caller (`cmd/new_charm.go:147`) passes `ctx.Name` which is always non-empty in practice. The recommended fix is `if dir == "" { return fmt.Errorf("post-hook: dir is required") }`. This is a defense-in-depth improvement; current code paths are safe.
 

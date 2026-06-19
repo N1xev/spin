@@ -15,7 +15,7 @@ const DefaultIndexURL = "https://registry.spin.invalid/v1"
 
 // ErrNotDeployed is returned by Client methods when the registry
 // server is unreachable (DNS failure, connection refused, timeout, or
-// HTTP 404). The CLI surfaces this as a friendly message — never as
+// HTTP 404). The CLI surfaces this as a friendly message -- never as
 // a stack trace. The name reflects v2.0: the server is not yet
 // deployed, so this is a transient condition, not a missing
 // implementation.

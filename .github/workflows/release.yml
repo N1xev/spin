@@ -1,0 +1,51 @@
+# .github/workflows/release.yml
+#
+# Triggered by pushing a v* tag (e.g. v0.2.0). Builds multi-arch
+# binaries, attaches them to a GitHub release, and opens a PR on
+# the homebrew-tap repo if one is configured.
+#
+# To cut a release:
+#   git tag v0.2.0
+#   git push origin v0.2.0
+# The release.yml workflow will run; the .goreleaser.yaml config
+# drives the rest.
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Sanity build
+        # Catches the obvious "main doesn't compile" failure before
+        # goreleaser spends 5 minutes on a doomed release.
+        run: go build ./...
+
+      - name: Sanity test
+        run: go test ./... -count=1
+
+      - name: Install goreleaser
+        run: |
+          go install github.com/goreleaser/goreleaser/v2/cmd/goreleaser@latest
+
+      - name: Run goreleaser
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          goreleaser release --clean

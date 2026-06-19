@@ -23,11 +23,11 @@ requirements:
   - AI-03
   - AI-04
 key_findings:
-  - "pflag v1.0.6 (pinned in go.mod) does not expose Flag.Aliases for long-form aliases. The plan's stated approach of `pf.Lookup(\"ai\").Aliases = []string{\"agents\"}` failed to compile; the same workaround as Plan 03-01's --no-interactive / --yes / --batch was used — register both flags and OR them into p.AI in ResolveFlags. The Usage string still mentions the alias for help output."
+  - "pflag v1.0.6 (pinned in go.mod) does not expose Flag.Aliases for long-form aliases. The plan's stated approach of `pf.Lookup(\"ai\").Aliases = []string{\"agents\"}` failed to compile; the same workaround as Plan 03-01's --no-interactive / --yes / --batch was used -- register both flags and OR them into p.AI in ResolveFlags. The Usage string still mentions the alias for help output."
   - "text/template's `{{- end}}` (strip-before) consumes the blank line INSIDE the loop body, collapsing consecutive library blocks into a single paragraph. `{{end -}}` (strip-after) preserves the blank line between blocks while still eating the newline before `## Extending`. The right form for the AGENTS.md template was `{{end -}}`."
   - "The text/template engine refuses to parse `{{ if has<Lib> . }}` because `<` is the less-than operator inside an action. The plan's prose contained this template-action-shaped text. The fix was to rewrite the body as `per-lib \\`has<Lib>\\` blocks` (with backticks for visual separation) so the `<` is no longer adjacent to `{{`."
   - "runSpinScaffold's existing repoRoot helper used the fixed `wd/../..` path, which broke when the helper was called multiple times in the same test (the second call's chdir made cwd point to a /tmp/ tempdir, then the walk-up failed). The fix was twofold: (1) repoRoot now walks up looking for go.mod, and (2) the helper caches the captured path via sync.Once so the first call wins regardless of cwd. This unblocks TestIntegrationScaffold_AGENTSmd_Determinism which calls runSpinScaffold twice in one test."
-  - "The original determinism test scaffolded two DIFFERENT project names (`determinism-a` vs `determinism-b`) and asserted byte-identical AGENTS.md — but the project name is interpolated into the file body, so the assertion would always fail. The fix: use the same project name in both scaffolds (different temp dirs, same `<name>`). The contract is \"same inputs → same outputs\", not \"any inputs → same outputs\"."
+  - "The original determinism test scaffolded two DIFFERENT project names (`determinism-a` vs `determinism-b`) and asserted byte-identical AGENTS.md -- but the project name is interpolated into the file body, so the assertion would always fail. The fix: use the same project name in both scaffolds (different temp dirs, same `<name>`). The contract is \"same inputs → same outputs\", not \"any inputs → same outputs\"."
 one_line_summary: "AGENTS.md opt-in via --ai (alias --agents) with a 15-entry charm library lookup table, byte-identical deterministic output, and integration test proving two scaffolds with the same flags produce identical files"
 ---
 
@@ -50,8 +50,8 @@ restructure. All other charm lib wiring stays inlined as
 overlay directories because they are project-root files
 unrelated to a specific variant.
 
-The FuncMap gains two helpers — `charmLibInfo(name, field)` for
-per-library metadata and `allLibs(p)` for sorted iteration — and
+The FuncMap gains two helpers -- `charmLibInfo(name, field)` for
+per-library metadata and `allLibs(p)` for sorted iteration -- and
 the 15-entry library lookup table is the canonical source of
 truth for module path, purpose, extending guidance, and
 example code.
@@ -211,12 +211,12 @@ example code.
 
 ## Verification
 
-- `go build ./...` — clean
-- `go vet ./...` — clean
-- `go test ./internal/scaffold/ -run 'TestAGENTSmd|TestCharmLibInfo|TestAllLibsFuncMap' -v` — 8/8 pass
-- `go test ./internal/scaffold/ -run TestIntegrationScaffold -v -timeout 600s` — 12/12 pass
+- `go build ./...` -- clean
+- `go vet ./...` -- clean
+- `go test ./internal/scaffold/ -run 'TestAGENTSmd|TestCharmLibInfo|TestAllLibsFuncMap' -v` -- 8/8 pass
+- `go test ./internal/scaffold/ -run TestIntegrationScaffold -v -timeout 600s` -- 12/12 pass
   (8 original + 4 new AGENTS.md tests)
-- `go test -count=1 -timeout 300s ./internal/scaffold/... ./internal/prompt/... ./cmd/...` — all pass
+- `go test -count=1 -timeout 300s ./internal/scaffold/... ./internal/prompt/... ./cmd/...` -- all pass
 - `gofumpt -l` reports no new findings on changed files
   (pre-existing findings in template.go and integration_test.go
   are present on the unmodified codebase and are not regressions)
@@ -239,7 +239,7 @@ example code.
   now auto-discover `AGENTS.md` at the project root and use it
   as context for understanding the generated project structure
   and library conventions. No opt-in or config is required on
-  the assistant side — the file is at the conventional location
+  the assistant side -- the file is at the conventional location
   and uses standard GFM.
 - **Existing `glow` overlay** is the closest analog and proves
   the per-lib overlay pattern still works after Plan 02-05's
@@ -250,16 +250,16 @@ example code.
 ## Files Touched
 
 ### Created
-- `internal/scaffold/templates/lib/ai/AGENTS.md.tmpl` — 35 lines, the AGENTS.md template
-- `internal/scaffold/agents_test.go` — 280 lines, 8 unit tests for AGENTS.md rendering + charmLibInfo + allLibs
+- `internal/scaffold/templates/lib/ai/AGENTS.md.tmpl` -- 35 lines, the AGENTS.md template
+- `internal/scaffold/agents_test.go` -- 280 lines, 8 unit tests for AGENTS.md rendering + charmLibInfo + allLibs
 
 ### Modified
-- `cmd/new.go` — register `--agents` flag alongside `--ai`
-- `internal/scaffold/resolve.go` — OR `--agents` value into `p.AI`
-- `internal/scaffold/resolve_test.go` — register `--agents` in `newResolveCmd`
-- `internal/scaffold/template.go` — add `charmLibInfo`, `allLibs`, `charmLibInfoField`; extend `boolFlagOverlayMap` with `"ai": p.AI`
-- `internal/scaffold/integration_test.go` — add 4 new integration tests + `assertAGENTSmd` helper + `cachedRepoRoot`; update `TestIntegrationScaffold` to pass `--ai`
-- `internal/scaffold/scaffold_e2e_test.go` — fix `repoRoot()` to walk up to `go.mod`
+- `cmd/new.go` -- register `--agents` flag alongside `--ai`
+- `internal/scaffold/resolve.go` -- OR `--agents` value into `p.AI`
+- `internal/scaffold/resolve_test.go` -- register `--agents` in `newResolveCmd`
+- `internal/scaffold/template.go` -- add `charmLibInfo`, `allLibs`, `charmLibInfoField`; extend `boolFlagOverlayMap` with `"ai": p.AI`
+- `internal/scaffold/integration_test.go` -- add 4 new integration tests + `assertAGENTSmd` helper + `cachedRepoRoot`; update `TestIntegrationScaffold` to pass `--ai`
+- `internal/scaffold/scaffold_e2e_test.go` -- fix `repoRoot()` to walk up to `go.mod`
 
 ## Self-Check: PASSED
 

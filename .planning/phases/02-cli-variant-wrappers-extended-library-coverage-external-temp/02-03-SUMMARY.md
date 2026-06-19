@@ -40,7 +40,7 @@ key_findings:
   - 6 lib overlays compile + test clean when their flag is passed
   - --wish adds an `ssh` subcommand (not a keybinding)
   - harmonica stays on github.com path; v1-leak grep per-module allow-list works
-  - glow is a binary (no Go require) — README mentions `glow README.md`
+  - glow is a binary (no Go require) -- README mentions `glow README.md`
   - fang-styled help on /tmp/mycli --help verified
   - 141 sub-tests pass
 one_line_summary: |

@@ -1,4 +1,4 @@
-// Package template handles external templates — git repos containing
+// Package template handles external templates -- git repos containing
 // a spin.toml manifest, a _base/ tree of file overlays, and an
 // optional _post/ hook. Templates are language-agnostic; the CLI
 // resolves the user's params (via internal/params) and renders the
@@ -51,6 +51,12 @@ func Detect(dir string) (*Template, error) {
 // values is the resolved param + flag map. Keys ending in `.Name` are
 // also available as `.Name` for backwards compat with the existing
 // scaffold package.
+//
+// Files whose path (relative to _base/, with the .tmpl extension
+// stripped) matches any glob in t.SpinToml.Exclude are skipped  - 
+// they never reach the output tree. This is how templates opt out
+// of files (e.g. a CI badge, a contributor list) that should stay
+// out of the generated project.
 func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 	out := map[string][]byte{}
 	err := filepath.Walk(t.BaseDir, func(path string, info os.FileInfo, walkErr error) error {
@@ -62,23 +68,42 @@ func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 		}
 		rel, _ := filepath.Rel(t.BaseDir, path)
 		rel = filepath.ToSlash(rel)
+		candidate := stripTmplExt(rel)
+		if isExcluded(candidate, t.SpinToml.Exclude) {
+			return nil
+		}
 		if filepath.Ext(rel) != ".tmpl" {
 			// copy non-templated files verbatim
 			b, err := os.ReadFile(path)
 			if err != nil {
 				return err
 			}
-			out[rel] = b
+			out[candidate] = b
 			return nil
 		}
 		rendered, err := renderFile(path, values)
 		if err != nil {
 			return fmt.Errorf("%s: %w", rel, err)
 		}
-		out[stripTmplExt(rel)] = rendered
+		out[candidate] = rendered
 		return nil
 	})
 	return out, err
+}
+
+// isExcluded reports whether path matches any of the exclude globs.
+// Matching uses filepath.Match semantics (e.g. "*.md", "docs/*") so
+// template authors get the familiar shell-glob behaviour.
+func isExcluded(path string, patterns []string) bool {
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		if ok, err := filepath.Match(p, path); err == nil && ok {
+			return true
+		}
+	}
+	return false
 }
 
 // RenderTo writes the rendered files to dest. Same path-traversal

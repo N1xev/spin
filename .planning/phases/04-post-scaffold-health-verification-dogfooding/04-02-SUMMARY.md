@@ -31,13 +31,13 @@ key-files:
   modified: []
 
 key-decisions:
-  - "Did NOT use RunWithFallback (no sensible fallback for a linter — silently running `go vet` would downgrade the user's lint signal without consent)"
-  - "No spin-specific flags — the lint command's flag set mirrors golangci-lint's by passing through (per CONTEXT Claude's Discretion)"
+  - "Did NOT use RunWithFallback (no sensible fallback for a linter -- silently running `go vet` would downgrade the user's lint signal without consent)"
+  - "No spin-specific flags -- the lint command's flag set mirrors golangci-lint's by passing through (per CONTEXT Claude's Discretion)"
   - "Install hint printed to stderr (not stdout) so it does not pollute piped tool output"
   - "Returned error from Lint is `fmt.Errorf` (not the underlying exec.LookPath err) so the cobra RunE surfaces a clean 'golangci-lint not found' message"
 
 patterns-established:
-  - "Pattern: thin tool-wrapper subcommand = `internal/wrap/<tool>.go` (detect+exec) + `cmd/<tool>.go` (ArbitraryArgs RunE) — add no spin-specific flags unless the tool needs spin-only behavior"
+  - "Pattern: thin tool-wrapper subcommand = `internal/wrap/<tool>.go` (detect+exec) + `cmd/<tool>.go` (ArbitraryArgs RunE) -- add no spin-specific flags unless the tool needs spin-only behavior"
   - "Pattern: test argv-passthrough with a shell-shim in a tempdir; the shim writes its $@ to a marker file for assertion"
 
 requirements-completed: [HLTH-01]
@@ -61,8 +61,8 @@ status: complete
 
 ## Accomplishments
 
-- `wrap.Lint(args)` — detects `golangci-lint` on $PATH, exec's it with argv passthrough, or returns a non-nil error + one-line install hint on stderr when missing
-- `spin lint` cobra subcommand — `ArbitraryArgs`, RunE forwards to `wrap.Lint`, Long help text embeds the install recipe so `spin lint --help` doubles as a recovery path
+- `wrap.Lint(args)` -- detects `golangci-lint` on $PATH, exec's it with argv passthrough, or returns a non-nil error + one-line install hint on stderr when missing
+- `spin lint` cobra subcommand -- `ArbitraryArgs`, RunE forwards to `wrap.Lint`, Long help text embeds the install recipe so `spin lint --help` doubles as a recovery path
 - 9 new unit tests across 2 packages, all passing
 - End-to-end verified: `spin lint version` exec's `golangci-lint version` and shows `golangci-lint has version v1.64.8`; `spin lint --help` renders fang-styled help with the install command
 
@@ -73,10 +73,10 @@ status: complete
 
 ## Files Created/Modified
 
-- `internal/wrap/lint.go` — `Lint(args []string) error` + `golangciLintInstallHint` const
-- `internal/wrap/lint_test.go` — 4 tests: not-on-path error, stderr hint content, argv passthrough via shell shim, const shape regression
-- `cmd/lint.go` — `lintCmd` (`ArbitraryArgs`, RunE forwards to wrap.Lint) + `init()` registration
-- `cmd/lint_test.go` — 5 tests: registration by pointer identity, Use mentions "golangci-lint args", Long mentions install hint, RunE wiring, rendered help contains install recipe
+- `internal/wrap/lint.go` -- `Lint(args []string) error` + `golangciLintInstallHint` const
+- `internal/wrap/lint_test.go` -- 4 tests: not-on-path error, stderr hint content, argv passthrough via shell shim, const shape regression
+- `cmd/lint.go` -- `lintCmd` (`ArbitraryArgs`, RunE forwards to wrap.Lint) + `init()` registration
+- `cmd/lint_test.go` -- 5 tests: registration by pointer identity, Use mentions "golangci-lint args", Long mentions install hint, RunE wiring, rendered help contains install recipe
 
 ## Decisions Made
 
@@ -84,16 +84,16 @@ None - plan executed exactly as written.
 
 ## Deviations from Plan
 
-None - the plan called for 4 tests in `cmd/lint_test.go`; 5 were added (the 5th is a parallel of `TestDoctorCmd_Help` in `cmd/doctor_test.go` — a regression catcher for the help-text rendering). No deviation from the spec, only an additional test.
+None - the plan called for 4 tests in `cmd/lint_test.go`; 5 were added (the 5th is a parallel of `TestDoctorCmd_Help` in `cmd/doctor_test.go` -- a regression catcher for the help-text rendering). No deviation from the spec, only an additional test.
 
 ## Threat Model Coverage
 
 All five STRIDE entries applied:
 
 - **T-04-09 (Tampering / argv forwarding):** `runTool` uses `exec.Cmd` with no shell interpolation. golangci-lint handles its own flag validation. The argv passthrough is exercised by `TestLint_ArgvPassThrough`.
-- **T-04-10 (Info Disclosure / install command on stderr):** accepted — the recipe is the canonical public hint, also published in CLAUDE.md.
+- **T-04-10 (Info Disclosure / install command on stderr):** accepted -- the recipe is the canonical public hint, also published in CLAUDE.md.
 - **T-04-11 (Elevation / env):** `runTool` does not modify inherited env (PATH, GOPATH, HOME all pass through).
-- **T-04-12 (DoS / hang):** accepted — users can pass `--timeout` themselves.
+- **T-04-12 (DoS / hang):** accepted -- users can pass `--timeout` themselves.
 - **T-04-13 (Repudiation / non-zero exit):** `Lint` returns the error directly; cobra RunE propagates to fang. `TestLintCmd_RunEForwardsArgs` exercises the path.
 
 ## Verification Gate Results
@@ -115,7 +115,7 @@ All five STRIDE entries applied:
 ## Next Phase Readiness
 
 - HLTH-01 now has two paths to the lint capability: direct (`spin lint`) and aggregated via `spin doctor --deep` (Plan 04-01).
-- Other Phase 4 plans (`spin update`, dogfood CI) are unblocked — `spin lint` does not depend on or affect them.
+- Other Phase 4 plans (`spin update`, dogfood CI) are unblocked -- `spin lint` does not depend on or affect them.
 - The `golangciLintInstallHint` const in `internal/wrap/lint.go` is duplicated as a string literal in `internal/doctor/checks.go`'s `DeepLintCheck`. Future work could extract this to a shared package if a third caller appears, but v1 keeps them parallel (avoids the cross-package import the plan calls out).
 
 ---

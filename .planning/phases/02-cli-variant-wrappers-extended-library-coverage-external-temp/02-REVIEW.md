@@ -13,7 +13,7 @@ findings:
 
 ## CRITICAL (5)
 
-### CR-01: `lib/wish/wish.go.tmpl` will not compile — `tea` package not imported
+### CR-01: `lib/wish/wish.go.tmpl` will not compile -- `tea` package not imported
 **File:** `internal/scaffold/templates/lib/wish/wish.go.tmpl`
 **Severity:** critical
 **Category:** generated-code
@@ -146,10 +146,10 @@ Remove the type.
 **File:** `internal/scaffold/templates/_base/go.mod.tmpl`
 **Severity:** info
 **Category:** quality
-Make conditional: `{{- if hasBubbles .}}go 1.25.0{{- else}}go 1.23{{- end}}`. (But 02-01 explicitly killed this branch; restoring it is a 02-01 design reversal — defer.)
+Make conditional: `{{- if hasBubbles .}}go 1.25.0{{- else}}go 1.23{{- end}}`. (But 02-01 explicitly killed this branch; restoring it is a 02-01 design reversal -- defer.)
 
 ## Cluster analysis
 
 WR-03 + CR-02 + CR-03 share one root cause: Phase 2 templates assume the user passed `--cobra`/`--fang` explicitly, but the variant flags should auto-default them (matching the Phase 1 `--tui` → `--bubbletea` pattern). One PR that adds the auto-default block to `ResolveFlags` plus the matching `{{if hasX}}` guards in the templates fixes the entire cluster.
 
-WR-06/07 + IN-05 are test-suite cleanup — Phase 3 should sweep these as part of the test-refactor pass.
+WR-06/07 + IN-05 are test-suite cleanup -- Phase 3 should sweep these as part of the test-refactor pass.

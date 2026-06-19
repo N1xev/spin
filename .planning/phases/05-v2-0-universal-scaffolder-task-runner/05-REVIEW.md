@@ -62,12 +62,12 @@ Phase 5 delivers the v2.0 universal scaffolder end-to-end: rust ecosystem, exter
 
 The defects below are the kinds of things a fresh review pass would catch. Two BLOCKERs:
 
-1. **`Template.Render` ignores files inside directories that happen to fail to walk** — the entire render aborts on the first walk error, including the user-controllable case where a malicious template's `_base/` contains a broken symlink.
-2. **`internal/registry/client.go` `writePinned` temp-file cleanup race** — the cleanup defer can be made to leak the temp file because the `tmp` is created before the deferred cleanup, and `os.Rename` failing would not roll back the explicit `cleanup = false` path. More importantly, `unlink` of the temp file is not guaranteed if the process is killed mid-rename.
+1. **`Template.Render` ignores files inside directories that happen to fail to walk** -- the entire render aborts on the first walk error, including the user-controllable case where a malicious template's `_base/` contains a broken symlink.
+2. **`internal/registry/client.go` `writePinned` temp-file cleanup race** -- the cleanup defer can be made to leak the temp file because the `tmp` is created before the deferred cleanup, and `os.Rename` failing would not roll back the explicit `cleanup = false` path. More importantly, `unlink` of the temp file is not guaranteed if the process is killed mid-rename.
 
 The WARNINGs are concentrated in three areas: (a) the `looksLikeV2Template` heuristic that shares the prefix space with v1 names containing `/`, (b) `cmd/new_extras.go`'s `os.Exit(0)` calls inside `PreRunE` (the cobra contract is "return an error" or "set state"; calling `os.Exit` skips the rest of the command's error-handling and confuses `SilenceUsage: true`), and (c) the `homeDir()` helper in `internal/template/loader.go` that shells out to `sh -c "echo $HOME"` instead of calling `os.UserHomeDir()`.
 
-No path-traversal escape was found in the writeFiles guards. No hardcoded secrets. No unhandled error returns on the hot path. The test coverage is genuinely good — 30+ tests across the new surface, the same-package-vs-external package pattern is correctly applied where needed (runner_test.go in `runner_test`), and the test files are all in scope and free of flakiness (the friendly-failure 1s timeout is correctly enforced via `newShortTimeoutClient`).
+No path-traversal escape was found in the writeFiles guards. No hardcoded secrets. No unhandled error returns on the hot path. The test coverage is genuinely good -- 30+ tests across the new surface, the same-package-vs-external package pattern is correctly applied where needed (runner_test.go in `runner_test`), and the test files are all in scope and free of flakiness (the friendly-failure 1s timeout is correctly enforced via `newShortTimeoutClient`).
 
 ## Critical Issues
 
@@ -99,7 +99,7 @@ A test (`TestTemplate_Render_PartialWalkFailure`) should be added that creates a
 ### CR-02: `Template.Render` does not follow the post-hook's `c.Dir = dir` contract when `dir == ""`
 
 **File:** `internal/template/post_hook.go:40-42`, `internal/template/template.go:115`
-**Issue:** In `RenderToWithPost`, the post-hook is invoked as `RunPostHook(t, values, dest)`. If `dest` is an empty string, `exec.Command` is invoked with `c.Dir = ""`, which Go treats as "use the current process's working directory" — NOT "fail loudly". This means a caller that passes `""` will silently run the post-hook in the wrong directory (the spin binary's cwd), with potentially destructive effects (e.g. `rm -rf` running in `os.Getwd()`).
+**Issue:** In `RenderToWithPost`, the post-hook is invoked as `RunPostHook(t, values, dest)`. If `dest` is an empty string, `exec.Command` is invoked with `c.Dir = ""`, which Go treats as "use the current process's working directory" -- NOT "fail loudly". This means a caller that passes `""` will silently run the post-hook in the wrong directory (the spin binary's cwd), with potentially destructive effects (e.g. `rm -rf` running in `os.Getwd()`).
 
 `cmd/new_charm.go:144` passes `ctx.Name` (the project name) as the dest, so the live code path is fine, but the API contract for `RenderToWithPost` and `RunPostHook` permits a `dest == ""` call. The current `cmd/new_charm.go:147` call IS `template.RunPostHook(tpl, values, ctx.Name)`, which is OK. The dangerous path is any future caller that passes an empty dest, or the case where `ctx.Name` is empty (e.g. an interactive form with no project name entered).
 
@@ -122,7 +122,7 @@ func RunPostHook(t *Template, values map[string]any, dir string) error {
 ### WR-01: `looksLikeV2Template` heuristic causes false positives on v1 names containing `/`
 
 **File:** `cmd/new.go:54-72`, `cmd/new_extras.go:57`
-**Issue:** The v1 template name `"tui-bubbletea"` is the canonical default, but the heuristic `looksLikeV2Template` returns `true` for ANY string containing `/`. If a future v1 template is named with a `/` (e.g. `cli/cobra` or `web/htmx`), the legacy `spin new <name> --template cli/cobra` will be mis-routed to the v2 git-spec branch in `cmd/new_extras.go:57`, calling `dispatchNewCharmWithTemplate` with `cli/cobra` as the template ref. That will then call `client.Add("cli/cobra")`, which (per `internal/registry/client.go:152`) returns a "shorthand not yet supported" error — confusing for the user who meant a v1 template name.
+**Issue:** The v1 template name `"tui-bubbletea"` is the canonical default, but the heuristic `looksLikeV2Template` returns `true` for ANY string containing `/`. If a future v1 template is named with a `/` (e.g. `cli/cobra` or `web/htmx`), the legacy `spin new <name> --template cli/cobra` will be mis-routed to the v2 git-spec branch in `cmd/new_extras.go:57`, calling `dispatchNewCharmWithTemplate` with `cli/cobra` as the template ref. That will then call `client.Add("cli/cobra")`, which (per `internal/registry/client.go:152`) returns a "shorthand not yet supported" error -- confusing for the user who meant a v1 template name.
 
 **Fix:** Whitelist the known v2 URL schemes AND check for v1 template names explicitly:
 
@@ -213,7 +213,7 @@ return Task{}, &ErrNotFound{Name: name}
 ### WR-05: `internal/runner/sources/spinconfig.go:111` `parseTaskInlineTable` does not validate brace balance
 
 **File:** `internal/runner/sources/spinconfig.go:111-146`
-**Issue:** `parseTaskInlineTable` calls `strings.TrimPrefix(body, "{")` and `strings.TrimSuffix(body, "}")` without verifying that those characters actually exist. The caller (`Tasks` at line 86) does pre-check `strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}")`, so the trimming is safe in practice — but a single-line inline table that is itself a `value` inside a multiline string (e.g. an env value containing `{...}` followed by `}`) would have the inner `}` removed by the suffix trim. The `splitTopLevel` helper correctly tracks bracket depth, but the `TrimPrefix`/`TrimSuffix` are applied to the raw input first, and if the value contains an outer `}` they would chew into the value.
+**Issue:** `parseTaskInlineTable` calls `strings.TrimPrefix(body, "{")` and `strings.TrimSuffix(body, "}")` without verifying that those characters actually exist. The caller (`Tasks` at line 86) does pre-check `strings.HasPrefix(raw, "{") && strings.HasSuffix(raw, "}")`, so the trimming is safe in practice -- but a single-line inline table that is itself a `value` inside a multiline string (e.g. an env value containing `{...}` followed by `}`) would have the inner `}` removed by the suffix trim. The `splitTopLevel` helper correctly tracks bracket depth, but the `TrimPrefix`/`TrimSuffix` are applied to the raw input first, and if the value contains an outer `}` they would chew into the value.
 
 In practice, the only inputs are user-controlled `spin.config.toml` files, and the schema is constrained, so this is a theoretical issue. Marking as Warning because the spec accepts `command = "..."` values that can contain anything.
 
@@ -222,9 +222,9 @@ In practice, the only inputs are user-controlled `spin.config.toml` files, and t
 ### WR-06: `internal/ecosystems/rust/validate.go:14-23` `--type` validation rejects all empty strings as "required" but the default is "bin"
 
 **File:** `internal/ecosystems/rust/validate.go:14-23`, `internal/ecosystems/rust/flags.go:11`
-**Issue:** `flags.go` declares `ecosystem.ChoiceFlag("type", "bin", ...)` with the default `"bin"`. The `cmd/new_rust.go:86` alias translation sets `flags["type"] = "bin"` only if a `--bin/--lib/--example` flag is true. If the user runs `spin new rust myapp` with no `--type` and no alias, `ctx.GetString("type")` returns `""` (the zero value), and `validate.go:18` returns "project --type is required (bin, lib, or example)" — but the flag has a default. The default is only applied by `pflag` when the flag is bound to the cobra command and the user did not pass it. The `flags` map constructed in `runNewRust` is built by `cmd.Flags().VisitAll`, so the default IS in the map.
+**Issue:** `flags.go` declares `ecosystem.ChoiceFlag("type", "bin", ...)` with the default `"bin"`. The `cmd/new_rust.go:86` alias translation sets `flags["type"] = "bin"` only if a `--bin/--lib/--example` flag is true. If the user runs `spin new rust myapp` with no `--type` and no alias, `ctx.GetString("type")` returns `""` (the zero value), and `validate.go:18` returns "project --type is required (bin, lib, or example)" -- but the flag has a default. The default is only applied by `pflag` when the flag is bound to the cobra command and the user did not pass it. The `flags` map constructed in `runNewRust` is built by `cmd.Flags().VisitAll`, so the default IS in the map.
 
-So this is actually fine — the default flows through `pflag` into the map. The `case "":` branch is dead. The defensive check is good practice, but the error message is misleading because the default exists.
+So this is actually fine -- the default flows through `pflag` into the map. The `case "":` branch is dead. The defensive check is good practice, but the error message is misleading because the default exists.
 
 **Fix:** Tighten the error message and remove the `case "":` branch, OR (if the default is only applied for v1 callers that don't go through pflag) add a unit test that confirms the default flows correctly. The simplest fix is to remove the dead branch:
 
@@ -243,7 +243,7 @@ default:
 **File:** `internal/registry/client.go:307-309`, mirrored in `internal/template/loader.go:89-91`
 **Issue:** `isLocalPath` returns `true` for any string starting with `~`, including `~foo` (a file literally named `~foo` in the current directory would be a strange thing, but the heuristic is meant to match `~` and `~/...`). The same is mirrored in `template/loader.go:89-91`. The bug is: a user who types `spin add ~something` (which is supposed to mean "home-relative, expand the tilde") will get it interpreted as a local path with the literal `~` character, not as a home-expanded path.
 
-`addLocal` calls `expandHome(spec)` which does handle `~` and `~/` correctly, so the actual add path works. But the heuristic is misleading: a future caller that doesn't go through `expandHome` would treat `~foo` as a local-path-with-tilde. Also, the test `TestLoader_IsLocalPath` at line 88 asserts `{"~foo", true}` — so the behaviour is pinned, but it's wrong.
+`addLocal` calls `expandHome(spec)` which does handle `~` and `~/` correctly, so the actual add path works. But the heuristic is misleading: a future caller that doesn't go through `expandHome` would treat `~foo` as a local-path-with-tilde. Also, the test `TestLoader_IsLocalPath` at line 88 asserts `{"~foo", true}` -- so the behaviour is pinned, but it's wrong.
 
 **Fix:** Tighten the heuristic to only match `~` or `~/`:
 
@@ -315,7 +315,7 @@ _ = cmd.Flags().Set(f.Name, strconv.FormatBool(b))
 ### IN-05: `cmd/new_charm.go:48,55` `f.Default.(bool)` and `f.Default.(string)` type assertions are unchecked
 
 **File:** `cmd/new_charm.go:46-56`, `cmd/new_rust.go:38-49`, `cmd/new_extras.go:111-117`
-**Issue:** `def, _ := f.Default.(bool)` silently swallows a type-mismatch. If a flag is declared with the wrong default type (e.g. `StringFlag` with `Default: 42` instead of `"42"`), the cobra binding will register with the zero value, not the supplied default. The type assertion would return `(0, false)` and `def` is `0`, which cobra registers as the default — a silent fallthrough.
+**Issue:** `def, _ := f.Default.(bool)` silently swallows a type-mismatch. If a flag is declared with the wrong default type (e.g. `StringFlag` with `Default: 42` instead of `"42"`), the cobra binding will register with the zero value, not the supplied default. The type assertion would return `(0, false)` and `def` is `0`, which cobra registers as the default -- a silent fallthrough.
 
 **Fix:** Add a unit test that exercises flag binding with a wrong default type and asserts the error. Or wrap the type assertion in a helper that returns an error. Low priority because the flags are coded in the same package and tested via integration.
 
@@ -324,3 +324,13 @@ _ = cmd.Flags().Set(f.Name, strconv.FormatBool(b))
 _Reviewed: 2026-06-09T11:55:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+
+---
+
+## Status: superseded by v2.x pivot (2026-06-10)
+
+The code reviewed in this report (v2.0 ecosystem system + universal task runner) was archived to `~/Projects/Golang/spin-ecosys-tasks-archieve/` on 2026-06-10 as part of the v2.x pivot to a templates-only scaffolder. The findings remain valid as a record of the state of the code at review time, but the issues identified (CR-01/02, WR-01..08, IN-01..05) are moot for the current codebase -- the affected files are no longer in `spin/`.
+
+**Files reviewed here, now in the archive:** `cmd/ecosystem.go`, `cmd/new_charm.go`, `cmd/new_extras.go`, `cmd/new_rust.go`, `cmd/run.go`, `internal/ecosystem/`, `internal/ecosystems/rust/`, `internal/runner/`, `internal/runner/sources/`.
+
+**Files reviewed here, still in `spin/`:** `cmd/add.go`, `cmd/list.go` (restored from archive -- uses `internal/registry`, not the runner), `cmd/new.go` (rewritten on `internal/template`), `internal/registry/`, `internal/params/`, `internal/template/`.

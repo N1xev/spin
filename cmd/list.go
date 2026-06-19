@@ -1,38 +1,59 @@
+// Package cmd: spin list.
+//
+// `spin list` prints every template pinned locally via
+// `spin add` as a styled table. `spin list --json` emits the
+// same data as a JSON array on stdout (no colors, no padding)
+// so scripts and other CLIs can consume it without parsing a
+// human-readable table.
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/example/spin/internal/registry"
+	"github.com/N1xev/spin/internal/registry"
+	"github.com/N1xev/spin/internal/template"
 )
 
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List pinned templates",
-	Long: `List every template pinned locally via ` + "`spin add`" + `. Pinned
-templates are stored in ~/.config/spin/pinned.json and cloned (or
-copied) into ~/.config/spin/templates/.`,
+	Use:           "list",
+	Short:         "List pinned templates",
+	Long:          "List every template pinned locally via `spin add`. Pinned templates are stored in ~/.config/spin/pinned.json and cached under ~/.config/spin/templates/.",
 	Args:          cobra.NoArgs,
 	RunE:          execList,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
 
+var listJSONFlag bool
+
 func init() {
+	listCmd.Flags().BoolVar(&listJSONFlag, "json", false, "emit pinned templates as JSON to stdout (machine-readable, no styling)")
 	rootCmd.AddCommand(listCmd)
 }
 
-// execList prints the pinned templates as a human-readable table.
-// `spin list` and `spin add --list` both call this; the latter
-// reaches it through runAdd with args=nil.
-//
-// Each row includes the resolved LocalPath (under
-// ~/.config/spin/templates/) so the user can inspect or hand-edit
-// the on-disk template.
+// pinnedRow is the JSON-friendly view of a Pinned template. We
+// don't reuse registry.Pinned directly because Pinned is the
+// on-disk schema (with internal field names); pinnedRow is the
+// stable, user-facing view that scripts can rely on.
+type pinnedRow struct {
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	PinnedAt    string `json:"pinned_at,omitempty"`
+	Description string `json:"description,omitempty"`
+	Source      string `json:"source"`
+	LocalPath   string `json:"local_path"`
+}
+
+// execList prints the pinned templates. Default is a styled
+// table; --json switches to a JSON array on stdout. Both paths
+// share the same data layer (pinnedRow) so behaviour is
+// consistent.
 func execList(cmd *cobra.Command, args []string) error {
 	client := registry.New()
 	pinned, err := client.ListPinned()
@@ -40,31 +61,64 @@ func execList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if len(pinned) == 0 {
-		fmt.Println("No pinned templates.")
-		fmt.Println("Use `spin search <query>` to find templates in the registry,")
-		fmt.Println("or `spin add <name>` to pin one.")
+		if listJSONFlag {
+			// Even on empty, emit a valid (empty) JSON array so
+			// `jq` consumers don't choke.
+			fmt.Fprintln(cmd.OutOrStdout(), "[]")
+			return nil
+		}
+		printInfo("no pinned templates")
+		printHint("use `spin add <spec>` to pin one (local path or git URL)")
 		return nil
 	}
 
-	// Compute the cache root so we can show short, relative local
-	// paths in the table (e.g. "templates/foo/bar") instead of the
-	// full "/home/user/.config/spin/templates/foo/bar".
-	cacheRoot := client.CacheDir
-
-	fmt.Printf("%-30s  %-10s  %-12s  %s\n", "NAME", "VERSION", "PINNED", "LOCAL PATH")
+	rows := make([]pinnedRow, 0, len(pinned))
 	for _, p := range pinned {
-		short := shortenLocal(p.LocalPath, cacheRoot)
-		fmt.Printf("%-30s  %-10s  %-12s  %s\n",
-			truncate(p.Name, 30),
-			truncate(p.Version, 10),
-			truncate(p.PinnedAt, 12),
-			short,
-		)
+		rows = append(rows, pinnedRow{
+			Name:        p.Name,
+			Version:     p.Version,
+			PinnedAt:    p.PinnedAt,
+			Description: pinnedDescription(p.LocalPath),
+			Source:      p.Source,
+			LocalPath:   p.LocalPath,
+		})
 	}
-	fmt.Println()
-	fmt.Println("Run `spin new <name>` to scaffold from a pinned template.")
-	fmt.Println("Run `spin new <name> --refresh` to re-clone (future).")
+
+	if listJSONFlag {
+		enc := json.NewEncoder(cmd.OutOrStdout())
+		enc.SetIndent("", "  ")
+		return enc.Encode(rows)
+	}
+
+	headers := []string{"NAME", "VERSION", "PINNED", "DESCRIPTION", "LOCAL PATH"}
+	tableRows := make([][]string, 0, len(rows))
+	for _, r := range rows {
+		tableRows = append(tableRows, []string{
+			truncate(r.Name, 30),
+			truncate(r.Version, 10),
+			truncate(r.PinnedAt, 12),
+			truncate(r.Description, 36),
+			shortenLocal(r.LocalPath, client.CacheDir),
+		})
+	}
+	printTable(io.Writer(cmd.OutOrStdout()), headers, tableRows)
+	fmt.Fprintln(cmd.OutOrStdout())
+	printHint("use `spin new <project> --template <name>` to scaffold from a pinned template")
 	return nil
+}
+
+// pinnedDescription returns the Description field of the spin.toml
+// at localPath, or "" if it can't be read. The lookup is best-effort:
+// a missing or malformed manifest shouldn't fail `spin list`.
+func pinnedDescription(localPath string) string {
+	if localPath == "" {
+		return ""
+	}
+	st, err := template.ParseSpinToml(filepath.Join(localPath, "spin.toml"))
+	if err != nil {
+		return ""
+	}
+	return st.Description
 }
 
 // shortenLocal renders p as a path relative to the cache root when
@@ -82,15 +136,4 @@ func shortenLocal(p, cacheRoot string) string {
 		return rel
 	}
 	return p
-}
-
-// truncate is a tiny helper for table column widths. The skeleton
-// re-uses similar truncation in the registry formatting code; we
-// keep a local copy here so cmd/list.go does not depend on the
-// internal/registry internals.
-func truncate(s string, n int) string {
-	if n <= 1 || len(s) <= n {
-		return s
-	}
-	return strings.TrimRight(s[:n-1], " ") + "…"
 }

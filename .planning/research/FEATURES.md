@@ -1,6 +1,6 @@
 # Feature Research: spin (charmbracelet v2 Go scaffold CLI)
 
-**Domain:** CLI tooling — Go project scaffolder
+**Domain:** CLI tooling -- Go project scaffolder
 **Researched:** 2026-06-02
 **Confidence:** HIGH (v2 import paths verified via Context7; feature landscape triangulated against cobra-cli, spring initializr, cargo, cookiecutter, yeoman; charmbracelet-app-template structure verified)
 
@@ -8,11 +8,11 @@
 
 ## Executive Summary
 
-`spin` sits in a well-defined category — language/ecosystem scaffolders — where the table stakes are clear and the differentiators are mostly *aesthetic* and *opinionated*. Every competitor (`cargo new`, `npm init`, `cobra-cli init`, `cookiecutter`, `spring initializr`, `yeoman`) does the same job: take a name + flags, emit a directory tree, write a `go.mod`-equivalent, and exit cleanly. The reason `spin` can win a small niche is not feature breadth but *vertical integration with the charmbracelet v2 stack* — the scaffolder itself uses fang + gum + lipgloss + huh so the tool *demonstrates* the experience it scaffolds. That is the differentiator; everything else is execution quality.
+`spin` sits in a well-defined category -- language/ecosystem scaffolders -- where the table stakes are clear and the differentiators are mostly *aesthetic* and *opinionated*. Every competitor (`cargo new`, `npm init`, `cobra-cli init`, `cookiecutter`, `spring initializr`, `yeoman`) does the same job: take a name + flags, emit a directory tree, write a `go.mod`-equivalent, and exit cleanly. The reason `spin` can win a small niche is not feature breadth but *vertical integration with the charmbracelet v2 stack* -- the scaffolder itself uses fang + gum + lipgloss + huh so the tool *demonstrates* the experience it scaffolds. That is the differentiator; everything else is execution quality.
 
 The anti-feature list is short but firm: no template marketplace, no plugin system, no TUI mode for the scaffolder itself, no CI generation, no GUI. All are tempting and all break the "small, sharp, opinionated" thesis.
 
-Charmbracelet v2 has matured substantially (v2 import paths use `charm.land/<lib>/v2`). The `bubbletea-app-template` repo already ships a reference structure (lint config, goreleaser, dependabot, GH Actions) that `spin` should embed as a starting point, but `spin` should *improve* on it by (a) consolidating `Makefile`+`Taskfile` into one, (b) wiring `air` and `prism` by default, (c) using fang, and (d) generating `AGENTS.md` for AI assistants — none of which the reference template does.
+Charmbracelet v2 has matured substantially (v2 import paths use `charm.land/<lib>/v2`). The `bubbletea-app-template` repo already ships a reference structure (lint config, goreleaser, dependabot, GH Actions) that `spin` should embed as a starting point, but `spin` should *improve* on it by (a) consolidating `Makefile`+`Taskfile` into one, (b) wiring `air` and `prism` by default, (c) using fang, and (d) generating `AGENTS.md` for AI assistants -- none of which the reference template does.
 
 ---
 
@@ -62,7 +62,7 @@ All import paths verified via Context7 UPGRADE_GUIDE_V2.md docs. v2 uses the `ch
 | Library | v2 Import Path | Purpose | Flag |
 |---------|----------------|---------|------|
 | log | `charm.land/log/v2` | Leveled, colorful, structured logger | `--log` |
-| crush | `github.com/charmbracelet/crush` (binary, not import — AI agent) | AI coding assistant in the terminal | `--crush` (binary, opt-in `AGENTS.md` integration) |
+| crush | `github.com/charmbracelet/crush` (binary, not import -- AI agent) | AI coding assistant in the terminal | `--crush` (binary, opt-in `AGENTS.md` integration) |
 
 ### Scaffolder itself (dogfooding)
 
@@ -70,7 +70,7 @@ All import paths verified via Context7 UPGRADE_GUIDE_V2.md docs. v2 uses the `ch
 |---------|------|-----|
 | cobra | `github.com/spf13/cobra` | Standard subcommand structure |
 | fang | `charm.land/fang/v2` | Styled help output (showcase) |
-| gum | (binary `charm.land/gum`) | Interactive prompts when flags are missing — invoked as a binary; no Go import needed |
+| gum | (binary `charm.land/gum`) | Interactive prompts when flags are missing -- invoked as a binary; no Go import needed |
 
 **Flag design note:** Flags follow the user-role grouping above. `--tui` (umbrella for bubbletea + bubbles + lipgloss) and `--cli` (umbrella for cobra + fang) are top-level; per-library subflags give fine control. `--wish` is orthogonal to `--tui`/`--cli` (an SSH project can be `--tui` or `--cli` over SSH). `--all` is a convenience that pulls every charm v2 lib.
 
@@ -91,13 +91,13 @@ Features users assume exist. Missing = product feels incomplete, broken, or untr
 | Sensible default `.gitignore` (covers `bin/`, IDE files, OS junk) | Every reference template includes one. Users will add it anyway if you don't. | LOW | Embed via `go:embed`. |
 | Sensible default `README.md` with project name + commands | The first file the user opens. Empty or missing = looks broken. | LOW | Template: title, install, run, structure. |
 | License file generation (or `--no-license`) | Every scaffolder asks. Missing = users complain. | LOW | Default `MIT`; `--license apache2/gpl/...`; `--no-license` to skip. |
-| `--help` that is readable and accurate | Cobra gives this for free; fang styles it. | LOW | fang gives styled help — table-stakes-quality. |
+| `--help` that is readable and accurate | Cobra gives this for free; fang styles it. | LOW | fang gives styled help -- table-stakes-quality. |
 | Runs offline by default (embedded templates) | `cargo new`, `go mod init`, `cobra-cli init` all work offline. Network-on-first-run surprises users. | MEDIUM | `go:embed` the templates directory. |
 | Non-zero exit on error with clear message | Standard CLI hygiene. | LOW | `os.Exit(1)` + `fmt.Fprintln(os.Stderr, ...)` style; or let cobra/fang handle. |
 | Generated project builds with `go build` on first try | The single most common "did it work?" test. | LOW | Verified by CI in spin itself (test fixture → build → run). |
 | Flag-only mode (no interactive prompts when all flags set) | Power users will scream if forced through prompts. | LOW | `--no-interactive` and detect completeness automatically. |
 
-### Differentiators (Competitive Advantage — the charm-flavored features)
+### Differentiators (Competitive Advantage -- the charm-flavored features)
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
@@ -126,7 +126,7 @@ Features users assume exist. Missing = product feels incomplete, broken, or untr
 |---------|---------------|-----------------|-------------|
 | **Online template marketplace / registry** | Sounds like a community play. | Hosting + curation + moderation burden; spin would need a backend, accounts, ratings. PROJECT.md explicitly defers. | Local `--template-repo <url>` is enough for v1. |
 | **Plugin system for custom scaffolders** | Lets users extend `spin` with their own generators. | Plugin ABI stability becomes a tax on every release. Premature. | External `--template-repo` is the de facto plugin story. |
-| **TUI/GUI mode for the scaffolder itself** | "Use huh to build the scaffolder!" is the obvious charm-flavored move. | Scaffolders are invoked by humans *and* scripts (CI, agents, copy-paste docs). A TUI breaks non-TTY flows. The generated app is the TUI; the scaffolder is a CLI. PROJECT.md says this explicitly. | Use `gum` (binary) for prompts — works in TTY, gracefully no-ops in non-TTY. |
+| **TUI/GUI mode for the scaffolder itself** | "Use huh to build the scaffolder!" is the obvious charm-flavored move. | Scaffolders are invoked by humans *and* scripts (CI, agents, copy-paste docs). A TUI breaks non-TTY flows. The generated app is the TUI; the scaffolder is a CLI. PROJECT.md says this explicitly. | Use `gum` (binary) for prompts -- works in TTY, gracefully no-ops in non-TTY. |
 | **CI/CD pipeline generation** (GitHub Actions, etc.) | "Just one click to set up CI!" | CI is opinionated; users have strong preferences (GitHub vs GitLab vs Drone vs Buildkite). Forcing one is hostile. | Ship a reference `.github/workflows/` in templates; users copy/edit. PROJECT.md defers. |
 | **Dockerfile / docker-compose generation** | Same reasoning as CI. | Same problem: opinionated, user-specific, often wrong. | Defer. |
 | **Auto-updating generated projects after scaffold** | "If spin releases v0.2, can it update my old project?" | Template drift vs user edits = data loss waiting to happen. | Document that users re-scaffold or hand-merge. PROJECT.md defers. |
@@ -152,7 +152,7 @@ flag parsing
 
 gum prompts
     └──requires──> gum binary on PATH (fall back gracefully)
-    └──conflicts──> non-TTY (stdin pipe, CI) — must auto-disable
+    └──conflicts──> non-TTY (stdin pipe, CI) -- must auto-disable
 
 per-library flags (--bubbletea, --lipgloss, --wish, ...)
     └──requires──> template variant exists in templates/
@@ -199,7 +199,7 @@ templates
 
 ## MVP Definition
 
-### Launch With (v1) — everything in PROJECT.md Active
+### Launch With (v1) -- everything in PROJECT.md Active
 
 These are non-negotiable. `spin new myapp --tui --bubbletea --ai` must work, end-to-end, on first try.
 
@@ -242,7 +242,7 @@ Defer until spin has product-market fit.
 - [ ] Plugin system (custom scaffolder types)
 - [ ] CI generation as opt-in
 - [ ] Dockerfile generation as opt-in
-- [ ] Multi-language support (Rust, TS, Python) — likely never; spin is the *charm* scaffolder
+- [ ] Multi-language support (Rust, TS, Python) -- likely never; spin is the *charm* scaffolder
 - [ ] Cloud execution / `spin deploy`
 - [ ] Auto-update mechanism (use Go's `go install`; consider `charm.land`-style)
 - [ ] TUI mode for the scaffolder itself (anti-feature in v1; revisit only if gum prompts prove insufficient)
@@ -302,31 +302,31 @@ Defer until spin has product-market fit.
 | Colored/styled output (charm-flavored) | n/a | n/a | no | no | no | yes (fang + lipgloss) |
 | **Friction to first `go run` success** | 1 cmd | 1 cmd + install | 1 cmd | 1 cmd + prompts.json | 1 cmd (or web) | 1 cmd (`spin new myapp --tui --bubbletea`) |
 
-**Positioning:** `spin` is to Go what `spring initializr` is to Java — opinionated, library-aware, gives you a runnable starting point. But unlike Spring Initializr, `spin` is local-first, has zero server cost, and dogfoods the same stack it scaffolds. The closest direct competitor is `cobra-cli init`, but that one is CLI-only and one-shape-fits-all; `spin` is multi-shape (TUI/CLI/SSH) and library-aware.
+**Positioning:** `spin` is to Go what `spring initializr` is to Java -- opinionated, library-aware, gives you a runnable starting point. But unlike Spring Initializr, `spin` is local-first, has zero server cost, and dogfoods the same stack it scaffolds. The closest direct competitor is `cobra-cli init`, but that one is CLI-only and one-shape-fits-all; `spin` is multi-shape (TUI/CLI/SSH) and library-aware.
 
 ---
 
 ## Sources
 
 **Verified via Context7 (HIGH confidence):**
-- [charmbracelet/bubbletea — UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) — confirmed v2 import path `charm.land/bubbletea/v2`
-- [charmbracelet/lipgloss — UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) — confirmed v2 import path `charm.land/lipgloss/v2`
-- [charmbracelet/bubbles — UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/bubbles/blob/main/UPGRADE_GUIDE_V2.md) — confirmed v2 import paths for all 14 component subpackages
-- [charmbracelet/huh — README.md](https://github.com/charmbracelet/huh/blob/main/README.md) — confirmed v2 import path `charm.land/huh/v2`
-- [charmbracelet/wish — UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/wish/blob/main/UPGRADE_GUIDE_V2.md) — confirmed v2 import path `charm.land/wish/v2` and middleware subpaths
-- [charmbracelet/log — UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/log/blob/main/UPGRADE_GUIDE_V2.md) — confirmed v2 import path `charm.land/log/v2`
-- [charmbracelet/glamour — UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/glamour/blob/main/UPGRADE_GUIDE_V2.md) — confirmed v2 import path `charm.land/glamour/v2`
-- [charmbracelet/fang — UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/fang/blob/main/UPGRADE_GUIDE_V2.md) — confirmed v2 import path `charm.land/fang/v2` and `fang.Execute(ctx, cmd)` usage
-- [charmbracelet/bubbletea-app-template — README & llms.txt](https://github.com/charmbracelet/bubbletea-app-template) — confirmed reference project structure: `.github/workflows/build.yml`, `.github/workflows/release.yml` (GoReleaser), `.golangci.yml` (thelper, gofumpt, tparallel, unconvert, unparam, wastedassign), `.goreleaser.yaml` (CGO_ENABLED=0, `go_first_class` targets, changelog groups), `.github/dependabot.yml` (gomod + github-actions weekly groups)
-- [charmbracelet/gum — README.md](https://github.com/charmbracelet/gum/blob/main/README.md) — confirmed `gum input`, `gum confirm`, `gum choose` for interactive prompts
-- [charmbracelet/x — llms.txt](https://context7.com/charmbracelet/x/llms.txt) — confirmed `ansi`, `modifiers`, `runewidth` packages under `github.com/charmbracelet/x`
-- [spf13/cobra — README.md & user_guide.md](https://github.com/spf13/cobra) — confirmed `cobra-cli` scaffolder structure (`init`, `add`, `--author`, `--license`, `--viper`); no v2 path for cobra itself
+- [charmbracelet/bubbletea -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/bubbletea/v2`
+- [charmbracelet/lipgloss -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/lipgloss/v2`
+- [charmbracelet/bubbles -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/bubbles/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import paths for all 14 component subpackages
+- [charmbracelet/huh -- README.md](https://github.com/charmbracelet/huh/blob/main/README.md) -- confirmed v2 import path `charm.land/huh/v2`
+- [charmbracelet/wish -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/wish/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/wish/v2` and middleware subpaths
+- [charmbracelet/log -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/log/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/log/v2`
+- [charmbracelet/glamour -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/glamour/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/glamour/v2`
+- [charmbracelet/fang -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/fang/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/fang/v2` and `fang.Execute(ctx, cmd)` usage
+- [charmbracelet/bubbletea-app-template -- README & llms.txt](https://github.com/charmbracelet/bubbletea-app-template) -- confirmed reference project structure: `.github/workflows/build.yml`, `.github/workflows/release.yml` (GoReleaser), `.golangci.yml` (thelper, gofumpt, tparallel, unconvert, unparam, wastedassign), `.goreleaser.yaml` (CGO_ENABLED=0, `go_first_class` targets, changelog groups), `.github/dependabot.yml` (gomod + github-actions weekly groups)
+- [charmbracelet/gum -- README.md](https://github.com/charmbracelet/gum/blob/main/README.md) -- confirmed `gum input`, `gum confirm`, `gum choose` for interactive prompts
+- [charmbracelet/x -- llms.txt](https://context7.com/charmbracelet/x/llms.txt) -- confirmed `ansi`, `modifiers`, `runewidth` packages under `github.com/charmbracelet/x`
+- [spf13/cobra -- README.md & user_guide.md](https://github.com/spf13/cobra) -- confirmed `cobra-cli` scaffolder structure (`init`, `add`, `--author`, `--license`, `--viper`); no v2 path for cobra itself
 
 **Other (MEDIUM confidence):**
-- [charm.land/](https://charm.land/) — official charmbracelet landing; lists all major libraries (Bubble Tea, Lip Gloss, Bubbles, Huh, Wish, Log, Glamour, Harmonica, Glow, gum, Crush, Mods, Skate)
-- [github.com/charmbracelet](https://github.com/charmbracelet) — confirmed 54 repos in org; pinned repos include bubbletea (42.8k), lipgloss (11.4k), bubbles (8.4k), huh (6.9k), wish (5.2k), freeze (4.6k), vhs (19.8k), glow (25.6k), gum (23.8k), crush (24.9k), catwalk (725), fantasy (786)
-- [start.spring.io](https://start.spring.io/) — Spring Initializr, the closest analog to `spin`'s per-library flag concept (Spring Starters)
-- [github.com/spf13/cobra-cli](https://github.com/spf13/cobra-cli) — competitor analysis: subcommand scaffolder for cobra projects
+- [charm.land/](https://charm.land/) -- official charmbracelet landing; lists all major libraries (Bubble Tea, Lip Gloss, Bubbles, Huh, Wish, Log, Glamour, Harmonica, Glow, gum, Crush, Mods, Skate)
+- [github.com/charmbracelet](https://github.com/charmbracelet) -- confirmed 54 repos in org; pinned repos include bubbletea (42.8k), lipgloss (11.4k), bubbles (8.4k), huh (6.9k), wish (5.2k), freeze (4.6k), vhs (19.8k), glow (25.6k), gum (23.8k), crush (24.9k), catwalk (725), fantasy (786)
+- [start.spring.io](https://start.spring.io/) -- Spring Initializr, the closest analog to `spin`'s per-library flag concept (Spring Starters)
+- [github.com/spf13/cobra-cli](https://github.com/spf13/cobra-cli) -- competitor analysis: subcommand scaffolder for cobra projects
 
 **Inferred from PROJECT.md (authoritative for scope):**
 - All Out of Scope items in PROJECT.md (online registry, plugin system, auto-update, CI generation, Dockerfile, remote execution, TUI mode for scaffolder, non-charm frameworks, non-Go languages) confirmed as anti-features.
@@ -334,5 +334,5 @@ Defer until spin has product-market fit.
 
 ---
 
-*Feature research for: spin — charmbracelet v2 Go scaffold CLI*
+*Feature research for: spin -- charmbracelet v2 Go scaffold CLI*
 *Researched: 2026-06-02*

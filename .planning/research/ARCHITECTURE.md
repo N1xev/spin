@@ -42,12 +42,12 @@
 | Component | Responsibility | Implementation |
 |-----------|----------------|----------------|
 | `cmd/root.go` | Cobra root, version, fang wiring | `fang.Execute(ctx, rootCmd)` |
-| `cmd/new.go` | `spin new` subcommand — calls scaffold pipeline | cobra `RunE` → `scaffold.New(opts)` |
-| `cmd/run.go` | `spin run` — detects `.air.toml`, falls back to `go run` | exec.CommandContext |
-| `cmd/build.go` | `spin build` — `go build -o bin/<name>` | exec.CommandContext |
-| `cmd/test.go` | `spin test` — `prism` if on PATH, else `go test` | exec.LookPath + exec.Command |
-| `cmd/vet.go` | `spin vet` — `go vet ./...` | exec.CommandContext |
-| `cmd/fmt.go` | `spin fmt` — `gofumpt` → `goimports` → `go fmt` fallback chain | exec.LookPath chain |
+| `cmd/new.go` | `spin new` subcommand -- calls scaffold pipeline | cobra `RunE` → `scaffold.New(opts)` |
+| `cmd/run.go` | `spin run` -- detects `.air.toml`, falls back to `go run` | exec.CommandContext |
+| `cmd/build.go` | `spin build` -- `go build -o bin/<name>` | exec.CommandContext |
+| `cmd/test.go` | `spin test` -- `prism` if on PATH, else `go test` | exec.LookPath + exec.Command |
+| `cmd/vet.go` | `spin vet` -- `go vet ./...` | exec.CommandContext |
+| `cmd/fmt.go` | `spin fmt` -- `gofumpt` → `goimports` → `go fmt` fallback chain | exec.LookPath chain |
 | `internal/scaffold` | Template loading, rendering, file emission | `embed.FS` + `text/template` |
 | `internal/scaffold.Project` | Strongly-typed resolved scaffold config (libs, type, template name, ai on/off) | struct passed to `template.Execute` |
 | `internal/interactive` | gum subprocess wrapper; collects missing flags | `os/exec` against `gum` binary |
@@ -64,7 +64,7 @@ spin/
 ├── go.sum
 ├── README.md
 ├── LICENSE
-├── Taskfile.yml                  # self-dogfooding — uses spin-like tasks
+├── Taskfile.yml                  # self-dogfooding -- uses spin-like tasks
 ├── Makefile                      # alt entry, mirrors Taskfile
 ├── .air.toml                     # for `spin run` in spin's own dev
 ├── .gitignore
@@ -142,14 +142,14 @@ spin/
 
 ### Structure Rationale
 
-- **`cmd/`** — thin cobra subcommand files. Each subcommand is one file. Flag declarations live with the subcommand; the resolver/validator is in `internal/scaffold`. Keeps cobra idiomatic and matches `cobra-cli init` convention.
-- **`internal/scaffold/`** — owns the entire pipeline: parse → render → emit → init git. Single importable surface. `Project` struct is the contract between flag parsing and template rendering — avoids passing 30 args through.
-- **`internal/interactive/`** — gum lives behind an interface. The scaffold pipeline never knows whether flags came from CLI or gum. If gum is missing, fallback to `os.Stdin` reads or fail with a clear message. Easy to swap to `huh` later (see Patterns).
-- **`internal/wrappers/`** — one file per wrapped command. Each is a pure function `(projectRoot, args) error`. The `cmd/<x>.go` file just calls into the wrapper. Trivial to test in isolation.
-- **`internal/agents/`** — separated so AGENTS.md rendering can evolve independently (e.g., one day support Cursor's `.cursorrules` or Copilot's `.github/copilot-instructions.md`) without touching the scaffold pipeline.
-- **`templates/_base/`** — files rendered for every project. `_base/main.go.tmpl` is the placeholder overwritten by the selected variant.
-- **`templates/variant_*/`** — one per top-level project type. Only `main.go.tmpl` differs; everything else is inherited from `_base`.
-- **`templates/lib/`** — per-library overlays. Each lib template is a snippet (struct/import/wiring) merged into `main.go` via a template `{{define}}` block, not a standalone file. This avoids 200-line `if/else` trees inside `main.go.tmpl`.
+- **`cmd/`** -- thin cobra subcommand files. Each subcommand is one file. Flag declarations live with the subcommand; the resolver/validator is in `internal/scaffold`. Keeps cobra idiomatic and matches `cobra-cli init` convention.
+- **`internal/scaffold/`** -- owns the entire pipeline: parse → render → emit → init git. Single importable surface. `Project` struct is the contract between flag parsing and template rendering -- avoids passing 30 args through.
+- **`internal/interactive/`** -- gum lives behind an interface. The scaffold pipeline never knows whether flags came from CLI or gum. If gum is missing, fallback to `os.Stdin` reads or fail with a clear message. Easy to swap to `huh` later (see Patterns).
+- **`internal/wrappers/`** -- one file per wrapped command. Each is a pure function `(projectRoot, args) error`. The `cmd/<x>.go` file just calls into the wrapper. Trivial to test in isolation.
+- **`internal/agents/`** -- separated so AGENTS.md rendering can evolve independently (e.g., one day support Cursor's `.cursorrules` or Copilot's `.github/copilot-instructions.md`) without touching the scaffold pipeline.
+- **`templates/_base/`** -- files rendered for every project. `_base/main.go.tmpl` is the placeholder overwritten by the selected variant.
+- **`templates/variant_*/`** -- one per top-level project type. Only `main.go.tmpl` differs; everything else is inherited from `_base`.
+- **`templates/lib/`** -- per-library overlays. Each lib template is a snippet (struct/import/wiring) merged into `main.go` via a template `{{define}}` block, not a standalone file. This avoids 200-line `if/else` trees inside `main.go.tmpl`.
 
 ## Architectural Patterns
 
@@ -157,7 +157,7 @@ spin/
 
 **What:** A `go:embed` rooted at `templates/` exposes a virtual filesystem. At scaffold time, walk the tree: copy `_base/*` first, then overwrite with `variant_<chosen>/*`, then `lib/<each>/*` (last-write-wins). Text rendering happens via `text/template` against the `Project` struct.
 
-**When to use:** Always for spin — this is the core mechanism. The variant+overlay split keeps templates small and combinable; adding a new library is one file in `templates/lib/`.
+**When to use:** Always for spin -- this is the core mechanism. The variant+overlay split keeps templates small and combinable; adding a new library is one file in `templates/lib/`.
 
 **Trade-offs:**
 - Pro: zero template-engine dependency, composable, testable in isolation.
@@ -228,11 +228,11 @@ func (g *Gum) Choose(title string, opts []string, def string) (string, error) {
 
 **What:** Each wrapper (`run`, `build`, `test`, `vet`, `fmt`) is a pure function that takes `(projectRoot string, extraArgs []string) error`. The wrapper does `exec.LookPath` for the preferred tool (e.g., `air`, `prism`, `gofumpt`) and falls back to the standard tool (`go run`, `go test`, `gofmt`) with a one-time warning.
 
-**When to use:** Always — every wrapper command in PROJECT.md. Keeps `cmd/<x>.go` files minimal (cobra flag binding + one call).
+**When to use:** Always -- every wrapper command in PROJECT.md. Keeps `cmd/<x>.go` files minimal (cobra flag binding + one call).
 
 **Trade-offs:**
 - Pro: works on a fresh machine with only Go installed.
-- Pro: degrades gracefully — the user gets a useful scaffold even if they haven't installed `air`/`prism`/`gofumpt` yet.
+- Pro: degrades gracefully -- the user gets a useful scaffold even if they haven't installed `air`/`prism`/`gofumpt` yet.
 - Con: silent fallback could confuse power users. Mitigation: print a one-line "using `go test` (install prism for parallel workers: `go install ...`)" message.
 - Con: tool detection at every invocation is slightly wasteful. Mitigation: detect once per process, cache in a `var`.
 
@@ -252,13 +252,13 @@ func Test(projectRoot string, args []string) error {
 
 ### Pattern 4: Single-Entry Subcommand File (cobra convention)
 
-**What:** Each `cmd/<subcommand>.go` defines exactly one cobra `*cobra.Command` value and one `init()` that attaches it to the root. No business logic — only flag binding and a single call into `internal/`.
+**What:** Each `cmd/<subcommand>.go` defines exactly one cobra `*cobra.Command` value and one `init()` that attaches it to the root. No business logic -- only flag binding and a single call into `internal/`.
 
 **When to use:** Always. Matches the `cobra-cli add` convention and keeps each subcommand a 30-line file that's easy to scan.
 
 **Trade-offs:**
 - Pro: conventional, every Go developer recognizes it.
-- Pro: trivial to remove a subcommand — delete one file.
+- Pro: trivial to remove a subcommand -- delete one file.
 - Con: flag definitions are scattered. Mitigation: keep flag struct + binding in the subcommand file, but the *resolution/validation* in `internal/scaffold`.
 
 **Example:**
@@ -351,7 +351,7 @@ stream stdout/stderr to user's terminal; propagate exit code
 ### Key Data Flows
 
 1. **Flag → Project struct → Template data:** The `Project` struct is the single source of truth after `ResolveFlags`. Templates reference fields directly: `{{ .Name }}`, `{{ if .AI }}...{{ end }}`, `{{ range .Libs }}...{{ end }}`. No magic globals.
-2. **Overlay resolution:** Deterministic — base files load first, variant files overwrite on filename match, lib files overwrite on filename match. Last write wins, by design.
+2. **Overlay resolution:** Deterministic -- base files load first, variant files overwrite on filename match, lib files overwrite on filename match. Last write wins, by design.
 3. **Interactive fallback chain:** If `gum` is missing AND `--no-interactive` is set AND flags are incomplete → fail with actionable error. If `gum` is missing AND interactive is on → fall back to `os.Stdin` reads (using `bufio.Scanner` + a small set of `fmt.Println` prompts).
 4. **Tool detection (wrappers):** `exec.LookPath` at command-invocation time, not at startup. Lets a user `go install prism` mid-session and have the next `spin test` use it.
 
@@ -379,12 +379,12 @@ The dependency graph between components drives the suggested phase structure:
 ```
 
 **Why this order:**
-- **Phase 1 must produce a runnable project** — even if it's just `spin new foo --tui` and writes a hardcoded `main.go`. Validates the embed + render + emit pipeline.
-- **Phase 2 can be done without interactive** — all flags are just CLI args. Project struct validation lives here. Tests can be written against flag combinations.
-- **Phase 3 layers on top** — the `Prompter` interface (Pattern 2) means `ResolveFlags` can stay the same; only the missing-field branch changes.
-- **Phase 4 is template authoring** — by this point the engine is stable, so templates are pure content work.
+- **Phase 1 must produce a runnable project** -- even if it's just `spin new foo --tui` and writes a hardcoded `main.go`. Validates the embed + render + emit pipeline.
+- **Phase 2 can be done without interactive** -- all flags are just CLI args. Project struct validation lives here. Tests can be written against flag combinations.
+- **Phase 3 layers on top** -- the `Prompter` interface (Pattern 2) means `ResolveFlags` can stay the same; only the missing-field branch changes.
+- **Phase 4 is template authoring** -- by this point the engine is stable, so templates are pure content work.
 - **Phase 5 is fully independent** of the scaffold pipeline; can ship in any phase after the root cmd exists. Best deferred so scaffold isn't blocked.
-- **Phase 6 is a leaf** — depends only on the `Project` struct, which is finalized by Phase 2. Cheap to add later.
+- **Phase 6 is a leaf** -- depends only on the `Project` struct, which is finalized by Phase 2. Cheap to add later.
 
 ## Scaling Considerations
 
@@ -404,7 +404,7 @@ The dependency graph between components drives the suggested phase structure:
 
 ### Anti-Pattern 1: God-Object `*Scaffolder` with all flags as methods
 
-**What people do:** `scaffolder.SetName().SetLibs().SetType().SetAI().Execute()` — fluent builder sprawl.
+**What people do:** `scaffolder.SetName().SetLibs().SetType().SetAI().Execute()` -- fluent builder sprawl.
 **Why it's wrong:** Hard to validate, hard to test, hides which fields are required. The cobra flag bindings become stringly-typed.
 **Do this instead:** Single `Project` struct populated by `ResolveFlags`, then passed to `scaffold.New(project)`. All required-field validation is in one place.
 
@@ -428,7 +428,7 @@ The dependency graph between components drives the suggested phase structure:
 
 ### Anti-Pattern 5: Wrapping `go test` with shell scripts
 
-**What people do:** `exec.Command("bash", "-c", "go test ./...")` — easy one-liner, but breaks on Windows and won't propagate signals cleanly.
+**What people do:** `exec.Command("bash", "-c", "go test ./...")` -- easy one-liner, but breaks on Windows and won't propagate signals cleanly.
 **Why it's wrong:** Spin is `CGO_ENABLED=0` portable; bash assumptions violate that.
 **Do this instead:** `exec.CommandContext(ctx, "go", "test", args...)` with explicit arg slices. Always `cmd.Stdout = os.Stdout; cmd.Stderr = os.Stderr` for streaming.
 
@@ -464,20 +464,20 @@ Spin uses the charm stack to build itself. This is both a constraint and a showc
 - **Help output:** `fang.Execute(ctx, rootCmd)` wraps the root cmd. `spin --help` looks like a charm product from day one.
 - **Version flag:** fang requires a `version` package (`internal/version`) populated via `-ldflags="-X .../version.Version=..."` in the Taskfile.
 - **Banner / success messages:** `internal/scaffold` uses `charm.land/lipgloss/v2` to style the "Created ./myapp" output. Matches the fang aesthetic.
-- **Self-template:** `templates/_base/` includes a `Taskfile.yml.tmpl` and `.air.toml.tmpl` — the same files spin itself ships. Developers who scaffold with spin can run `spin run` / `spin test` in their new project immediately.
+- **Self-template:** `templates/_base/` includes a `Taskfile.yml.tmpl` and `.air.toml.tmpl` -- the same files spin itself ships. Developers who scaffold with spin can run `spin run` / `spin test` in their new project immediately.
 - **Readme preview (future):** Could pipe the generated `README.md` through `charm.land/glamour/v2` for a one-shot preview at scaffold time. Out of scope for v1; noted as a future enhancement.
-- **AGENTS.md content:** When `--ai` is set, the generated `AGENTS.md` describes the *new* project's stack — including the fact that `spin` is a charm-flavored scaffolder. Self-referential and useful for AI assistants picking up the new project.
+- **AGENTS.md content:** When `--ai` is set, the generated `AGENTS.md` describes the *new* project's stack -- including the fact that `spin` is a charm-flavored scaffolder. Self-referential and useful for AI assistants picking up the new project.
 
 ## Sources
 
-- [Fang docs (Context7)](https://context7.com/charmbracelet/fang/llms.txt) — `fang.Execute(ctx, rootCmd)` pattern, version flag requirements
-- [Fang README](https://github.com/charmbracelet/fang/blob/main/README.md) — styled help, manpages, completions
-- [Bubble Tea v2 Upgrade Guide](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) — `charm.land/bubbletea/v2` import path, model pattern
-- [Lipgloss v2 Upgrade Guide](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) — `lipgloss.NewStyle()` is pure value; no Renderer
-- [Huh v2 docs (Context7)](https://context7.com/charmbracelet/huh/llms.txt) — `huh.NewForm`, `huh.NewInput().Run()` for standalone fields
-- [Gum README](https://github.com/charmbracelet/gum/blob/main/README.md) — `gum choose` / `gum input` / `gum confirm` / `gum write` invocation
-- [Cobra Generator docs (Context7)](https://context7.com/spf13/cobra-cli/llms.txt) — `cmd/root.go` + `main.go` layout, `cobra-cli init` convention
-- [.planning/PROJECT.md](file:///home/samouly/Projects/Golang/loom/.planning/PROJECT.md) — requirements, constraints, key decisions
+- [Fang docs (Context7)](https://context7.com/charmbracelet/fang/llms.txt) -- `fang.Execute(ctx, rootCmd)` pattern, version flag requirements
+- [Fang README](https://github.com/charmbracelet/fang/blob/main/README.md) -- styled help, manpages, completions
+- [Bubble Tea v2 Upgrade Guide](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) -- `charm.land/bubbletea/v2` import path, model pattern
+- [Lipgloss v2 Upgrade Guide](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) -- `lipgloss.NewStyle()` is pure value; no Renderer
+- [Huh v2 docs (Context7)](https://context7.com/charmbracelet/huh/llms.txt) -- `huh.NewForm`, `huh.NewInput().Run()` for standalone fields
+- [Gum README](https://github.com/charmbracelet/gum/blob/main/README.md) -- `gum choose` / `gum input` / `gum confirm` / `gum write` invocation
+- [Cobra Generator docs (Context7)](https://context7.com/spf13/cobra-cli/llms.txt) -- `cmd/root.go` + `main.go` layout, `cobra-cli init` convention
+- [.planning/PROJECT.md](file:///home/samouly/Projects/Golang/loom/.planning/PROJECT.md) -- requirements, constraints, key decisions
 
 ---
 *Architecture research for: spin (Go scaffold CLI, charmbracelet v2 flavor)*

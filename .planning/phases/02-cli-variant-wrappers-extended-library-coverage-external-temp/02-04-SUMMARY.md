@@ -74,7 +74,7 @@ Spin now ships 5 scaffolder-side wrappers (run / build / test / vet / fmt) plus 
 The new package is the single helper for all 5 wrappers. It exposes:
 
 - `ToolSpec` struct (Name / Args / ExtraEnv / InstallHint)
-- `RunWithFallback(spec, fallback ToolSpec) error` — the shared look-up-then-fall-back helper
+- `RunWithFallback(spec, fallback ToolSpec) error` -- the shared look-up-then-fall-back helper
 - 5 wrapper functions: `Run`, `Build`, `Test`, `Vet`, `Fmt(noStrict bool)`
 - An unexported `runTool` that is the only place we touch `exec.Cmd`
 
@@ -86,8 +86,8 @@ Each is ~15 lines, follows the `cmd/new.go` pattern, and attaches to `rootCmd` v
 
 ### 3. Two new CI grep scripts + Taskfile.yml update
 
-- `scripts/check-air-bin.sh` — fails if `.air.toml` / `.air.toml.tmpl` uses the deprecated `bin = "tmp/main"` form
-- `scripts/check-taskfile-setup.sh` — fails if `Taskfile.yml` / `Taskfile.yml.tmpl` is missing the `setup:` target with the 4 required installs (gofumpt, goimports, air, prism)
+- `scripts/check-air-bin.sh` -- fails if `.air.toml` / `.air.toml.tmpl` uses the deprecated `bin = "tmp/main"` form
+- `scripts/check-taskfile-setup.sh` -- fails if `Taskfile.yml` / `Taskfile.yml.tmpl` is missing the `setup:` target with the 4 required installs (gofumpt, goimports, air, prism)
 - `Taskfile.yml` `grep-v1-leaks` target now runs all 3 scripts in sequence
 
 ### 4. Tests
@@ -104,7 +104,7 @@ Each is ~15 lines, follows the `cmd/new.go` pattern, and attaches to `rootCmd` v
 | 2 | Scaffold `--tui --bubbletea --bubbles --lipgloss` then `spin vet` + `spin build` | `vet` exit 0; `build` exit 0; `bin/wrap-test` produced and executable |
 | 3a | `spin fmt` (no gofumpt on $PATH, default strict) | Exit 1; stderr shows `Gofumpt not found on $PATH; install with: go install mvdan.cc/gofumpt@latest (or pass --no-strict)` |
 | 3b | `spin fmt --no-strict` | Exit 0; warn message printed, falls through to gofmt |
-| 4 | `spin test` (prism missing in env) | Exit 0; falls back to `go test` (or prism if present) — `No tests found. Get to writing!` message |
+| 4 | `spin test` (prism missing in env) | Exit 0; falls back to `go test` (or prism if present) -- `No tests found. Get to writing!` message |
 | 5 | `spin run` with timeout 1 (no air, no TTY) | Exit 1; hint printed: `air not found on $PATH; install with: go install github.com/air-verse/air@latest / falling back to: go`; bubbletea fails on `open /dev/tty` (expected in headless env) |
 | 6 | `scripts/check-air-bin.sh` + `scripts/check-taskfile-setup.sh` on scaffolded project | Both exit 0; `OK:` line printed |
 | 7 | Full Phase 1 + 2 regression: scaffold with all 8 libs (`--tui --bubbletea --bubbles --lipgloss --huh --glamour --log --harmonica`) + `CGO_ENABLED=0 go build ./...` + `go test ./...` + v1-leak grep | All exit 0; no regressions |
@@ -117,7 +117,7 @@ Each is ~15 lines, follows the `cmd/new.go` pattern, and attaches to `rootCmd` v
 
 ## Deviations from plan
 
-None — plan executed exactly as written. The plan called for 10 atomic commits per the planner's count; I produced 9 (Tasks 1-9) plus this docs commit, for 10 total. Task 10 (end-to-end smoke) found no regressions, so per the plan's instruction ("only if the smoke uncovers a regression; otherwise no separate commit") it produced no separate commit.
+None -- plan executed exactly as written. The plan called for 10 atomic commits per the planner's count; I produced 9 (Tasks 1-9) plus this docs commit, for 10 total. Task 10 (end-to-end smoke) found no regressions, so per the plan's instruction ("only if the smoke uncovers a regression; otherwise no separate commit") it produced no separate commit.
 
 ## Self-Check: PASSED
 
@@ -126,10 +126,10 @@ None — plan executed exactly as written. The plan called for 10 atomic commits
 - Both new `scripts/check-*.sh` files exist and are `+x`
 - `Taskfile.yml` `grep-v1-leaks` target runs all 3 scripts
 - `go build ./...`, `go test ./... -count=1`, `go vet ./...` all exit 0
-- 9 git commits land cleanly: 8 feat(02) + 2 test(02) — verified via `git log --oneline`
+- 9 git commits land cleanly: 8 feat(02) + 2 test(02) -- verified via `git log --oneline`
 
 ## Notes for the next plan
 
 - The wrap package's test infrastructure is reusable: `buildSpin` + `chdirTo` + `scaffoldMinimalProject` form a tight pattern for any future end-to-end CLI subcommand test. If a Phase 3 plan adds new subcommands, those tests can copy this scaffolding.
 - The two new CI grep scripts (check-air-bin.sh, check-taskfile-setup.sh) complement check-v1-leaks.sh. A future "extend the grep suite" task (e.g., to catch missing `--huh` in lipgloss templates, or to verify a `[[bin]]` name in goreleaser) can follow the same pattern: `set -euo pipefail` header, recursive `find ... -type f -name 'X' -o -name 'X.tmpl'`, FAIL=0 accumulator, exit-1 with hint on failure.
-- `wrap.Fmt` uses a chain (not a fallback pair). If a future wrapper needs a chain of N tools, the existing chain-of-`runTool` pattern in fmt.go is the reference implementation — no need to redesign.
+- `wrap.Fmt` uses a chain (not a fallback pair). If a future wrapper needs a chain of N tools, the existing chain-of-`runTool` pattern in fmt.go is the reference implementation -- no need to redesign.

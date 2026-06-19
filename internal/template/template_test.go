@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/example/spin/internal/params"
+	"github.com/N1xev/spin/internal/params"
 )
 
 // TestTemplate_RenderToWithPost_DeletesSpinToml verifies that
@@ -28,7 +28,7 @@ func TestTemplate_RenderToWithPost_DeletesSpinToml(t *testing.T) {
 		BaseDir: base,
 		SpinToml: &SpinToml{
 			Params: map[string]params.Spec{},
-			Post:   PostHook{}, // empty -> no post-hook
+			Post:   nil, // empty -> no post-hook
 		},
 	}
 	if err := tpl.RenderToWithPost(dest, map[string]any{}); err != nil {
@@ -133,4 +133,68 @@ func TestDefaultCacheDir_PrefersXDG(t *testing.T) {
 	if filepath.Base(got) != "templates" {
 		t.Errorf("defaultCacheDir suffix: got %q, want basename=templates", got)
 	}
+}
+
+// TestRender_Exclude verifies that paths matching any glob in
+// SpinToml.Exclude are skipped during render -- neither the .tmpl
+// nor the rendered output lands in the result map. This is the
+// primary use case for `exclude` (e.g. a CI badge file that
+// should stay literal, or a docs/ tree the author doesn't want
+// copied by default).
+func TestRender_Exclude(t *testing.T) {
+	base := t.TempDir()
+	if err := os.MkdirAll(base, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// _base/ contains: keep.md (should land), drop.md (exact match),
+	// docs/intro.md (glob match), docs/inner.go.tmpl (not excluded,
+	// should render and land as docs/inner.go).
+	for _, rel := range []string{"keep.md", "drop.md", "docs/intro.md", "docs/inner.go.tmpl"} {
+		full := filepath.Join(base, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := []byte("hello from " + rel)
+		if filepath.Ext(rel) == ".tmpl" {
+			body = []byte("package p\n// name={{.name}}\n")
+		}
+		if err := os.WriteFile(full, body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	tpl := &Template{
+		BaseDir: base,
+		SpinToml: &SpinToml{
+			Params: map[string]params.Spec{},
+			Exclude: []string{
+				"drop.md",   // exact match
+				"docs/*.md", // glob
+			},
+		},
+	}
+	out, err := tpl.Render(map[string]any{"name": "myapp"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if _, ok := out["keep.md"]; !ok {
+		t.Errorf("expected keep.md in output; got keys: %v", keysOf(out))
+	}
+	if _, ok := out["drop.md"]; ok {
+		t.Errorf("drop.md should be excluded")
+	}
+	if _, ok := out["docs/intro.md"]; ok {
+		t.Errorf("docs/intro.md should be excluded by glob")
+	}
+	if _, ok := out["docs/inner.go"]; !ok {
+		t.Errorf("docs/inner.go.tmpl should render and land; got keys: %v", keysOf(out))
+	}
+}
+
+func keysOf(m map[string][]byte) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

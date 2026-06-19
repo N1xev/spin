@@ -38,7 +38,7 @@ func TestLoader_Load_LocalPath(t *testing.T) {
 // TestLoader_Load_LocalPath_MissingSpinToml verifies Load fails
 // (with a clear "spin.toml not found" error) when the local dir
 // has no spin.toml. The error message is part of the v2.0
-// contract — if it changes, the CLI's user-facing error
+// contract -- if it changes, the CLI's user-facing error
 // degrades silently.
 func TestLoader_Load_LocalPath_MissingSpinToml(t *testing.T) {
 	dir := t.TempDir()
@@ -125,7 +125,7 @@ func TestLoader_IsGitURL(t *testing.T) {
 func TestRender_PathTraversal(t *testing.T) {
 	// Build a path-traversal file map by hand and call
 	// WriteFiles directly. We don't need a real Template for
-	// this test — the security guard is in writeFiles, which
+	// this test -- the security guard is in writeFiles, which
 	// is the same code path RenderTo uses.
 	dest := t.TempDir()
 	err := WriteFiles(dest, map[string][]byte{
@@ -174,7 +174,7 @@ func TestRender_DeletesSpinToml(t *testing.T) {
 	// spin.toml at top level was never rendered (it's not in
 	// _base), so it doesn't exist at dest/spin.toml. The
 	// _base/spin.toml IS rendered, so it appears at
-	// dest/spin.toml — and the defensive walk must remove it.
+	// dest/spin.toml -- and the defensive walk must remove it.
 	if _, err := os.Stat(filepath.Join(dest, "spin.toml")); !os.IsNotExist(err) {
 		t.Errorf("dest/spin.toml should NOT exist (TPL-16), but stat says: %v", err)
 	}
@@ -185,12 +185,12 @@ func TestRender_DeletesSpinToml(t *testing.T) {
 }
 
 // TestRunPostHook_RunsShellCommand verifies RunPostHook executes
-// the [post] hook command via `sh -c` in the given dir, with
+// the [[post]] hook command via `sh -c` in the given dir, with
 // the supplied values available as template variables. The hook
 // runs AFTER files are written and BEFORE spin.toml deletion.
 func TestRunPostHook_RunsShellCommand(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "spin.toml"), []byte("name = \"tpl\"\n[post]\nrun = \"echo {{.name}} > post-out.txt && touch post-ran.txt\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "spin.toml"), []byte("name = \"tpl\"\n[[post]]\nrun = \"echo {{.name}} > post-out.txt && touch post-ran.txt\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(dir, "_base"), 0o755); err != nil {
@@ -233,5 +233,79 @@ func TestLoader_Load_GitURL_Mock(t *testing.T) {
 	}
 	if !isGitURL(spec) {
 		t.Errorf("isGitURL(%q) = false, want true", spec)
+	}
+}
+
+// TestRunPostHook_MultiStepOrder verifies that two [[post]] steps
+// both run, in the order they appear in spin.toml, and the second
+// observes side-effects from the first.
+func TestRunPostHook_MultiStepOrder(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "spin.toml"), []byte(`name = "tpl"
+[[post]]
+run = "echo first > step1.txt"
+[[post]]
+run = "echo second > step2.txt"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "_base"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tpl, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	if err := RunPostHook(tpl, map[string]any{}, dir); err != nil {
+		t.Fatalf("RunPostHook: %v", err)
+	}
+	for name, want := range map[string]string{"step1.txt": "first", "step2.txt": "second"} {
+		b, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Errorf("read %s: %v", name, err)
+			continue
+		}
+		if strings.TrimSpace(string(b)) != want {
+			t.Errorf("%s = %q, want %q", name, strings.TrimSpace(string(b)), want)
+		}
+	}
+}
+
+// TestRunPostHook_FailFast verifies that when a step fails, the
+// hook stops and subsequent steps do NOT run. The error must name
+// the failing step index for debuggability.
+func TestRunPostHook_FailFast(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "spin.toml"), []byte(`name = "tpl"
+[[post]]
+run = "echo ran > step1.txt"
+[[post]]
+run = "false"
+[[post]]
+run = "echo should-not-run > step3.txt"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "_base"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tpl, err := Detect(dir)
+	if err != nil {
+		t.Fatalf("Detect: %v", err)
+	}
+	err = RunPostHook(tpl, map[string]any{}, dir)
+	if err == nil {
+		t.Fatal("expected post-hook to fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "step 2") {
+		t.Errorf("error should reference failing step 2; got: %v", err)
+	}
+	// step1 must have run (we never reached step 3 because step 2 failed).
+	if _, err := os.Stat(filepath.Join(dir, "step1.txt")); err != nil {
+		t.Errorf("step1.txt should exist (step 1 ran before failure): %v", err)
+	}
+	// step3 must NOT have run.
+	if _, err := os.Stat(filepath.Join(dir, "step3.txt")); !os.IsNotExist(err) {
+		t.Errorf("step3.txt should not exist (fail-fast stopped at step 2); stat err=%v", err)
 	}
 }

@@ -5,8 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"text/template"
+	"time"
+
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 // renderFile renders a single .tmpl file with the given values.
@@ -27,11 +32,12 @@ func renderFile(path string, values map[string]any) ([]byte, error) {
 }
 
 func funcMap() template.FuncMap {
+	titleCaser := cases.Title(language.English)
 	return template.FuncMap{
 		// Useful in templates
 		"upper": strings.ToUpper,
 		"lower": strings.ToLower,
-		"title": strings.Title,
+		"title": titleCaser.String,
 		"trim":  strings.TrimSpace,
 		"join":  strings.Join,
 		"default": func(d, v any) any {
@@ -40,7 +46,61 @@ func funcMap() template.FuncMap {
 			}
 			return v
 		},
+		// snake_case: "MyProject" -> "my_project".
+		// Splits on case boundaries and word boundaries, joins
+		// with underscores, lowercases.
+		"snake_case": snakeCase,
+		// kebab-case: "MyProject" -> "my-project". Go's text/template
+		// requires function names to be valid identifiers, so we use
+		// `kebab` (called as `{{ kebab "X" }}`).
+		"kebab": func(s string) string {
+			return strings.ReplaceAll(snakeCase(s), "_", "-")
+		},
+		// quote: shell-escapes s for use inside a `[[post]] run = "..."`.
+		// Uses single-quote wrapping with the standard "'='"'" trick
+		// so embedded single quotes are escaped correctly.
+		"quote": shellQuote,
+		// now: current time, formatted. No-arg -> RFC3339. With a
+		// layout string (e.g. "2006") -> that layout.
+		"now": func(layout string) string {
+			if layout == "" {
+				layout = time.RFC3339
+			}
+			return time.Now().UTC().Format(layout)
+		},
+		// contains: substring check. Useful in templates that want
+		// to gate on a value (e.g. `{{ if contains .tags "rust" }}`).
+		"contains": strings.Contains,
 	}
+}
+
+var nonWordSplitter = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+
+func snakeCase(s string) string {
+	if s == "" {
+		return ""
+	}
+	// Insert an underscore at every case boundary: "MyProject" -> "My_Project".
+	var b strings.Builder
+	runes := []rune(s)
+	for i, r := range runes {
+		if i > 0 && isUpper(r) && !isUpper(runes[i-1]) {
+			b.WriteByte('_')
+		}
+		if i > 0 && isUpper(r) && i+1 < len(runes) && isLower(runes[i+1]) && isLower(runes[i-1]) {
+			b.WriteByte('_')
+		}
+		b.WriteRune(r)
+	}
+	return strings.ToLower(nonWordSplitter.ReplaceAllString(b.String(), "_"))
+}
+
+func isUpper(r rune) bool { return r >= 'A' && r <= 'Z' }
+func isLower(r rune) bool { return r >= 'a' && r <= 'z' }
+
+func shellQuote(s string) string {
+	// 'foo' -> 'foo'. Embedded single quotes become '"'"'.
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
 }
 
 // WriteFiles writes a rel-path → bytes map to a destination directory.

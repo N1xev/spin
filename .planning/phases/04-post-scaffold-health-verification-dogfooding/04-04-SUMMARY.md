@@ -22,15 +22,15 @@ written manually here.
 
 ## Files added (4)
 
-- `internal/update/form.go` — `PromptForUpdate`, `PromptOptions`,
+- `internal/update/form.go` -- `PromptForUpdate`, `PromptOptions`,
   `UpdateChoice`, `printNonTTYTable`. Layering: `update` does NOT import
   `internal/prompt` (one-way: prompt → scaffold); local `ErrCanceled`
   defined here.
-- `internal/update/form_test.go` — 5+ tests covering non-TTY table, empty-deps
+- `internal/update/form_test.go` -- 5+ tests covering non-TTY table, empty-deps
   no-op, form-construction, "(current)" annotation, long-module truncation.
-- `cmd/update.go` — `updateCmd` (cobra), `--all` bool flag, `runUpdate`
+- `cmd/update.go` -- `updateCmd` (cobra), `--all` bool flag, `runUpdate`
   calls `update.FindGoMod` + `update.PromptForUpdate`.
-- `cmd/update_test.go` — 4 tests: command registered, `--all` flag present,
+- `cmd/update_test.go` -- 4 tests: command registered, `--all` flag present,
   `Long` mentions `[Skip, newStable, newLatest]` and the no-`go test` policy,
   no-go.mod returns error.
 
@@ -47,14 +47,14 @@ written manually here.
   assert `Apply` never invokes `go test`.
 - **INT-03 (non-TTY guard)**: `isatty.IsTerminal(os.Stdin)` check before
   building the form. Non-TTY path renders a 4-column `MODULE OLD STABLE LATEST`
-  table and returns an error — no hang.
+  table and returns an error -- no hang.
 
 ## Verification
 
-- `go test ./internal/update/... -count=1` — PASS
-- `go test ./cmd/... -count=1` — PASS
-- `go build ./...` — clean
-- `go vet ./...` — clean
+- `go test ./internal/update/... -count=1` -- PASS
+- `go test ./cmd/... -count=1` -- PASS
+- `go build ./...` -- clean
+- `go vet ./...` -- clean
 
 ## Deviations from plan
 

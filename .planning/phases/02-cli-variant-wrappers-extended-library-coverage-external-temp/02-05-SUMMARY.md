@@ -6,7 +6,7 @@ status: complete
 verified: 2026-06-04
 ---
 
-# Plan 02-05 — Template Restructure SUMMARY
+# Plan 02-05 -- Template Restructure SUMMARY
 
 ## Why
 
@@ -34,7 +34,7 @@ conditional section), modelled on charmbracelet's official example apps.
 ├── internal/
 │   ├── app/                # TUI variant (--tui / --all)
 │   │   ├── app.go          # Model + New + Init + Run
-│   │   ├── update.go       # Update — inlines huh/glamour/harmonica/spinner/log
+│   │   ├── update.go       # Update -- inlines huh/glamour/harmonica/spinner/log
 │   │   ├── view.go         # View() returning tea.View
 │   │   └── keys.go         # KeyMap
 │   ├── cmd/                # CLI variant (--cli / --all)
@@ -51,13 +51,13 @@ conditional section), modelled on charmbracelet's official example apps.
 
 ### Template tree (`internal/scaffold/templates/`)
 
-- **`_base/`** — shared scaffolding: go.mod, README, .air.toml,
+- **`_base/`** -- shared scaffolding: go.mod, README, .air.toml,
   Taskfile.yml, LICENSE-*, .gitignore (unchanged shape; some content
   re-pinned)
-- **`variant_tui/`**, **`variant_cli/`**, **`variant_all/`** — variant
+- **`variant_tui/`**, **`variant_cli/`**, **`variant_all/`** -- variant
   files with `{{ if has<Lib> . }}` conditional blocks inlining EVERY
   charm lib's wiring (no separate lib/<name>/<file>.go.tmpl)
-- **`lib/glow/README.glow.md.tmpl`** — only surviving lib overlay
+- **`lib/glow/README.glow.md.tmpl`** -- only surviving lib overlay
   (binary install hint for the glow markdown reader)
 
 DELETED: `lib/{huh,wish,glamour,harmonica,bubbles,bubbletea,cobra,fang,log,lipgloss,viper,ansi,modifiers,runewidth}/`.
@@ -67,17 +67,17 @@ DELETED: `lib/{huh,wish,glamour,harmonica,bubbles,bubbletea,cobra,fang,log,lipgl
 `templates/.../cmd/_name_/main.go.tmpl` → `cmd/<actual-name>/main.go`.
 The `_name_` placeholder is replaced in the output PATH (not the
 template body) so authors can address per-project paths without
-templating the filesystem itself. `<name>` was rejected — angle
+templating the filesystem itself. `<name>` was rejected -- angle
 brackets are valid in filenames but harder to type in editors.
 
 ### Bool→Name map split (`project.go` + `template.go`)
 
 The single bool→name map was split into two:
 
-- **`boolFlagOverlayMap()`** in `template.go` — only entries with a
+- **`boolFlagOverlayMap()`** in `template.go` -- only entries with a
   surviving `lib/<name>/` overlay. Now `{"glow": p.Glow}`. Drives the
   overlay walker.
-- **`libBoolMap()`** in `project.go` — full 9-entry map: cobra, fang,
+- **`libBoolMap()`** in `project.go` -- full 9-entry map: cobra, fang,
   viper, huh, glamour, glow, wish, log, harmonica. Drives `AllLibs()`
   for prompts and (future) AGENTS.md.
 
@@ -96,7 +96,7 @@ appending, so the layer list reflects what actually exists. Fixed
 
 - `variant_cli/internal/cmd/ssh.go.tmpl` + `variant_all/internal/cmd/ssh.go.tmpl`:
   removed the v1 `tea.WithAltScreen()` program option (returns `nil`
-  options now — bubbletea v2 has no `WithAltScreen`)
+  options now -- bubbletea v2 has no `WithAltScreen`)
 - `variant_all/internal/ui/styles.go.tmpl`: merged TUI styles (Title,
   Status, Help) with CLI styles (Header, Success, Error) into one
   6-field struct gated on `{{ if hasLipgloss . }}`
@@ -105,20 +105,20 @@ appending, so the layer list reflects what actually exists. Fixed
 
 In `internal/scaffold/integration_test.go`:
 
-1. **`TestIntegrationScaffold_TUIAllLibs`** — `--tui --bubbletea
+1. **`TestIntegrationScaffold_TUIAllLibs`** -- `--tui --bubbletea
    --bubbles --lipgloss --huh --glamour --harmonica --log`; asserts
    restructured tree exists, no per-lib files in `internal/app/`,
    `internal/app/update.go` inlines huh.NewForm, glamour.NewTermRenderer,
    harmonica.NewSpring, spinner.TickMsg, log.Info; `internal/app/app.go`
    has spinner.New; builds clean, zero v1 leaks
-2. **`TestIntegrationScaffold_CLIAllLibs`** — `--cli --cobra --fang
+2. **`TestIntegrationScaffold_CLIAllLibs`** -- `--cli --cobra --fang
    --lipgloss --glamour --wish --log --viper`; asserts restructured tree
    exists, builds, runs `hello world` + `readme` subcommands
    end-to-end with expected output
-3. **`TestIntegrationScaffold_AllVariant`** — `--all` with full lib set;
+3. **`TestIntegrationScaffold_AllVariant`** -- `--all` with full lib set;
    asserts both `internal/app/` + `internal/cmd/` exist, root `--help`
    lists tui, hello, readme, ssh subcommands, hello + readme execute
-4. **`TestIntegrationScaffold_NameInPath`** — scaffolds `weird-name_123`;
+4. **`TestIntegrationScaffold_NameInPath`** -- scaffolds `weird-name_123`;
    asserts `cmd/weird-name_123/main.go` exists and no scaffolded path
    contains the unsubstituted `_name_` placeholder
 
@@ -128,13 +128,13 @@ split.
 
 ## Verification
 
-- `go build ./...` — exit 0
+- `go build ./...` -- exit 0
 - `go test ./internal/scaffold/... ./internal/prompt/... ./cmd/... -count=1`
-  — all green (scaffold 69.2s, prompt 0.006s, cmd 6.4s)
-- Manual smoke tests for each variant — all pass (see 02-VERIFICATION.md
+  -- all green (scaffold 69.2s, prompt 0.006s, cmd 6.4s)
+- Manual smoke tests for each variant -- all pass (see 02-VERIFICATION.md
   Addendum)
 - Pre-existing flaky `wrap.TestRun_WithAirToml` + `wrap.TestFmt_GofumptMissing_NoStrict`
-  still flake at base commit — NOT Plan 02-05 regressions
+  still flake at base commit -- NOT Plan 02-05 regressions
 
 ## Downstream Impact
 

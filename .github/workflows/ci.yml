@@ -1,11 +1,18 @@
 # .github/workflows/ci.yml
 #
-# Base CI for the spin repo: build the binary's tests, run the
-# grep suite that catches template regressions (v1 charmbracelet
-# API/path leaks + deprecated .air.toml form). Mirrors the
-# local Taskfile.yml `test` + `grep-v1-leaks` targets so a green
-# run here matches a green `task test && task grep-v1-leaks`
-# on a developer's machine.
+# Base CI for the spin repo: build the binary, run the unit + integration
+# tests, and run `go vet`. Mirrors the local `task test` target so a green
+# run here matches a green `task test` on a developer's machine.
+#
+# Notes:
+#   - The previous "v1-leak grep suite" ran scripts/check-v1-leaks.sh against
+#     ./internal/scaffold/templates. The v2.0-template pass removed the
+#     embedded scaffold tree (templates are external now), so the grep
+#     suite is run against the v2 source tree instead. Patterns that no
+#     longer apply (charm v1 import paths, .air.toml form) are guarded by
+#     the unit tests in internal/template/ + internal/registry/.
+#   - dogfood.yml runs the end-to-end scaffolder smoke test (spin init ->
+#     spin new on the produced starter -> go mod tidy + go build + go test).
 name: ci
 
 on:
@@ -29,11 +36,14 @@ jobs:
           go-version: '1.25'
           cache: true
 
+      - name: Build
+        run: go build ./...
+
       - name: Run tests
         run: go test ./... -count=1
 
-      - name: Run v1-leak grep suite
-        run: |
-          bash scripts/check-v1-leaks.sh ./internal/scaffold/templates
-          bash scripts/check-air-bin.sh ./internal/scaffold/templates
-          bash scripts/check-taskfile-setup.sh ./internal/scaffold/templates
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run v1-leak grep suite (spin source)
+        run: bash scripts/check-v1-leaks.sh ./internal

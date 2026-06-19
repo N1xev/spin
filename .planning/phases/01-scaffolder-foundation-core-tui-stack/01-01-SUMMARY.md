@@ -13,9 +13,9 @@ provides:
   - "post-scaffold `go mod tidy` + `go build ./...` smoke test with CGO_ENABLED=0"
   - "end-to-end CLI smoke test (TestE2EScaffold) that builds spin, runs it, validates output, and greps for v1 leaks"
 affects:
-  - "phase-02 (CLI variant, more libs, more flags) — extends Project struct and overlay engine"
-  - "phase-03 (interactive prompts, --ai) — runs prompter before scaffold.New"
-  - "phase-04 (doctor/add/update) — operates on the Project struct and template tree"
+  - "phase-02 (CLI variant, more libs, more flags) -- extends Project struct and overlay engine"
+  - "phase-03 (interactive prompts, --ai) -- runs prompter before scaffold.New"
+  - "phase-04 (doctor/add/update) -- operates on the Project struct and template tree"
 
 # Tech tracking
 tech-stack:
@@ -84,7 +84,7 @@ completed: 2026-06-02
 - `go install`-able `spin` binary with cobra v1.9.1 + fang v2; `spin --help` shows fang-styled help (not raw cobra)
 - `spin new <name> --tui --bubbletea` from any directory produces a runnable bubbletea v2 TUI project in `./<name>/` that builds and tests clean with `CGO_ENABLED=0`
 - Embedded template engine (//go:embed all:templates) walking three overlay layers (_base, variant_tui, lib/bubbletea) with last-write-wins
-- Single `Project` struct (Name, Module, Type, Libs, Year, SpinVer) as the scaffold contract — Plan 02/03 extend this without touching the engine
+- Single `Project` struct (Name, Module, Type, Libs, Year, SpinVer) as the scaffold contract -- Plan 02/03 extend this without touching the engine
 - Post-scaffold `go mod tidy` + `go build ./...` smoke test catches v1 imports, wrong version pins, and missing dependencies
 - TestE2EScaffold: black-box test that builds spin, runs the CLI, validates every emitted file, runs go build + go test, and greps for v1 charmbracelet import leaks (<1s wall clock, no special tags)
 
@@ -95,7 +95,7 @@ completed: 2026-06-02
 3. **Task 3: Walking Skeleton templates (_base + variant_tui + lib/bubbletea)** - `bf3ef3b` (feat)
 4. **Task 4: Walking Skeleton end-to-end smoke test (TestE2EScaffold)** - `5b779a1` (feat)
 
-**Plan metadata:** No separate docs commit — summary committed as part of plan completion.
+**Plan metadata:** No separate docs commit -- summary committed as part of plan completion.
 
 _Note: TDD was applied at the task level (one feat commit per task with tests written first within the task). The Task 2/Task 3 split (engine-then-templates) is intentional: Task 2's tests fail RED until Task 3's templates land, then both flip GREEN. This is the same engine/templates decoupling documented in 01-SKELETON.md._
 
@@ -122,7 +122,7 @@ _Note: TDD was applied at the task level (one feat commit per task with tests wr
 - **Pinned cobra to v1.9.1** as the fang-tested floor per the plan. Let fang, lipgloss, and log resolve to their latest stable (v2.0.1, v2.0.3, v2.0.0 respectively) since the plan listed them as "latest stable" without a specific pin.
 - **Moved templates/ into `internal/scaffold/templates/`.** The plan specified `templates/` at the repo root, but `//go:embed` cannot reach parent directories. The Go embed directive is resolved relative to the source file, so templates must live alongside the file declaring the embed.
 - **Added `go mod tidy` to `verifyBuild`.** The plan specified only `go build ./...`, but a fresh generated project has no `go.sum`; `go build` fails with "missing go.sum entry for module providing package charm.land/bubbletea/v2" before the v1-leak gate can fire. `go mod tidy` populates the sum file and lets the build proceed.
-- **Auto-bumped `go` directive to 1.25.8** in spin's own go.mod. The plan specified `go 1.23`, but `charm.land/fang/v2 v2.0.1` requires `go 1.25.0` — `go mod tidy` would not accept a lower floor.
+- **Auto-bumped `go` directive to 1.25.8** in spin's own go.mod. The plan specified `go 1.23`, but `charm.land/fang/v2 v2.0.1` requires `go 1.25.0` -- `go mod tidy` would not accept a lower floor.
 
 ## Deviations from Plan
 
@@ -170,13 +170,13 @@ _Note: TDD was applied at the task level (one feat commit per task with tests wr
 
 ---
 
-**Total deviations:** 5 auto-fixed (5 Rule 1/2 — all bugs or missing-critical fixes; no architectural changes)
+**Total deviations:** 5 auto-fixed (5 Rule 1/2 -- all bugs or missing-critical fixes; no architectural changes)
 **Impact on plan:** All auto-fixes were necessary for correctness. The Walking Skeleton's architectural decisions (overlay engine, Project struct, embed root, post-scaffold smoke test) are unchanged. Only the template location and the go directive floor shifted to satisfy Go's `//go:embed` and module-system constraints.
 
 ## Issues Encountered
 
-- **Test 2 (TestNewEndToEndWalkingSkeleton) auto-skip mechanism** — Task 2's end-to-end test was written before templates existed. Implemented a "probe + skip" pattern: if the first renderToMap call returns a "no templates" error, the test skips with a clear message pointing at Task 3. This kept Task 2 (engine) and Task 3 (templates) committable independently, which matched the plan's structure. After Task 3 landed, the probe returned real content and the test ran end-to-end.
-- **The Write tool interpreted `templates/lib/bubbletea.go.tmpl` as a file directly in `templates/lib/`, not in `templates/lib/bubbletea/`.** Caught by `find` and fixed with a `mv` before commit. No downstream impact — the file ended up in the right place.
+- **Test 2 (TestNewEndToEndWalkingSkeleton) auto-skip mechanism** -- Task 2's end-to-end test was written before templates existed. Implemented a "probe + skip" pattern: if the first renderToMap call returns a "no templates" error, the test skips with a clear message pointing at Task 3. This kept Task 2 (engine) and Task 3 (templates) committable independently, which matched the plan's structure. After Task 3 landed, the probe returned real content and the test ran end-to-end.
+- **The Write tool interpreted `templates/lib/bubbletea.go.tmpl` as a file directly in `templates/lib/`, not in `templates/lib/bubbletea/`.** Caught by `find` and fixed with a `mv` before commit. No downstream impact -- the file ended up in the right place.
 - **Generated `bubbletea.go` at project root** is a `package main` placeholder per the plan. Plan 03 will replace this with the proper "lib overlay injects via {{define}} blocks or internal/ui/" pattern. For the Walking Skeleton it's harmless: compiles, ships a comment, takes no runtime resources.
 
 ## User Setup Required

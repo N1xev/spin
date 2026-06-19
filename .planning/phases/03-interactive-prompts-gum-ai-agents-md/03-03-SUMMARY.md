@@ -17,12 +17,12 @@ requirements:
   - INT-01
 key_findings:
   - "gum's `choose` widget writes the chosen option's display text to stdout (not a separate value), so the backend must reverse-map the label back to the machine key. Two maps were added: typeDisplayToKey (project type) and an inline displayToKey map per askGumTemplate call (variant-specific)."
-  - "The widget wrapper signatures in the plan (gumChoose(header, options, defaultIdx)) do not take a ctx parameter, but gumRunCapture does (so the gumRunner var type matches it). The cleanest plumbing is a package-level gumCtx var that fillWithGum sets at entry (5-min timeout) and resets on exit — the wrappers read it and pass to gumRunner. This keeps the wrapper surface clean while honoring the 5-min timeout contract from the plan."
+  - "The widget wrapper signatures in the plan (gumChoose(header, options, defaultIdx)) do not take a ctx parameter, but gumRunCapture does (so the gumRunner var type matches it). The cleanest plumbing is a package-level gumCtx var that fillWithGum sets at entry (5-min timeout) and resets on exit -- the wrappers read it and pass to gumRunner. This keeps the wrapper surface clean while honoring the 5-min timeout contract from the plan."
   - "resolveBackend is unexported; the existing prompt_test.go is `package prompt_test` (external). Added a new prompt_backend_test.go in `package prompt` (white-box) for the unexported symbol access. The 6 resolveBackend / backend tests are the load-bearing coverage for the dispatch logic."
   - "gum's `choose --no-limit` does not support pre-selection via the CLI; the user always sees the full list. askGumLibs accepts a preSelected []string param (for future pre-fill-via-stdin) but does not currently use it for arg construction. This is a known divergence from the huh backend (which DOES pre-select via .Selected(true)) and is documented in 03-RESEARCH.md as a future-enhancement hook."
-  - "TestFillWithGum_CancelPropagates cannot assert `err == want` because the askGumXxx wrapper replaces the reason with a step-specific one (\"user canceled at project type selection\" etc.). The test now asserts the returned error matches `*Canceled` via errors.As, with a non-empty Reason — the same `*Canceled` instance contract that main.go uses to exit 130."
+  - "TestFillWithGum_CancelPropagates cannot assert `err == want` because the askGumXxx wrapper replaces the reason with a step-specific one (\"user canceled at project type selection\" etc.). The test now asserts the returned error matches `*Canceled` via errors.As, with a non-empty Reason -- the same `*Canceled` instance contract that main.go uses to exit 130."
   - "gum's `Template` choice cannot distinguish a value from a label via stdout (it only writes the chosen option's text). The gum backend builds an inline displayToKey map per askGumTemplate call, rather than adding a (display,key) tuple type to a shared helper. This is local to one function and the inline map is the smallest change that matches the existing pattern in huh.go (which has a similar inline Option building approach)."
-one_line_summary: "Gum shell-out backend (4 widget wrappers + fillWithGum dispatcher with the 8-step prompt sequence), resolveBackend() that prefers gum when found + healthy, and dispatch from Fill — the primary charmbracelet-style interactive prompt backend with huh v2 as the transparent fallback"
+one_line_summary: "Gum shell-out backend (4 widget wrappers + fillWithGum dispatcher with the 8-step prompt sequence), resolveBackend() that prefers gum when found + healthy, and dispatch from Fill -- the primary charmbracelet-style interactive prompt backend with huh v2 as the transparent fallback"
 ---
 
 # Phase 3 Plan 3: Gum shell-out backend + backend resolver + dispatch
@@ -37,7 +37,7 @@ Debug level per UI-SPEC §"gum vs huh decision".
 
 The plan introduces two new test seams (gumLookPath, gumVersionCheck
 in prompt.go; gumRunner in gum.go) that let the dispatch and
-arg-construction logic be unit-tested in any environment — no real
+arg-construction logic be unit-tested in any environment -- no real
 gum binary, no real subprocess calls, no TTY required.
 
 ## Performance
@@ -54,7 +54,7 @@ gum binary, no real subprocess calls, no TTY required.
 
 | Task | Name | Commit | Files |
 |------|------|--------|-------|
-| 1 | Implement gum.go — subprocess runner + 4 widget wrappers + fillWithGum dispatcher | 8037dc9 | internal/prompt/gum.go |
+| 1 | Implement gum.go -- subprocess runner + 4 widget wrappers + fillWithGum dispatcher | 8037dc9 | internal/prompt/gum.go |
 | 2 | Add resolveBackend() and wire Fill() to dispatch to gum-or-huh | 982d2d6 | internal/prompt/{prompt,prompt_backend_test}.go |
 | 3 | Tests for gum arg construction (mock runner) | 42bd3bd | internal/prompt/gum.go, internal/prompt/gum_test.go |
 
@@ -74,7 +74,7 @@ gum binary, no real subprocess calls, no TTY required.
     the 0-based Go defaultIdx to 1-based).
   - `gumMultiSelect(header, options, preSelected)` → `choose --no-limit --header H a b c`.
     Returns nil on empty stdout (user confirmed no selection).
-    `preSelected` is accepted but currently unused — gum's
+    `preSelected` is accepted but currently unused -- gum's
     `choose --no-limit` does not support pre-selection via the CLI.
   - `gumInput(header, placeholder, defaultValue)` → `input --header H --placeholder P [--value V]`
     (the `--value` flag is conditional on non-empty default).
@@ -113,21 +113,21 @@ gum binary, no real subprocess calls, no TTY required.
 ## Files Created/Modified
 
 ### Created
-- `internal/prompt/gum.go` — gumRunCapture, 4 widget wrappers,
+- `internal/prompt/gum.go` -- gumRunCapture, 4 widget wrappers,
   fillWithGum dispatcher, 8 askGum* step functions, typeDisplayToKey
   map, templateOptionsForType, isCanceled helper, logBackend
-- `internal/prompt/gum_test.go` — TestGum{Choose,MultiSelect,Input,Confirm}_Args
+- `internal/prompt/gum_test.go` -- TestGum{Choose,MultiSelect,Input,Confirm}_Args
   (arg construction, default plumbing, cancel propagation);
   TestFillWithGum_{WritesBackToProject, SkipsSetFields, CancelPropagates}
   (load-bearing write-back test + skip predicate + cancel);
   TestTemplateOptionsForType_Variants, TestTypeDisplayToKey_AllLabels,
   TestIsCanceled_AffectsOnlyCanceledErrors
-- `internal/prompt/prompt_backend_test.go` — TestResolveBackend_{HuhWhenGumMissing,
+- `internal/prompt/prompt_backend_test.go` -- TestResolveBackend_{HuhWhenGumMissing,
   HuhWhenSPINUseHuh1, GumWhenAvailableAndHealthy, HuhWhenGumBroken};
   TestBackendString; TestFill_DispatchHiresolvesHuhWhenGumMissing
 
 ### Modified
-- `internal/prompt/prompt.go` — added `backend` enum + `String()`;
+- `internal/prompt/prompt.go` -- added `backend` enum + `String()`;
   added `gumLookPath` and `gumVersionCheck` test seams; added
   `resolveBackend()`; replaced the Fill body with a backend dispatch
   + Debug log line; updated the package doc to reflect Plan 03
@@ -135,17 +135,17 @@ gum binary, no real subprocess calls, no TTY required.
 
 ## Decisions Made
 
-1. **Package-level `gumCtx` for ctx plumbing** — the plan's widget
+1. **Package-level `gumCtx` for ctx plumbing** -- the plan's widget
    signatures (`gumChoose(header, options, defaultIdx)`) don't take
    a ctx parameter, but `gumRunCapture` does (so `gumRunner`'s type
-   matches). A package-level `gumCtx` var — set by `fillWithGum`
-   to a 5-min timeout and reset on exit — is the cleanest way to
+   matches). A package-level `gumCtx` var -- set by `fillWithGum`
+   to a 5-min timeout and reset on exit -- is the cleanest way to
    plumb the caller's context to the subprocess call site. The
    wrappers read `gumCtx` and pass it to `gumRunner`. This matches
    the existing pattern in huh.go (no ctx in wrappers) while
    honoring the 5-min timeout contract from the plan.
 
-2. **Test seams `gumLookPath` and `gumVersionCheck`** — added as
+2. **Test seams `gumLookPath` and `gumVersionCheck`** -- added as
    package-level vars in prompt.go. Default to the real
    `exec.LookPath` and a 2-second `gum --version` probe. Tests
    override them per-test via `t.Cleanup` to simulate gum
@@ -153,11 +153,11 @@ gum binary, no real subprocess calls, no TTY required.
    requires `os/exec.Command` to be called at exactly 2 sites
    (gumRunCapture + resolveBackend); the seams are var assignments
    to the real `exec.LookPath` / a closure that calls the real
-   `exec.CommandContext` — so the count is unchanged.
+   `exec.CommandContext` -- so the count is unchanged.
 
 3. **`typeDisplayToKey` map** for project-type label → machine
    key. The plan shows the gum labels as user-facing copy
-   ("TUI — terminal app with bubbletea", etc.) and the test
+   ("TUI -- terminal app with bubbletea", etc.) and the test
    `TestFillWithGum_WritesBackToProject` stubs the runner to
    return these labels. The wrapper reverse-maps via a static
    map. A regression in the labels (typo, missing entry) would
@@ -166,7 +166,7 @@ gum binary, no real subprocess calls, no TTY required.
    `TestTypeDisplayToKey_AllLabels` test pins the map to the
    UI-SPEC labels.
 
-4. **Inline `displayToKey` map in `askGumTemplate`** — same shape
+4. **Inline `displayToKey` map in `askGumTemplate`** -- same shape
    as `typeDisplayToKey` but for the template options. Inline
    rather than a package-level var because the options are
    variant-specific and only one variant is asked per call. The
@@ -174,7 +174,7 @@ gum binary, no real subprocess calls, no TTY required.
    keys to UI-SPEC.
 
 5. **`askGumLibs` returns picks as display labels, then maps to
-   machine names** — the huh backend's `askLibs` returns the
+   machine names** -- the huh backend's `askLibs` returns the
    machine names directly (the huh form has a separate Value).
    The gum backend has no separate Value, so the labels are
    captured and mapped via `displayToName` (built once per call
@@ -183,7 +183,7 @@ gum binary, no real subprocess calls, no TTY required.
    mirror to bools via `libBoolMirror`).
 
 6. **`preSelected []string` parameter unused in `gumMultiSelect`**
-   — gum's `choose --no-limit` does not support pre-selection
+   -- gum's `choose --no-limit` does not support pre-selection
    via the CLI; the user always sees the full list. The parameter
    is kept in the signature for symmetry with `huh.NewMultiSelect`
    and so a future plan can pre-fill via stdin (one line in
@@ -192,11 +192,11 @@ gum binary, no real subprocess calls, no TTY required.
    `gumMultiSelect` doc comment.
 
 7. **`TestFillWithGum_CancelPropagates` asserts matchable *Canceled,
-   not same-instance** — the `askGumXxx` wrappers replace the
+   not same-instance** -- the `askGumXxx` wrappers replace the
    `*Canceled.Reason` with a step-specific one ("user canceled at
    project type selection", etc.). The same `*Canceled` instance
    is not preserved. The test asserts the returned error matches
-   `*Canceled` via `errors.As`, with a non-empty Reason — the same
+   `*Canceled` via `errors.As`, with a non-empty Reason -- the same
    contract that main.go uses to exit 130.
 
 8. **`SPIN_USE_HUH=1` escape hatch is the FIRST check in
@@ -237,7 +237,7 @@ after the multi-select write-back. The gum backend's
 (`[bubbles, bubbletea]`, not `[bubbletea, bubbles]`).
 
 **Fix:** Added `sort.Strings(p.Libs)` in `askGumLibs` after the
-write-back. The sort is part of the public contract — the
+write-back. The sort is part of the public contract -- the
 AGENTS.md template and the overlay walker both assume sorted
 `p.Libs`.
 
@@ -250,7 +250,7 @@ AGENTS.md template and the overlay walker both assume sorted
 **Found during:** Task 3 first test run.
 
 **Issue:** Initial test had `if isCanceled(...) { t.Error("...
-= false, want true") }` — the branch fires when isCanceled
+= false, want true") }` -- the branch fires when isCanceled
 returns true, but the error message describes the false case.
 The test passed when isCanceled returned false (the wrong direction)
 and failed when isCanceled returned true (the correct direction).
@@ -269,7 +269,7 @@ correctly written and unchanged.
 
 **Issue:** Initial fixture pre-set `License: "mit"` (the default)
 expecting askGumLicense to skip. But the skip predicate is
-`p.License != "" && p.License != "mit"` — License="mit" does NOT
+`p.License != "" && p.License != "mit"` -- License="mit" does NOT
 skip (the user must be able to confirm the default per UI-SPEC).
 The stub returned "" for every call, which got lowercased to ""
 and assigned to `p.License`.
@@ -287,7 +287,7 @@ pre-set to a non-default value.
 
 **Found during:** Task 3 first test run.
 
-**Issue:** Same as above — Template was pre-set to "tui-bubbletea"
+**Issue:** Same as above -- Template was pre-set to "tui-bubbletea"
 (the default), so askGumTemplate's skip predicate
 `p.Template != "" && p.Template != "tui-bubbletea"` did not fire.
 The stub returned "" which didn't match any template display
@@ -334,8 +334,8 @@ Same fix pattern as the License case.
 - `go test -count=1 -timeout 300s ./internal/scaffold/... ./internal/prompt/... ./cmd/...` all pass
 - `gofumpt -l internal/prompt/` clean
 - `grep -nR "exec\." internal/prompt/` shows exactly 2 `os/exec` call sites:
-  - `gum.go:71` — `exec.CommandContext(ctx, "gum", args...)` (gumRunCapture)
-  - `prompt.go:103` — `exec.CommandContext(verCtx, path, "--version").Run()` (gumVersionCheck, the resolveBackend probe)
+  - `gum.go:71` -- `exec.CommandContext(ctx, "gum", args...)` (gumRunCapture)
+  - `prompt.go:103` -- `exec.CommandContext(verCtx, path, "--version").Run()` (gumVersionCheck, the resolveBackend probe)
   - All other subprocess usage goes through `gumRunner` (test seam)
 - `gum` not on $PATH in the test runner → all 4 stubbed-gum tests
   pass; resolveBackend correctly returns backendHuh in the
@@ -353,7 +353,7 @@ The remaining stub-like behavior is `gumMultiSelect`'s unused
 forward-compatibility hook for stdin pre-fill). This is a deliberate
 API choice, not a missing implementation.
 
-The `gum` binary itself is not a Go module — it's a runtime
+The `gum` binary itself is not a Go module -- it's a runtime
 requirement installed via
 `go install github.com/charmbracelet/gum@latest`. The test
 runner doesn't have gum installed; the suite passes because all
@@ -375,11 +375,11 @@ and never call the real subprocess.
 
 - **`gumRunner` ctx plumbing.** The plan's widget signatures don't
   include ctx, but `gumRunCapture` does. Tried three designs:
-  (1) wrappers take ctx, tests pass `context.Background()` —
+  (1) wrappers take ctx, tests pass `context.Background()` --
   breaks the plan's literal test signatures; (2) wrappers use
   `context.Background()` and the 5-min timeout lives in
-  `gumRunCapture` — loses the "caller provides ctx" intent from
-  the plan; (3) package-level `gumCtx` set by `fillWithGum` —
+  `gumRunCapture` -- loses the "caller provides ctx" intent from
+  the plan; (3) package-level `gumCtx` set by `fillWithGum` --
   matches the plan's literal signatures AND honors the 5-min
   timeout from the caller. Chose (3). The package var is a small
   stateful construct but it stays within the Fill-call scope
@@ -402,7 +402,7 @@ and never call the real subprocess.
   values, which caused 2 unexpected gumRunner calls. Fixed by
   pre-setting both to non-default values in the test fixture.
 
-- **`*Canceled` wrapping at the wrapper level** — the
+- **`*Canceled` wrapping at the wrapper level** -- the
   `askGumXxx` wrappers replace the `*Canceled.Reason` with a
   step-specific one before returning. This is the same behavior
   as the huh backend (each ask function maps `huh.ErrUserAborted`
@@ -416,7 +416,7 @@ and never call the real subprocess.
 - **Plan 04 (AGENTS.md template)** can iterate over
   `p.AllLibs()` (in place from Plan 02) to render the library
   sections. The gum/huh prompt answers now flow into the same
-  `*scaffold.Project` that the template consumes — no separate
+  `*scaffold.Project` that the template consumes -- no separate
   `*PromptAnswers` struct. The FuncMap helper for the library
   lookup table is the only remaining piece.
 - The `*prompt.Canceled` error path is now active on both

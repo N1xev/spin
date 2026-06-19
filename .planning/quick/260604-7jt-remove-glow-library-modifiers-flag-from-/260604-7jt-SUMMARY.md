@@ -74,20 +74,20 @@ Drop --glow and --modifiers flags, Project.Glow/Modifiers fields, lib/glow/ over
 
 ## Verification
 
-- `go build ./...` — clean
-- `go test -count=1 -timeout 300s ./internal/scaffold/... ./internal/prompt/... ./cmd/...` — all pass (scaffold 70.7s; prompt 0.004s; cmd 6.2s)
-- `go run . new --help` — does not mention `--glow` or `--modifiers`
-- `go run . new myapp --tui --bubbletea --glamour` — scaffolds cleanly, builds with `CGO_ENABLED=0 go build ./...`, no glow/modifier in go.mod
-- `go run . new myapp-cli --cli --wish --viper` — CLI scaffold has only `hello` + `ssh` subcommands, no `readme`
+- `go build ./...` -- clean
+- `go test -count=1 -timeout 300s ./internal/scaffold/... ./internal/prompt/... ./cmd/...` -- all pass (scaffold 70.7s; prompt 0.004s; cmd 6.2s)
+- `go run . new --help` -- does not mention `--glow` or `--modifiers`
+- `go run . new myapp --tui --bubbletea --glamour` -- scaffolds cleanly, builds with `CGO_ENABLED=0 go build ./...`, no glow/modifier in go.mod
+- `go run . new myapp-cli --cli --wish --viper` -- CLI scaffold has only `hello` + `ssh` subcommands, no `readme`
 
 ## Deviations from Plan
 
-None — plan executed exactly as written.
+None -- plan executed exactly as written.
 
 ## Pre-existing Flaky Tests (not regressions)
 
-- `internal/wrap:TestRun_WithAirToml` — hits 660s timeout; the wrap package was not touched by this plan. The constraints explicitly call this out: "Pre-existing flaky tests (`wrap.TestRun_WithAirToml` 660s timeout, `wrap.TestFmt_GofumptMissing_NoStrict`) are NOT regressions — note in SUMMARY but do not block."
+- `internal/wrap:TestRun_WithAirToml` -- hits 660s timeout; the wrap package was not touched by this plan. The constraints explicitly call this out: "Pre-existing flaky tests (`wrap.TestRun_WithAirToml` 660s timeout, `wrap.TestFmt_GofumptMissing_NoStrict`) are NOT regressions -- note in SUMMARY but do not block."
 
 ## Self-Check
 
-PASSED — all 2 task commits present in git log; all modified files exist; deleted files are gone.
+PASSED -- all 2 task commits present in git log; all modified files exist; deleted files are gone.

@@ -1,7 +1,7 @@
 ---
 phase: 02
 plan: 01
-title: Foundation refactor — pins, go directive, path-traversal guard, grep refinement
+title: Foundation refactor -- pins, go directive, path-traversal guard, grep refinement
 subsystem: scaffold
 tags: [pins, go-version, security, grep]
 completed: 2026-06-02
@@ -35,7 +35,7 @@ key_findings:
 one_line_summary: "Foundation refactor: pin bumps, unconditional 1.25.0 go directive, path-traversal guard in emit(), and per-module v1-leak grep deny-list (allow harmonica + glow)"
 ---
 
-# Phase 2 Plan 1: Foundation refactor — Summary
+# Phase 2 Plan 1: Foundation refactor -- Summary
 
 This plan is the foundation for Phase 2. It fixes the four things the v1
 research got wrong (per the Phase 2 research §1 / §2 / §7) so that
@@ -64,7 +64,7 @@ everything else in Phase 2 builds on solid ground:
 | 3 | Path-traversal guard | 9585618 | internal/scaffold/scaffold.go |
 | 4 | Per-module v1-leak grep | 8cf36e1 | scripts/check-v1-leaks.sh |
 | 5 | Test updates + new tests | 58274c7 | 6 test/source files |
-| 6 | End-to-end smoke | (no commit) | — verification only, no regression found |
+| 6 | End-to-end smoke | (no commit) | -- verification only, no regression found |
 
 ## Deviations from plan
 
@@ -73,7 +73,7 @@ everything else in Phase 2 builds on solid ground:
 **Found during:** Task 5 test run.
 
 **Issue:** The plan stated "Plan 02-02's `charmPin` template-func
-switch will reference the new fields" — implying Task 5's new
+switch will reference the new fields" -- implying Task 5's new
 `TestFuncMap_CharmPin` assertions for huh/glamour/wish/fang should
 NOT pass yet, with Plan 02-02 making the test go green. But the
 Task 5 commit also asserts those new pins work end-to-end in
@@ -140,13 +140,13 @@ belongs with the test commit.
     `TestEmit_HappyPath`, `TestGrepV1Leaks_AllowsHarmonica`,
     `TestGrepV1Leaks_AllowsGlowV2`
   - 6 new sub-cases:
-    - `TestEmit_PathTraversal` — 3 sub-cases (absolute_unix,
+    - `TestEmit_PathTraversal` -- 3 sub-cases (absolute_unix,
       relative_traversal, mixed_traversal)
-    - `TestRenderToMap_GoVersion` — 1 new sub-case
+    - `TestRenderToMap_GoVersion` -- 1 new sub-case
       (bubbles_implies_bubbletea) on top of 2 existing
-    - `TestGrepV1Leaks_AllowsGlowV2` — no sub-cases (top-level)
+    - `TestGrepV1Leaks_AllowsGlowV2` -- no sub-cases (top-level)
   - Net 1 renamed test: `TestIntegrationScaffold_NoBubblesGoVersion`
-    → `TestIntegrationScaffold_AlwaysGo1250` (semantic flip —
+    → `TestIntegrationScaffold_AlwaysGo1250` (semantic flip --
     was asserting the absence of 1.25.0, now asserts its presence)
 
 ## Verification

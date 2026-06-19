@@ -232,7 +232,7 @@ func TestParse_Shorthand(t *testing.T) {
 }
 
 // TestSetDefaults verifies SetDefaults applies each param's
-// Default() to its Value() — the path used by --no-interactive
+// Default() to its Value() -- the path used by --no-interactive
 // mode to skip the huh form.
 func TestSetDefaults(t *testing.T) {
 	specs := SpecMap{
@@ -285,7 +285,7 @@ func TestSetDefaults_PreservesOrder(t *testing.T) {
 	if !reflect.DeepEqual(names, got) {
 		t.Errorf("order changed: %v → %v", names, got)
 	}
-	// And the values are independent — sort by name and check.
+	// And the values are independent -- sort by name and check.
 	sort.Strings(names)
 	sort.Strings(got)
 	if !reflect.DeepEqual(names, got) {

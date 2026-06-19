@@ -88,7 +88,7 @@ func TestNumberParam_DefaultZero(t *testing.T) {
 // TestMultiSelectParam_DefaultNil verifies a nil default doesn't
 // panic; the form should just open with no options selected.
 // (Default() returns the stored []string; a nil default
-// round-trips to an empty slice — both are falsy in templates.)
+// round-trips to an empty slice -- both are falsy in templates.)
 func TestMultiSelectParam_DefaultNil(t *testing.T) {
 	mp := NewMultiSelect("features", "Features", []string{"a", "b"}, nil)
 	if d, ok := mp.Default().([]string); !ok || len(d) != 0 {

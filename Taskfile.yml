@@ -1,4 +1,4 @@
-# Taskfile.yml — spin's own dev workflow
+# Taskfile.yml -- spin's own dev workflow
 # https://taskfile.dev
 
 version: '3'
@@ -25,19 +25,22 @@ tasks:
     cmds:
       - go test ./... -count=1
 
-  # The grep suite covers three classes of template regression:
-  #   1. v1 charmbracelet API/path leaks (check-v1-leaks.sh)
-  #   2. Deprecated .air.toml `build.bin` form (check-air-bin.sh)
-  #   3. Missing Taskfile.yml `setup:` target (check-taskfile-setup.sh)
-  # The templates dir is the unit-of-truth for the generated configs;
-  # any of these scripts failing means a scaffold regression will land
-  # in a user's project.
+  # The grep suite catches v1 charmbracelet path / API leaks across
+  # the spin source tree. The v2.0-template pass removed the embedded
+  # scaffold tree (templates are external now), so the check runs
+  # against ./internal + ./cmd. Patterns that no longer apply to
+  # any source (charm v1 imports, .air.toml form, Taskfile setup
+  # target) are exercised by the in-tree unit tests instead.
   grep-v1-leaks:
-    desc: Grep the embedded templates for v1 / air-config / Taskfile-setup regressions
+    desc: Grep the spin source for v1 charmbracelet API/path regressions
     cmds:
-      - bash scripts/check-v1-leaks.sh ./internal/scaffold/templates
-      - bash scripts/check-air-bin.sh ./internal/scaffold/templates
-      - bash scripts/check-taskfile-setup.sh ./internal/scaffold/templates
+      - bash scripts/check-v1-leaks.sh ./internal
+      - bash scripts/check-v1-leaks.sh ./cmd
+
+  dogfood:
+    desc: End-to-end smoke test (init -> render non-interactively)
+    cmds:
+      - bash scripts/dogfood.sh
 
   lint:
     desc: Run golangci-lint
@@ -46,4 +49,4 @@ tasks:
 
   clean:
     cmds:
-      - rm -rf ./bin ./tmp ./dist
+      - rm -rf ./bin ./tmp ./dist ./.tmp

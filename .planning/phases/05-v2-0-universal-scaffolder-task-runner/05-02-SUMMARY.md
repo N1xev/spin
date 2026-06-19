@@ -23,7 +23,7 @@ tech-stack:
   added: []
   patterns:
     - "runNew dispatch: 0 args -> legacy; 1 unknown + 1 arg -> legacy + deprecation notice; 1 known -> v2 dispatch; 1 unknown + >=2 args -> error listing ecosystems"
-    - "Per-process one-time deprecation notice (deprecationPrinted bool guard) — not per-invocation spam"
+    - "Per-process one-time deprecation notice (deprecationPrinted bool guard) -- not per-invocation spam"
     - "Template loader's NewCacheDir resolves to XDG config dir via os.UserConfigDir() (was ~/.cache/spin/templates)"
     - "ResolveForm applies defaults FIRST then user-supplied values, so explicit CLI flags win over the template's own defaults"
     - "params.Value is unwrapped to raw Go primitives (string/int/bool/[]string) before text/template rendering, so `{{.project_name}}` interpolates as the name, not the Value struct dump"
@@ -79,7 +79,7 @@ completed: 2026-06-08
 
 ## Accomplishments
 
-### Task 1 — One-time deprecation notice + ecosystem dispatch (cmd/new.go)
+### Task 1 -- One-time deprecation notice + ecosystem dispatch (cmd/new.go)
 
 - `cmd/new.go` refactored: `runNew` now dispatches based on the first positional:
   - 0 args → legacy path with deprecation notice
@@ -91,7 +91,7 @@ completed: 2026-06-08
 - `cobra.MaximumNArgs` relaxed from 1 to 2 so the v2 form passes the args check
 - `cmd/new_test.go` (new): TestPrintDeprecationNotice_OncePerProcess + TestIsKnownEcosystem
 
-### Task 2 — Template loader upgrade + v2 dispatch end-to-end
+### Task 2 -- Template loader upgrade + v2 dispatch end-to-end
 
 - `internal/template/loader.go`:
   - `defaultCacheDir()` → `~/.config/spin/templates/` via `os.UserConfigDir()`
@@ -116,7 +116,7 @@ completed: 2026-06-08
   - `hasNewSubcommand` distinguishes `spin new charm ...` (which already handles --template) from the bare form (which needs the bridge)
 - `internal/template/template_test.go` (new): 4 tests covering spin.toml deletion, nested spin.toml, UnwrapValue (5 sub-cases), XDG cache dir
 
-### Task 3 — Registry unit tests + single-source-of-truth verification
+### Task 3 -- Registry unit tests + single-source-of-truth verification
 
 - `internal/ecosystem/registry_test.go` (new): 6 tests using an inline `stubEco` (NO import from concrete ecosystem packages to avoid the cycle)
   - TestRegistry_Get_UnknownEcosystem
@@ -131,28 +131,28 @@ completed: 2026-06-08
 
 Each task was committed atomically:
 
-1. **Task 1: One-time deprecation notice + ecosystem dispatch** — `1d1fe82` (feat)
-2. **Task 2: Template loader upgrade + v2 dispatch end-to-end** — `549ec71` (feat)
-3. **Task 3: Registry unit tests + defaultRegistry single source of truth** — `64d0e8e` (test)
+1. **Task 1: One-time deprecation notice + ecosystem dispatch** -- `1d1fe82` (feat)
+2. **Task 2: Template loader upgrade + v2 dispatch end-to-end** -- `549ec71` (feat)
+3. **Task 3: Registry unit tests + defaultRegistry single source of truth** -- `64d0e8e` (test)
 
 ## Files Created/Modified
 
 ### Created
 
-- `cmd/new_test.go` — deprecation helper + ecosystem lookup tests
-- `internal/template/post_hook.go` — `RunPostHook` + value unwrapping
-- `internal/template/template_test.go` — RenderToWithPost + UnwrapValue + cache dir tests
-- `internal/ecosystem/registry_test.go` — 6 registry tests with inline `stubEco`
+- `cmd/new_test.go` -- deprecation helper + ecosystem lookup tests
+- `internal/template/post_hook.go` -- `RunPostHook` + value unwrapping
+- `internal/template/template_test.go` -- RenderToWithPost + UnwrapValue + cache dir tests
+- `internal/ecosystem/registry_test.go` -- 6 registry tests with inline `stubEco`
 
 ### Modified
 
-- `cmd/new.go` — added `deprecationPrinted`, `printDeprecationNotice()`, `isKnownEcosystem()`, `looksLikeV2Template()`, `dispatchV2()`; refactored `runNew`; relaxed cobra MaxNArgs to 2
-- `cmd/new_charm.go` — added --template v2 flow (loader, merge, post-hook); `mergeMaps()` and `isTerminalCmd()` helpers
-- `cmd/new_extras.go` — PreRunE bridges v1 --template form onto v2 dispatch via fresh cobra command; `hasNewSubcommand`, `dispatchNewCharmWithTemplate`, `boolToString`, `charmFlagsForDispatch`
-- `internal/template/loader.go` — XDG cache dir; `GIT_TERMINAL_PROMPT=0` in env; `Lister()`, `Clear(ref)`
-- `internal/template/template.go` — `RenderToWithPost` + `deleteSpinToml` (defensive walk)
-- `internal/template/form.go` — reordered default/apply, exported `UnwrapValue`
-- `internal/template/engine.go` — exported `WriteFiles` (delegates to existing `writeFiles`)
+- `cmd/new.go` -- added `deprecationPrinted`, `printDeprecationNotice()`, `isKnownEcosystem()`, `looksLikeV2Template()`, `dispatchV2()`; refactored `runNew`; relaxed cobra MaxNArgs to 2
+- `cmd/new_charm.go` -- added --template v2 flow (loader, merge, post-hook); `mergeMaps()` and `isTerminalCmd()` helpers
+- `cmd/new_extras.go` -- PreRunE bridges v1 --template form onto v2 dispatch via fresh cobra command; `hasNewSubcommand`, `dispatchNewCharmWithTemplate`, `boolToString`, `charmFlagsForDispatch`
+- `internal/template/loader.go` -- XDG cache dir; `GIT_TERMINAL_PROMPT=0` in env; `Lister()`, `Clear(ref)`
+- `internal/template/template.go` -- `RenderToWithPost` + `deleteSpinToml` (defensive walk)
+- `internal/template/form.go` -- reordered default/apply, exported `UnwrapValue`
+- `internal/template/engine.go` -- exported `WriteFiles` (delegates to existing `writeFiles`)
 
 ## Decisions Made
 
@@ -179,7 +179,7 @@ Moved from `~/.cache/spin/templates/` to `~/.config/spin/templates/` per XDG Bas
 
 ### TPL-16: defensive walk for spin.toml deletion
 
-`deleteSpinToml(dest)` is a `filepath.Walk` that removes every `spin.toml` in the output tree, not just the top-level one. This catches the edge case where a template accidentally includes a `spin.toml` in `_base/` (e.g. via copy-raw-files) — the spec is "spin.toml is deleted from the output", and the walk enforces that.
+`deleteSpinToml(dest)` is a `filepath.Walk` that removes every `spin.toml` in the output tree, not just the top-level one. This catches the edge case where a template accidentally includes a `spin.toml` in `_base/` (e.g. via copy-raw-files) -- the spec is "spin.toml is deleted from the output", and the walk enforces that.
 
 ### Test-time stub approach (Task 3)
 
@@ -203,7 +203,7 @@ The plan's step 4 asked for a NEW cobra `--template` flag on `newCharmCmd`. This
 
 **2. [Rule 2 - Missing critical] params.Value struct dump in template output**
 - **Found during:** Task 2 (verification)
-- **Issue:** After fixing the `<nil>` issue, `{{.project_name}}` rendered as `{<nil> 0 false [] }` — the literal Go struct dump of `params.Value`. text/template formats struct values via their String() method, which is the zero-value representation.
+- **Issue:** After fixing the `<nil>` issue, `{{.project_name}}` rendered as `{<nil> 0 false [] }` -- the literal Go struct dump of `params.Value`. text/template formats struct values via their String() method, which is the zero-value representation.
 - **Fix:** Added `UnwrapValue(v params.Value) any` in `internal/template/form.go` that extracts the populated field. Called from `ResolveForm` and `RunPostHook` before passing values to text/template.
 - **Files modified:** `internal/template/form.go`, `internal/template/post_hook.go`
 - **Verification:** `{{.project_name}}` interpolates to the actual string; post-hook renders correctly.
@@ -226,7 +226,7 @@ The plan's step 4 asked for a NEW cobra `--template` flag on `newCharmCmd`. This
 
 **5. [Rule 1 - Blocking] cmd/new_extras.go dispatch prepended "charm" to args**
 - **Found during:** Task 2 (verification)
-- **Issue:** The PreRunE bridge called `dispatchNewCharmWithTemplate(newArgs, ...)` where `newArgs = ["charm", "spin-v1-tpl"]`. Inside, `runNewCharm(cmd, newArgs)` then read `args[0]` as `ctx.Name` — but the v2 form has `args[0]="charm"` (the ecosystem) and `args[1]="spin-v1-tpl"` (the name). The fix was to pass the original args (project name only) to `runNewCharm`, since `runNewCharm` is a subcommand with `ExactArgs(1)` and expects args[0] to be the name.
+- **Issue:** The PreRunE bridge called `dispatchNewCharmWithTemplate(newArgs, ...)` where `newArgs = ["charm", "spin-v1-tpl"]`. Inside, `runNewCharm(cmd, newArgs)` then read `args[0]` as `ctx.Name` -- but the v2 form has `args[0]="charm"` (the ecosystem) and `args[1]="spin-v1-tpl"` (the name). The fix was to pass the original args (project name only) to `runNewCharm`, since `runNewCharm` is a subcommand with `ExactArgs(1)` and expects args[0] to be the name.
 - **Fix:** Pass `args` (not `newArgs`) into `dispatchNewCharmWithTemplate`. The "charm" prefix is only needed for `dispatchV2` (the v2 ecosystem dispatcher), not for `runNewCharm`.
 - **Files modified:** `cmd/new_extras.go`
 - **Verification:** `spin new spin-v1-tpl --template /tmp/test-template --tui --bubbletea ...` now produces `./spin-v1-tpl/` with the template rendered into it.
@@ -234,7 +234,7 @@ The plan's step 4 asked for a NEW cobra `--template` flag on `newCharmCmd`. This
 
 **6. [Rule 1 - Blocking] Flag copy skipped flags already bound on cmd**
 - **Found during:** Task 2 (verification)
-- **Issue:** `dispatchNewCharmWithTemplate` bound the charm ecosystem's flags (including `tui`, `bubbletea`) and then iterated the parent's flags, skipping any already on cmd. This meant the user's `--tui --bubbletea` were never copied — the charm's defaults (false) won, and the charm ecosystem's Validate returned "type=tui requires --bubbletea".
+- **Issue:** `dispatchNewCharmWithTemplate` bound the charm ecosystem's flags (including `tui`, `bubbletea`) and then iterated the parent's flags, skipping any already on cmd. This meant the user's `--tui --bubbletea` were never copied -- the charm's defaults (false) won, and the charm ecosystem's Validate returned "type=tui requires --bubbletea".
 - **Fix:** For each parent flag that the user actually changed (`f.Changed`), `Set()` the value on cmd. This OVERRIDES the default with the user's value, even for flags that exist on both.
 - **Files modified:** `cmd/new_extras.go`
 - **Verification:** `spin new spin-v1-tpl --template /tmp/test-template --tui --bubbletea ...` now reaches the post-hook and renders correctly.

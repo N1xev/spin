@@ -1,4 +1,4 @@
-# Phase 2: CLI Variant + Wrappers + Extended Library Coverage + External Templates — Research
+# Phase 2: CLI Variant + Wrappers + Extended Library Coverage + External Templates -- Research
 
 **Researched:** 2026-06-03
 **Domain:** Go scaffolder variant template, toolchain wrappers, charm v2 lib overlays, external template override
@@ -16,27 +16,27 @@
 - Charm v2 only: do not import v1 paths or APIs.
 
 ### Locked Decisions (STATE.md / Phase 1)
-- Charm v2 only — generated projects use `charm.land/<lib>/v2` import paths; v1 paths forbidden (CI grep suite).
+- Charm v2 only -- generated projects use `charm.land/<lib>/v2` import paths; v1 paths forbidden (CI grep suite).
 - `go 1.25.0` floor when `--bubbles` is used; `go 1.23` otherwise; `spin` itself pins `go 1.25.8` (resolved in Phase 1 to fang v2.0.1 floor).
 - Templates embedded via `go:embed`; `--template-repo` override wired in Phase 2.
 - Single static binary distribution.
 
 ### Phase 2 Scope Fences (REQUIREMENTS.md, §"v1 Requirements")
-- **FLAG-07..12** — `--huh`, `--glamour`, `--glow`, `--wish`, `--log`, `--harmonica` (each adds the lib to go.mod + wires a working example)
-- **FLAG-13, FLAG-14** — `--cobra` / `--fang` are default-on for `--cli` projects (Phase 1 bound the flag; Phase 2 fills templates)
-- **FLAG-15** — `--viper` opt-in config (Phase 1 bound; Phase 2 fills template)
-- **TMPL-02** — `--template cli-cobra-fang` selector
-- **TMPL-03** — `--template-repo <url>` external template override (depth-1 clone, tempdir, `GIT_TERMINAL_PROMPT=0`)
-- **WRAP-01..08** — five wrapper subcommands (`run`, `build`, `test`, `vet`, `fmt`) + three build-config requirements (`.air.toml` `build.entrypoint`, `Taskfile.yml` `setup` target)
+- **FLAG-07..12** -- `--huh`, `--glamour`, `--glow`, `--wish`, `--log`, `--harmonica` (each adds the lib to go.mod + wires a working example)
+- **FLAG-13, FLAG-14** -- `--cobra` / `--fang` are default-on for `--cli` projects (Phase 1 bound the flag; Phase 2 fills templates)
+- **FLAG-15** -- `--viper` opt-in config (Phase 1 bound; Phase 2 fills template)
+- **TMPL-02** -- `--template cli-cobra-fang` selector
+- **TMPL-03** -- `--template-repo <url>` external template override (depth-1 clone, tempdir, `GIT_TERMINAL_PROMPT=0`)
+- **WRAP-01..08** -- five wrapper subcommands (`run`, `build`, `test`, `vet`, `fmt`) + three build-config requirements (`.air.toml` `build.entrypoint`, `Taskfile.yml` `setup` target)
 
 ### Out-of-Scope (Phase 3+)
-- Interactive `gum` / `huh` prompts (INT-01..05) — Phase 3
-- AGENTS.md / `--ai` (AI-01..04) — Phase 3
-- `spin doctor` / `spin add` / `spin update` (HLTH-01..04) — Phase 4
-- CGO matrix / cross-platform GoReleaser in scaffolds — Phase 3+
+- Interactive `gum` / `huh` prompts (INT-01..05) -- Phase 3
+- AGENTS.md / `--ai` (AI-01..04) -- Phase 3
+- `spin doctor` / `spin add` / `spin update` (HLTH-01..04) -- Phase 4
+- CGO matrix / cross-platform GoReleaser in scaffolds -- Phase 3+
 
-### Project Constraints (CLAUDE.md — verbatim directives)
-- Do not import `github.com/charmbracelet/bubbletea`, `github.com/charmbracelet/bubbles`, `github.com/charmbracelet/lipgloss`, `github.com/charmbracelet/huh`, `github.com/charmbracelet/glamour`, `github.com/charmbracelet/wish`, `github.com/charmbracelet/log`, `github.com/charmbracelet/fang` — those v1 paths are forbidden. **NOTE (correction):** `github.com/charmbracelet/harmonica` and `github.com/charmbracelet/glow/v2` are still the current paths — see §2.1 critical correction below.
+### Project Constraints (CLAUDE.md -- verbatim directives)
+- Do not import `github.com/charmbracelet/bubbletea`, `github.com/charmbracelet/bubbles`, `github.com/charmbracelet/lipgloss`, `github.com/charmbracelet/huh`, `github.com/charmbracelet/glamour`, `github.com/charmbracelet/wish`, `github.com/charmbracelet/log`, `github.com/charmbracelet/fang` -- those v1 paths are forbidden. **NOTE (correction):** `github.com/charmbracelet/harmonica` and `github.com/charmbracelet/glow/v2` are still the current paths -- see §2.1 critical correction below.
 - Pin `go 1.25.0+` in generated `go.mod` when any charm v2 lib is required.
 - Build with `CGO_ENABLED=0`.
 - Single static binary, `go install` distribution.
@@ -156,7 +156,7 @@ The v1 RESEARCH §3 said "go 1.25.0 when --bubbles, go 1.23 otherwise." After ve
 
 | Library | `go` directive in go.mod | Source |
 |---------|--------------------------|--------|
-| `bubbletea v2.0.7` | (inherits; bubble tea v2.0.0-beta.4 → 1.23) | TBD — likely 1.23 or 1.25.0 |
+| `bubbletea v2.0.7` | (inherits; bubble tea v2.0.0-beta.4 → 1.23) | TBD -- likely 1.23 or 1.25.0 |
 | `lipgloss v2.0.3` | (inherits from bubbles test suite; likely 1.25.0) | TBD |
 | `bubbles v2.1.0` | `go 1.25.0` | verified at v2.1.0 go.mod |
 | `huh v2.0.3` | `go 1.25.8` | verified at v2.0.3 go.mod |
@@ -164,17 +164,17 @@ The v1 RESEARCH §3 said "go 1.25.0 when --bubbles, go 1.23 otherwise." After ve
 | `wish v2.0.1` | `go 1.25.9` | verified at v2.0.1 go.mod |
 | `log v2.0.0` | `go 1.25.8` | verified at v2.0.0 go.mod |
 | `fang v2.0.1` | `go 1.25.0` | verified at v2.0.1 go.mod |
-| `harmonica v0.2.0` | `go 1.16` | verified — old lib, low floor |
+| `harmonica v0.2.0` | `go 1.16` | verified -- old lib, low floor |
 | `glow v2.1.2` | `go 1.25.9` | verified at v2.1.2 go.mod |
 
-**Recommendation:** generated `go.mod` uses `go 1.25.0` whenever any charm v2 lib is included (which is always for the v1 project: even the CLI variant pulls in fang v2.0.1 → 1.25.0). The "go 1.23" branch from v1 is no longer reachable for any real scaffold — even `spin new foo --tui --lipgloss --no-bubbletea` is dead code because `--tui` implies `--bubbletea` (Phase 1 `ResolveFlags` does this auto-implication). The decision matrix from v1 §3 collapses to:
+**Recommendation:** generated `go.mod` uses `go 1.25.0` whenever any charm v2 lib is included (which is always for the v1 project: even the CLI variant pulls in fang v2.0.1 → 1.25.0). The "go 1.23" branch from v1 is no longer reachable for any real scaffold -- even `spin new foo --tui --lipgloss --no-bubbletea` is dead code because `--tui` implies `--bubbletea` (Phase 1 `ResolveFlags` does this auto-implication). The decision matrix from v1 §3 collapses to:
 
 | Flag combination | `go` directive |
 |------------------|----------------|
 | Anything that includes a charm v2 lib | `1.25.0` |
-| (nothing else — the project always has at least fang for CLI or bubbletea for TUI) | — |
+| (nothing else -- the project always has at least fang for CLI or bubbletea for TUI) | -- |
 
-**Pin policy:** the `CharmPins` struct in v1.0 had `Lipgloss: "v2.0.0-beta.2"` — this is stale and is the explicit memory entry "v2.0.0-beta.2 module-path mismatch; bump to stable v2 before Phase 2 lib variants". The Phase 2 plan should bump to `Lipgloss: "v2.0.3"`. Same review for all 11 lib pins: pin to the latest stable per `go list -m -versions`.
+**Pin policy:** the `CharmPins` struct in v1.0 had `Lipgloss: "v2.0.0-beta.2"` -- this is stale and is the explicit memory entry "v2.0.0-beta.2 module-path mismatch; bump to stable v2 before Phase 2 lib variants". The Phase 2 plan should bump to `Lipgloss: "v2.0.3"`. Same review for all 11 lib pins: pin to the latest stable per `go list -m -versions`.
 
 ### 2.3 Tooling pins (per the official install docs)
 
@@ -212,7 +212,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "{{.Name}}",
 	Short: "A {{title .Name}} CLI scaffolded with spin",
-	Long:  "{{title .Name}} — generated with spin {{.SpinVer}}.",
+	Long:  "{{title .Name}} -- generated with spin {{.SpinVer}}.",
 	// --version comes from fang automatically when WithVersion is passed
 }
 
@@ -243,14 +243,14 @@ func main() {
 
 **Verified API surface (Context7 `/charmbracelet/fang`):**
 
-- `fang.Execute(ctx, *cobra.Command, ...fang.Option) error` — drop-in for `rootCmd.Execute()`; styles help, errors, completions, manpage.
-- `fang.WithVersion(string)` — sets the version string for `--version` flag theming.
-- `fang.WithCommit(string)` — optional commit SHA for the version output.
-- `fang.WithNotifySignal(os.Interrupt)` — optional signal handling.
+- `fang.Execute(ctx, *cobra.Command, ...fang.Option) error` -- drop-in for `rootCmd.Execute()`; styles help, errors, completions, manpage.
+- `fang.WithVersion(string)` -- sets the version string for `--version` flag theming.
+- `fang.WithCommit(string)` -- optional commit SHA for the version output.
+- `fang.WithNotifySignal(os.Interrupt)` -- optional signal handling.
 
 **What fang does NOT do** (verified against `/spf13/cobra` and `/charmbracelet/fang`):
 
-- Does NOT style *subcommand* `--help` — only the root help is fang-styled. Subcommand help is cobra's default. This is by design and is the official behavior (no flag to enable subcommand styling).
+- Does NOT style *subcommand* `--help` -- only the root help is fang-styled. Subcommand help is cobra's default. This is by design and is the official behavior (no flag to enable subcommand styling).
 - Does NOT add `SuggestFloats` or "Did you mean?" for unknown flags (cobra's responsibility; spin's `root.go` already implements this in Phase 1).
 
 ### 3.2 `--all` variant structure (TMPL-02, FLAG-03)
@@ -339,7 +339,7 @@ func LogLevel() string {
 }
 ```
 
-**Viper mapstructure v2 import:** per Viper UPGRADE.md, the mapstructure dependency moved from `github.com/mitchellh/mapstructure` to `github.com/go-viper/mapstructure/v2`. Generated projects that use Viper must use the new path if they `import "github.com/go-viper/mapstructure/v2"` directly (most won't — Viper's `Unmarshal` is the typical entry point).
+**Viper mapstructure v2 import:** per Viper UPGRADE.md, the mapstructure dependency moved from `github.com/mitchellh/mapstructure` to `github.com/go-viper/mapstructure/v2`. Generated projects that use Viper must use the new path if they `import "github.com/go-viper/mapstructure/v2"` directly (most won't -- Viper's `Unmarshal` is the typical entry point).
 
 **Viper Go version floor:** 1.20+ (per spf13/viper README), well below 1.25.0.
 
@@ -456,9 +456,9 @@ var buildSpec = ToolSpec{
 
 The order matters. `gofumpt` is a stricter superset of `gofmt`, so running `gofmt` after `gofumpt` is idempotent. `goimports` adds missing imports / removes unused ones, which `gofumpt` does not. Order:
 
-1. `gofumpt -l -w .` — list and rewrite any non-gofumpt-clean files
-2. `goimports -w .` — fix imports (with `-local {{.Module}}` to group local imports)
-3. `gofmt -l -w .` — defensive final pass (no-op if gofumpt ran)
+1. `gofumpt -l -w .` -- list and rewrite any non-gofumpt-clean files
+2. `goimports -w .` -- fix imports (with `-local {{.Module}}` to group local imports)
+3. `gofmt -l -w .` -- defensive final pass (no-op if gofumpt ran)
 
 **Strict mode** (default): if `gofumpt` is missing, `spin fmt` exits non-zero with the install hint:
 
@@ -531,7 +531,7 @@ func goVersionLessThan(want string) bool {
 }
 ```
 
-Verified: prism README says "Prism works anywhere `go test` works, so it can be quickly integrated into any project using Go v1.24 or higher" — the 1.24 floor is for `-json`, not for prism's own compile target.
+Verified: prism README says "Prism works anywhere `go test` works, so it can be quickly integrated into any project using Go v1.24 or higher" -- the 1.24 floor is for `-json`, not for prism's own compile target.
 
 **Why both checks:** an old Go install with `prism` on `$PATH` (e.g., user installed prism months ago and downgraded Go) would fail. The version check ensures we only invoke prism when the runtime can support it.
 
@@ -551,7 +551,7 @@ func Build() error {
 }
 ```
 
-**Air config awareness:** `spin build` does NOT need to parse `.air.toml` — the binary path is always `bin/<name>`, independent of what `air` uses (which is `tmp/main`). The two are decoupled. The user is expected to `go build` (or `spin build`) for the release binary and `air` (or `spin run`) for hot-reload dev.
+**Air config awareness:** `spin build` does NOT need to parse `.air.toml` -- the binary path is always `bin/<name>`, independent of what `air` uses (which is `tmp/main`). The two are decoupled. The user is expected to `go build` (or `spin build`) for the release binary and `air` (or `spin run`) for hot-reload dev.
 
 ### 4.6 `spin vet`: trivial wrapper (WRAP-04)
 
@@ -660,7 +660,7 @@ The clone function above validates `_base/` presence. Two more checks the plan s
 | cloned tree has `_base/` | `CloneTemplateRepo` | "error: template repo missing _base/ directory" |
 | cloned tree has at least one of `variant_tui/`, `variant_cli/`, or `variant_all/` | `CloneTemplateRepo` | "warning: template repo has no variant_<type>/ directories; only _base/ will be used" |
 
-The git URL validation is intentionally permissive — we let `git clone` itself reject malformed URLs, then surface the error verbatim.
+The git URL validation is intentionally permissive -- we let `git clone` itself reject malformed URLs, then surface the error verbatim.
 
 ### 5.4 Cleanup + `--keep-template-cache`
 
@@ -685,7 +685,7 @@ A malicious template can render `{{.Name}}` to `../../etc/passwd` (or any escape
 
 | Layer | Mitigation | Where |
 |-------|-----------|-------|
-| 1 | `Project.Name` is already validated by `IsValidGoModuleSegment` (Phase 1) — no `/`, no `..`, no leading dot | `validate.go` |
+| 1 | `Project.Name` is already validated by `IsValidGoModuleSegment` (Phase 1) -- no `/`, no `..`, no leading dot | `validate.go` |
 | 2 | Template `FuncMap` should NOT have a `replace` or `eval` function | `template.go` |
 | 3 | `os.WriteFile` rejects paths that resolve outside `target` (add a `safePath` check before each write) | `emit` in `scaffold.go` |
 | 4 | `filepath.Rel(target, full)` should return a path that does NOT start with `..` | `emit` |
@@ -725,7 +725,7 @@ templates/lib/<name>/
 
 The Go file imports the lib and adds a small, self-contained, runnable example. The main wiring of the example may also need to be patched into `variant_tui/main.go.tmpl` or `variant_cli/main.go.tmpl` via a `{{if has <lib>}}` block, depending on where the example surfaces.
 
-### 6.1 `--huh` (FLAG-07) — `charm.land/huh/v2` v2.0.3
+### 6.1 `--huh` (FLAG-07) -- `charm.land/huh/v2` v2.0.3
 
 **`go.mod` entry (added by `_base/go.mod.tmpl` via a `{{if hasHuh}}` block):**
 
@@ -735,7 +735,7 @@ charm.land/huh/v2 v2.0.3
 
 **Overlay files:**
 
-- `lib/huh/huh.go.tmpl` — small stand-alone example (placeholder file, like bubbletea.go.tmpl).
+- `lib/huh/huh.go.tmpl` -- small stand-alone example (placeholder file, like bubbletea.go.tmpl).
 - A `{{if hasHuh}}` block in `variant_tui/main.go.tmpl` adds a huh form to the TUI (gated by `hasHuh` helper, added to FuncMap).
 
 **Example snippet (10-15 lines, runnable in `cmd/foo/main.go` after the model):**
@@ -766,7 +766,7 @@ func runHuhExample() {
 "hasHuh": func(p2 *Project) bool { return p2.Huh },
 ```
 
-### 6.2 `--glamour` (FLAG-08) — `charm.land/glamour/v2` v2.0.0
+### 6.2 `--glamour` (FLAG-08) -- `charm.land/glamour/v2` v2.0.0
 
 **`go.mod` entry:** `charm.land/glamour/v2 v2.0.0`
 
@@ -784,7 +784,7 @@ func renderMarkdown(in string) string {
 }
 ```
 
-### 6.3 `--glow` (FLAG-09) — `github.com/charmbracelet/glow/v2` v2.1.2
+### 6.3 `--glow` (FLAG-09) -- `github.com/charmbracelet/glow/v2` v2.1.2
 
 **Important:** glow is a BINARY, not a Go library. There is no `go.mod` entry to add. The scaffold changes:
 
@@ -792,11 +792,11 @@ func renderMarkdown(in string) string {
 - `README.md` adds a "Markdown preview" section explaining `glow README.md`
 - `main.go` can call `exec.Command("glow", "README.md").Run()` from a `glow` subcommand or `--preview` flag (optional; minimal overlay is README-only)
 
-**Overlay:** `lib/glow/README.glow.md.tmpl` — a sample markdown file that glow will render well, and a `{{if hasGlow}}` block in `_base/README.md.tmpl` that mentions `glow README.md` for the preview.
+**Overlay:** `lib/glow/README.glow.md.tmpl` -- a sample markdown file that glow will render well, and a `{{if hasGlow}}` block in `_base/README.md.tmpl` that mentions `glow README.md` for the preview.
 
 **CI grep implication:** the allow-list of `github.com/charmbracelet/` modules (see §7.3) must include `glow/v2` and `harmonica` so the grep suite doesn't false-positive on `go install github.com/charmbracelet/glow/v2@latest` in Taskfile.yml or `lib/glow/README.glow.md.tmpl` text.
 
-### 6.4 `--wish` (FLAG-10) — `charm.land/wish/v2` v2.0.1
+### 6.4 `--wish` (FLAG-10) -- `charm.land/wish/v2` v2.0.1
 
 **`go.mod` entry:** `charm.land/wish/v2 v2.0.1`
 
@@ -828,7 +828,7 @@ func runWishServer() {
 
 **Caveat:** the host key path `.ssh/id_ed25519` must exist. The README must explain `ssh-keygen -t ed25519 -f .ssh/id_ed25519` and that the server only listens locally.
 
-### 6.5 `--log` (FLAG-11) — `charm.land/log/v2` v2.0.0
+### 6.5 `--log` (FLAG-11) -- `charm.land/log/v2` v2.0.0
 
 **`go.mod` entry:** `charm.land/log/v2 v2.0.0`
 
@@ -846,9 +846,9 @@ func setupLogger() {
 }
 ```
 
-**Phase 1 already uses `charm.land/log/v2` in spin itself** — so the import path is verified empirically (`go.mod` line: `charm.land/log/v2 v2.0.0`).
+**Phase 1 already uses `charm.land/log/v2` in spin itself** -- so the import path is verified empirically (`go.mod` line: `charm.land/log/v2 v2.0.0`).
 
-### 6.6 `--harmonica` (FLAG-12) — `github.com/charmbracelet/harmonica` v0.2.0
+### 6.6 `--harmonica` (FLAG-12) -- `github.com/charmbracelet/harmonica` v0.2.0
 
 **`go.mod` entry:** `github.com/charmbracelet/harmonica v0.2.0`
 
@@ -896,14 +896,14 @@ The Phase 1 `.air.toml.tmpl` is correct and uses `build.entrypoint = ["./tmp/mai
 
 **Verified schema (Context7 `/air-verse/air`):**
 
-- `build.cmd` — build command (required)
-- `build.entrypoint` — binary path; `[]string` allows inline args
-- `build.args_bin` — additional args
-- `build.include_ext` — string list, default `["go"]`
-- `build.exclude_dir` — string list
-- `build.exclude_regex`, `build.exclude_unchanged`, `build.exclude_file` — additional filters
-- `[build.windows/darwin/linux]` — platform-specific overrides
-- `[misc] clean_on_exit` — bool, default true
+- `build.cmd` -- build command (required)
+- `build.entrypoint` -- binary path; `[]string` allows inline args
+- `build.args_bin` -- additional args
+- `build.include_ext` -- string list, default `["go"]`
+- `build.exclude_dir` -- string list
+- `build.exclude_regex`, `build.exclude_unchanged`, `build.exclude_file` -- additional filters
+- `[build.windows/darwin/linux]` -- platform-specific overrides
+- `[misc] clean_on_exit` -- bool, default true
 
 **`build.bin` is deprecated and will be removed in a future release** (verified via the `air-verse/air` README).
 
@@ -912,7 +912,7 @@ The Phase 1 `.air.toml.tmpl` is correct and uses `build.entrypoint = ["./tmp/mai
 The Phase 1 `setup` target uses `@latest` for all four tools. Phase 2 keeps `@latest` (matches the rest of the v2 stack; user always gets the newest stable) and adds a comment block documenting the install-side Go version requirements.
 
 ```yaml
-# Taskfile.yml — generated by spin {{.SpinVer}}
+# Taskfile.yml -- generated by spin {{.SpinVer}}
 # ...
   setup:
     desc: Install gofumpt, goimports, air, and prism
@@ -937,8 +937,8 @@ A bash script or a Go test in `scripts/check-taskfile-setup_test.go` both work; 
 
 The Phase 1 `scripts/check-v1-leaks.sh` has two issues for Phase 2:
 
-1. **Blanket `github\.com/charmbracelet/`** — false-positives on `github.com/charmbracelet/harmonica` and `github.com/charmbracelet/glow/v2` (which are the current paths for these libraries, not v1).
-2. **No check for `Taskfile.yml` `setup:` target** — WRAP-08 has no automated gate.
+1. **Blanket `github\.com/charmbracelet/`** -- false-positives on `github.com/charmbracelet/harmonica` and `github.com/charmbracelet/glow/v2` (which are the current paths for these libraries, not v1).
+2. **No check for `Taskfile.yml` `setup:` target** -- WRAP-08 has no automated gate.
 
 **Phase 2 changes to `check-v1-leaks.sh`:**
 
@@ -966,11 +966,11 @@ declare -a V1_LEAK_PATTERNS=(
   'github\.com/charmbracelet/fang/v2"'
 )
 # Note: github.com/charmbracelet/harmonica and github.com/charmbracelet/glow/v2
-# are intentionally NOT in this list — they have not migrated and are still
+# are intentionally NOT in this list -- they have not migrated and are still
 # the current paths for those libraries.
 ```
 
-**New script: `scripts/check-air-bin.sh`** — extracts the AIR_PATTERNS check from `check-v1-leaks.sh` into a dedicated script. The v1 script keeps the v1-leak checks; the new script is the air-config check. This matches the Phase 1 plan's "consider splitting in Phase 2" note.
+**New script: `scripts/check-air-bin.sh`** -- extracts the AIR_PATTERNS check from `check-v1-leaks.sh` into a dedicated script. The v1 script keeps the v1-leak checks; the new script is the air-config check. This matches the Phase 1 plan's "consider splitting in Phase 2" note.
 
 ```bash
 #!/usr/bin/env bash
@@ -1000,7 +1000,7 @@ fi
 echo "OK: no deprecated air patterns in $AIR_FILE"
 ```
 
-**New script: `scripts/check-taskfile-setup.sh`** — verifies WRAP-08:
+**New script: `scripts/check-taskfile-setup.sh`** -- verifies WRAP-08:
 
 ```bash
 #!/usr/bin/env bash
@@ -1073,7 +1073,7 @@ Phase 1 shipped the embed-based template engine, the `Project` struct with 13 fo
 | CI grep extension | `scripts/check-air-bin.sh`, `scripts/check-taskfile-setup.sh`; refined v1-leak patterns in `check-v1-leaks.sh` | existing grep suite scripts |
 | `internal/scaffold/versions.go` pin update | bump all 11 pins to latest stable (see §2.2) | existing `CharmPins` struct (add `LegacyCharmPins` for harmonica) |
 
-The biggest single refactor is the `FS` → `currentFS` swap in `template.go` — about 5 lines of changes. Everything else is additive.
+The biggest single refactor is the `FS` → `currentFS` swap in `template.go` -- about 5 lines of changes. Everything else is additive.
 
 ### 8.2 New patterns introduced
 
@@ -1120,9 +1120,9 @@ The biggest single refactor is the `FS` → `currentFS` swap in `template.go` �
 |---|----------|----------------------|-----------|
 | Q1 | Does `--all` mean "TUI + CLI as one binary with subcommands" (recommended) or "TUI is the primary, CLI is a flag"? | Single binary, TUI is a `tui` subcommand | §3.2 |
 | Q2 | Should `--viper` add a `config.yaml` to the scaffold or just the binding wiring? | Just wiring; sample `config.yaml` is in `internal/config/config.go` comments | §3.3 |
-| Q3 | Where should `spin fmt` print the install hint — fang error box, plain stderr, or just exit non-zero? | Plain stderr + non-zero exit (fang only styles its own errors) | §4.3 |
+| Q3 | Where should `spin fmt` print the install hint -- fang error box, plain stderr, or just exit non-zero? | Plain stderr + non-zero exit (fang only styles its own errors) | §4.3 |
 | Q4 | For `spin build`, should the output path be `./bin/<name>` (matching `Taskfile.yml`) or `./bin/main`? | `./bin/<name>` to match the generated Taskfile | §4.5 |
-| Q5 | For external template repos, do we want to support `git+ssh://git@github.com/foo/bar` (private repos)? | Yes — `GIT_TERMINAL_PROMPT=0` lets ssh-agent auth happen silently | §5.1 |
+| Q5 | For external template repos, do we want to support `git+ssh://git@github.com/foo/bar` (private repos)? | Yes -- `GIT_TERMINAL_PROMPT=0` lets ssh-agent auth happen silently | §5.1 |
 | Q6 | When `glow` is selected without `--tui`, do we still need a `glow` subcommand in the generated CLI? | Optional `glow` subcommand via `--all`; pure CLI doesn't need it | §6.3 |
 | Q7 | Should the `variant_all/main.go.tmpl` default to TUI-as-primary (run TUI if no args) or strict-subcommand-mode? | Strict-subcommand-mode (TUI is `tui` subcommand, no TUI on bare `myapp` invocation) | §3.2 |
 
@@ -1131,15 +1131,15 @@ The biggest single refactor is the `FS` → `currentFS` swap in `template.go` �
 | Item | Phase-2 impact |
 |------|----------------|
 | `--module <path>` with sub-paths (v1 §15.11) | The directory emitted is still flat (`./<basename>/`); only `go.mod`'s `module` line changes. Not a Phase-2 concern. |
-| Module path default — bare name vs `github.com/<user>/<name>` (v1 §15.1) | Phase 2 keeps bare-name default; the Phase 3 prompter may add GitHub detection. |
-| `gofumpt` install — `@latest` vs pinned (v1 §15.3) | Phase 2 keeps `@latest`; README notes the Go 1.25+ floor. |
+| Module path default -- bare name vs `github.com/<user>/<name>` (v1 §15.1) | Phase 2 keeps bare-name default; the Phase 3 prompter may add GitHub detection. |
+| `gofumpt` install -- `@latest` vs pinned (v1 §15.3) | Phase 2 keeps `@latest`; README notes the Go 1.25+ floor. |
 
 ### 9.4 Things to watch during implementation
 
 - **`go list -m -versions` drift:** re-run before locking the plan. New stable releases for any of the 11 libs could land between this research and plan execution.
-- **Cobra v1.9.1 is the floor for fang v2**, but v1.10+ is out. Phase 2 should bump to v1.9.1 (the fang-tested floor) per the v1 RESEARCH §2 — not v1.10 — to match the `spin` repo's existing go.mod.
+- **Cobra v1.9.1 is the floor for fang v2**, but v1.10+ is out. Phase 2 should bump to v1.9.1 (the fang-tested floor) per the v1 RESEARCH §2 -- not v1.10 -- to match the `spin` repo's existing go.mod.
 - **`go test -json` availability** is 1.24+ (matches prism's floor). `--test-vet` was added later; check if `prism` supports it.
-- **Windows paths:** the `filepath.Separator` check in §5.5 is portable. Verify on Windows in the integration test if the CI matrix includes it (it does not today per CLAUDE.md — Linux/macOS only).
+- **Windows paths:** the `filepath.Separator` check in §5.5 is portable. Verify on Windows in the integration test if the CI matrix includes it (it does not today per CLAUDE.md -- Linux/macOS only).
 - **Bubbles `runeutil` and `memoization` were removed in v2** (per v1 RESEARCH §2). Phase 2 overlays for bubbles, huh, etc. must avoid these.
 - **fzf-style fuzzy match** for unknown flag suggestion: Phase 1 already implements Levenshtein (`cmd/root.go`); Phase 2 wrapper subcommands inherit it.
 
@@ -1167,7 +1167,7 @@ The Phase 2 work naturally splits into 4 plans across 2 waves. The split minimiz
 
 - 02-01 (templates + pins) is the foundation; everything else either emits content or consumes it.
 - 02-02 (variants + overlays) builds on the pins from 02-01.
-- 02-03 (wrappers) is independent of variants — the wrappers are scaffolder-side, not scaffolded-side. Could in principle run in parallel with 02-02, but 02-04's integration test needs both, and serializing avoids the "two parallel plans both touch `_base/Taskfile.yml.tmpl`" conflict.
+- 02-03 (wrappers) is independent of variants -- the wrappers are scaffolder-side, not scaffolded-side. Could in principle run in parallel with 02-02, but 02-04's integration test needs both, and serializing avoids the "two parallel plans both touch `_base/Taskfile.yml.tmpl`" conflict.
 - 02-04 (grep + integration test) is the gate.
 
 **Total plan count: 4.** Matches the Phase 1 plan count (4 plans in 3 waves). Reasonable scope for Phase 2.
@@ -1176,24 +1176,24 @@ The Phase 2 work naturally splits into 4 plans across 2 waves. The split minimiz
 
 ## 11. Sources
 
-### Primary (HIGH confidence — Context7-verified on 2026-06-03)
+### Primary (HIGH confidence -- Context7-verified on 2026-06-03)
 
-- **[/charmbracelet/fang](https://context7.com/charmbracelet/fang)** — `fang.Execute(ctx, *cobra.Command, fang.WithVersion(...), fang.WithCommit(...), fang.WithNotifySignal(...))` API; drop-in for `rootCmd.Execute()`; v2 import path `charm.land/fang/v2`. Latest: v2.0.1. Go floor: 1.25.0.
-- **[/charmbracelet/huh](https://context7.com/charmbracelet/huh)** — `charm.land/huh/v2` v2.0.3; `huh.NewForm(huh.NewGroup(huh.NewInput().Value(&name), huh.NewConfirm().Value(&b)))`; `huh.ThemeFunc(huh.ThemeCharm)`; `WithWidth(60)`. Form fields: `NewInput`, `NewConfirm`, `NewSelect`, `NewText`, `NewNote`, `NewMultiSelect`. Go floor: 1.25.8.
-- **[/charmbracelet/glamour](https://context7.com/charmbracelet/glamour)** — `charm.land/glamour/v2` v2.0.0; `glamour.Render(in, "dark")` one-liner OR `glamour.NewTermRenderer(glamour.WithStylePath("dark"), glamour.WithWordWrap(80))` for custom; `r.Render(md)` returns ANSI; `lipgloss.Print(out)` recommended for color downsampling. Go floor: 1.25.8.
-- **[/charmbracelet/wish](https://context7.com/charmbracelet/wish)** — `charm.land/wish/v2` v2.0.1; sub-packages `charm.land/wish/v2/{bubbletea,logging,activeterm}`. `wish.NewServer(wish.WithAddress(...), wish.WithHostKeyPath(...), wish.WithMiddleware(...))`; `bubbletea.Middleware(teaHandler)`; `activeterm.Middleware()` rejects non-PTY; `logging.Middleware()`. Go floor: **1.25.9** (highest in the v2 stack).
-- **[/charmbracelet/harmonica](https://context7.com/charmbracelet/harmonica)** — **CRITICAL: still on `github.com/charmbracelet/harmonica`, NOT migrated to charm.land.** v0.2.0 (Apr 2022) latest. `harmonica.NewSpring(harmonica.FPS(60), angularFreq, damping)`; `spring.Update(pos, vel, target)` returns new pos, vel. Also `harmonica.NewProjectile(...)` for gravity/terminal motion. Go floor: 1.16 (low).
-- **[/charmbracelet/log](https://context7.com/charmbracelet/log)** — `charm.land/log/v2` v2.0.0; `log.SetDefault(log.New(os.Stderr))`; setter methods `SetLevel`, `SetReportTimestamp`, `SetFormatter`, `SetOutput`; package-level `log.Info`, `log.Debug`, `log.Fatal`. Go floor: 1.25.8.
-- **[/charmbracelet/glow](https://context7.com/charmbracelet/glow)** — **CRITICAL: still on `github.com/charmbracelet/glow/v2`, NOT migrated to charm.land.** v2.1.2 latest. Binary install: `go install github.com/charmbracelet/glow/v2@latest`. Go floor: 1.25.9.
-- **[/air-verse/air](https://context7.com/air-verse/air)** — `build.entrypoint` schema (preferred over deprecated `build.bin`); `include_ext`, `exclude_dir`, `exclude_regex`, `exclude_unchanged`, `exclude_file` fields. CLI override: `air --build.cmd "..." --build.entrypoint "..." --build.exclude_dir "..."`. `build.bin` "deprecated and will be removed in a future release." Install: `go install github.com/air-verse/air@latest` (Go 1.25+).
-- **[/spf13/cobra](https://context7.com/spf13/cobra)** — `cobra.Command{Use, Short, Long, RunE, Args, PersistentFlags, Flags}`; `cobra.ExactArgs(1)`, `cobra.MinimumNArgs(1)`, `cobra.NoArgs`; `MarkFlagRequired`, `MarkFlagsRequiredTogether`, `MarkFlagsMutuallyExclusive`, `MarkFlagsOneRequired`. v1.9.1 (latest tested; v1.10+ exists but fang v2.0.1 documents v1.9+).
-- **[/spf13/viper](https://context7.com/spf13/viper)** — `viper.BindPFlag(key, flag)` for one-off binding; `viper.BindPFlags(pflag.CommandLine)` for bulk; `viper.GetString`, `viper.GetInt`, `viper.GetBool`; `viper.IsSet(key)`; `viper.AutomaticEnv()` with `SetEnvPrefix`. UPGRADE.md: mapstructure moved to `github.com/go-viper/mapstructure/v2`. v1.20.1. Go floor: 1.20+.
-- **[/charmbracelet/bubbletea](https://context7.com/charmbracelet/bubbletea)** — Re-confirmed Phase 1: `View() tea.View` (not `string`); `tea.NewView(content)`; `tea.KeyPressMsg` (typed message); `tea.RequestBackgroundColor`, `tea.BackgroundColorMsg.IsDark()`. `tea.NewProgram(m).Run()` returns `(tea.Model, error)`. v2.0.7.
-- **[/mattn/go-runewidth](https://context7.com/mattn/go-runewidth)** — `runewidth.StringWidth("Hello世界")`; `runewidth.NewCondition()` with `cond.EastAsianWidth = true` for CJK awareness. Package-level `runewidth.EastAsianWidth = true` also works. (Phase 1 had this; re-verified.)
-- **[/mvdan/gofumpt](https://context7.com/mvdan/gofumpt)** — `gofumpt -l -w .` (list + write); v0.9.0+ based on Go 1.25's gofmt, requires Go 1.24+ to build. Install: `go install mvdan.cc/gofumpt@latest`.
-- **[/charmbracelet/bubbletea-app-template](https://context7.com/charmbracelet/bubbletea-app-template)** — Re-confirmed Phase 1: `.goreleaser.yaml` `version: 2`, `CGO_ENABLED=0`, `targets: ["go_first_class"]`. (Not Phase 2 scope but worth noting for Phase 3+.)
+- **[/charmbracelet/fang](https://context7.com/charmbracelet/fang)** -- `fang.Execute(ctx, *cobra.Command, fang.WithVersion(...), fang.WithCommit(...), fang.WithNotifySignal(...))` API; drop-in for `rootCmd.Execute()`; v2 import path `charm.land/fang/v2`. Latest: v2.0.1. Go floor: 1.25.0.
+- **[/charmbracelet/huh](https://context7.com/charmbracelet/huh)** -- `charm.land/huh/v2` v2.0.3; `huh.NewForm(huh.NewGroup(huh.NewInput().Value(&name), huh.NewConfirm().Value(&b)))`; `huh.ThemeFunc(huh.ThemeCharm)`; `WithWidth(60)`. Form fields: `NewInput`, `NewConfirm`, `NewSelect`, `NewText`, `NewNote`, `NewMultiSelect`. Go floor: 1.25.8.
+- **[/charmbracelet/glamour](https://context7.com/charmbracelet/glamour)** -- `charm.land/glamour/v2` v2.0.0; `glamour.Render(in, "dark")` one-liner OR `glamour.NewTermRenderer(glamour.WithStylePath("dark"), glamour.WithWordWrap(80))` for custom; `r.Render(md)` returns ANSI; `lipgloss.Print(out)` recommended for color downsampling. Go floor: 1.25.8.
+- **[/charmbracelet/wish](https://context7.com/charmbracelet/wish)** -- `charm.land/wish/v2` v2.0.1; sub-packages `charm.land/wish/v2/{bubbletea,logging,activeterm}`. `wish.NewServer(wish.WithAddress(...), wish.WithHostKeyPath(...), wish.WithMiddleware(...))`; `bubbletea.Middleware(teaHandler)`; `activeterm.Middleware()` rejects non-PTY; `logging.Middleware()`. Go floor: **1.25.9** (highest in the v2 stack).
+- **[/charmbracelet/harmonica](https://context7.com/charmbracelet/harmonica)** -- **CRITICAL: still on `github.com/charmbracelet/harmonica`, NOT migrated to charm.land.** v0.2.0 (Apr 2022) latest. `harmonica.NewSpring(harmonica.FPS(60), angularFreq, damping)`; `spring.Update(pos, vel, target)` returns new pos, vel. Also `harmonica.NewProjectile(...)` for gravity/terminal motion. Go floor: 1.16 (low).
+- **[/charmbracelet/log](https://context7.com/charmbracelet/log)** -- `charm.land/log/v2` v2.0.0; `log.SetDefault(log.New(os.Stderr))`; setter methods `SetLevel`, `SetReportTimestamp`, `SetFormatter`, `SetOutput`; package-level `log.Info`, `log.Debug`, `log.Fatal`. Go floor: 1.25.8.
+- **[/charmbracelet/glow](https://context7.com/charmbracelet/glow)** -- **CRITICAL: still on `github.com/charmbracelet/glow/v2`, NOT migrated to charm.land.** v2.1.2 latest. Binary install: `go install github.com/charmbracelet/glow/v2@latest`. Go floor: 1.25.9.
+- **[/air-verse/air](https://context7.com/air-verse/air)** -- `build.entrypoint` schema (preferred over deprecated `build.bin`); `include_ext`, `exclude_dir`, `exclude_regex`, `exclude_unchanged`, `exclude_file` fields. CLI override: `air --build.cmd "..." --build.entrypoint "..." --build.exclude_dir "..."`. `build.bin` "deprecated and will be removed in a future release." Install: `go install github.com/air-verse/air@latest` (Go 1.25+).
+- **[/spf13/cobra](https://context7.com/spf13/cobra)** -- `cobra.Command{Use, Short, Long, RunE, Args, PersistentFlags, Flags}`; `cobra.ExactArgs(1)`, `cobra.MinimumNArgs(1)`, `cobra.NoArgs`; `MarkFlagRequired`, `MarkFlagsRequiredTogether`, `MarkFlagsMutuallyExclusive`, `MarkFlagsOneRequired`. v1.9.1 (latest tested; v1.10+ exists but fang v2.0.1 documents v1.9+).
+- **[/spf13/viper](https://context7.com/spf13/viper)** -- `viper.BindPFlag(key, flag)` for one-off binding; `viper.BindPFlags(pflag.CommandLine)` for bulk; `viper.GetString`, `viper.GetInt`, `viper.GetBool`; `viper.IsSet(key)`; `viper.AutomaticEnv()` with `SetEnvPrefix`. UPGRADE.md: mapstructure moved to `github.com/go-viper/mapstructure/v2`. v1.20.1. Go floor: 1.20+.
+- **[/charmbracelet/bubbletea](https://context7.com/charmbracelet/bubbletea)** -- Re-confirmed Phase 1: `View() tea.View` (not `string`); `tea.NewView(content)`; `tea.KeyPressMsg` (typed message); `tea.RequestBackgroundColor`, `tea.BackgroundColorMsg.IsDark()`. `tea.NewProgram(m).Run()` returns `(tea.Model, error)`. v2.0.7.
+- **[/mattn/go-runewidth](https://context7.com/mattn/go-runewidth)** -- `runewidth.StringWidth("Hello世界")`; `runewidth.NewCondition()` with `cond.EastAsianWidth = true` for CJK awareness. Package-level `runewidth.EastAsianWidth = true` also works. (Phase 1 had this; re-verified.)
+- **[/mvdan/gofumpt](https://context7.com/mvdan/gofumpt)** -- `gofumpt -l -w .` (list + write); v0.9.0+ based on Go 1.25's gofmt, requires Go 1.24+ to build. Install: `go install mvdan.cc/gofumpt@latest`.
+- **[/charmbracelet/bubbletea-app-template](https://context7.com/charmbracelet/bubbletea-app-template)** -- Re-confirmed Phase 1: `.goreleaser.yaml` `version: 2`, `CGO_ENABLED=0`, `targets: ["go_first_class"]`. (Not Phase 2 scope but worth noting for Phase 3+.)
 
-### Secondary (MEDIUM confidence — verified via GitHub go.mod + go list)
+### Secondary (MEDIUM confidence -- verified via GitHub go.mod + go list)
 
 - `charm.land/wish/v2 v2.0.1` go.mod → `go 1.25.9`
 - `charm.land/huh/v2 v2.0.3` go.mod → `go 1.25.8`
@@ -1206,24 +1206,24 @@ The Phase 2 work naturally splits into 4 plans across 2 waves. The split minimiz
 - `go list -m -versions` confirmed all 10 lib versions published on the Go module proxy
 - [DaltonSW/prism](https://github.com/DaltonSW/prism) README: Go 1.24+ floor (for `-json` flag); install `go install go.dalton.dog/prism@latest`; flags `-v` (verbose), `-f` (failed-only), `--no-color`/`--show-color`; `prism bench [regex] [path]`
 
-### Local project files (HIGH confidence — current state)
+### Local project files (HIGH confidence -- current state)
 
-- `/home/samouly/Projects/Golang/loom/.planning/ROADMAP.md` — Phase 2 success criteria 1-5 (verbatim cited in §1.1)
-- `/home/samouly/Projects/Golang/loom/.planning/REQUIREMENTS.md` — Phase 2 REQ-IDs (FLAG-07..12, FLAG-13..15, TMPL-02, TMPL-03, WRAP-01..08)
-- `/home/samouly/Projects/Golang/loom/.planning/STATE.md` — "stopped at: Phase 01 complete (4/4) — ready to discuss Phase 2"
-- `/home/samouly/Projects/Golang/loom/.planning/config.json` — `mode: yolo`, `nyquist_validation: false` (no Validation Architecture section required)
-- `/home/samouly/Projects/Golang/loom/.planning/phases/01-scaffolder-foundation-core-tui-stack/01-RESEARCH.md` — Foundation: stack pins, embed-FS template engine, overlay composition, gum/huh design, CI grep patterns
-- `/home/samouly/Projects/Golang/loom/CLAUDE.md` — Project rules; charm v2 only (with the §2.1 correction for harmonica + glow)
-- `/home/samouly/Projects/Golang/loom/internal/scaffold/versions.go` — Current `DefaultPins` (v2.0.0 / v2.0.0-beta.2 / v2.0.0 / v2.0.0); needs update
-- `/home/samouly/Projects/Golang/loom/internal/scaffold/template.go` — Overlay walker; refactor target for `FS` → `currentFS`
-- `/home/samouly/Projects/Golang/loom/internal/scaffold/resolve.go` — `Project` field population; `--tui` auto-implies `--bubbletea` already
-- `/home/samouly/Projects/Golang/loom/internal/scaffold/templates/lib/*/LIBS.md.tmpl` — Placeholder overlays; Phase 2 replaces with real content
-- `/home/samouly/Projects/Golang/loom/scripts/check-v1-leaks.sh` — Existing grep suite; needs §7.3 refinement
-- `/home/samouly/Projects/Golang/loom/internal/scaffold/integration_test.go` — Phase 1 integration test pattern; Phase 2 extends with new assertions
+- `/home/samouly/Projects/Golang/loom/.planning/ROADMAP.md` -- Phase 2 success criteria 1-5 (verbatim cited in §1.1)
+- `/home/samouly/Projects/Golang/loom/.planning/REQUIREMENTS.md` -- Phase 2 REQ-IDs (FLAG-07..12, FLAG-13..15, TMPL-02, TMPL-03, WRAP-01..08)
+- `/home/samouly/Projects/Golang/loom/.planning/STATE.md` -- "stopped at: Phase 01 complete (4/4) -- ready to discuss Phase 2"
+- `/home/samouly/Projects/Golang/loom/.planning/config.json` -- `mode: yolo`, `nyquist_validation: false` (no Validation Architecture section required)
+- `/home/samouly/Projects/Golang/loom/.planning/phases/01-scaffolder-foundation-core-tui-stack/01-RESEARCH.md` -- Foundation: stack pins, embed-FS template engine, overlay composition, gum/huh design, CI grep patterns
+- `/home/samouly/Projects/Golang/loom/CLAUDE.md` -- Project rules; charm v2 only (with the §2.1 correction for harmonica + glow)
+- `/home/samouly/Projects/Golang/loom/internal/scaffold/versions.go` -- Current `DefaultPins` (v2.0.0 / v2.0.0-beta.2 / v2.0.0 / v2.0.0); needs update
+- `/home/samouly/Projects/Golang/loom/internal/scaffold/template.go` -- Overlay walker; refactor target for `FS` → `currentFS`
+- `/home/samouly/Projects/Golang/loom/internal/scaffold/resolve.go` -- `Project` field population; `--tui` auto-implies `--bubbletea` already
+- `/home/samouly/Projects/Golang/loom/internal/scaffold/templates/lib/*/LIBS.md.tmpl` -- Placeholder overlays; Phase 2 replaces with real content
+- `/home/samouly/Projects/Golang/loom/scripts/check-v1-leaks.sh` -- Existing grep suite; needs §7.3 refinement
+- `/home/samouly/Projects/Golang/loom/internal/scaffold/integration_test.go` -- Phase 1 integration test pattern; Phase 2 extends with new assertions
 
 ### Auto-memory (HIGH confidence)
 
-- `.claude/memory/MEMORY.md` — "Project lipgloss pin issue: v2.0.0-beta.2 module-path mismatch; bump to stable v2 before Phase 2 lib variants" — confirms the v2.0.3 bump is overdue.
+- `.claude/memory/MEMORY.md` -- "Project lipgloss pin issue: v2.0.0-beta.2 module-path mismatch; bump to stable v2 before Phase 2 lib variants" -- confirms the v2.0.3 bump is overdue.
 
 ---
 
@@ -1259,16 +1259,16 @@ The Phase 2 work naturally splits into 4 plans across 2 waves. The split minimiz
 
 ## RESEARCH COMPLETE
 
-**Phase:** 2 — CLI Variant + Wrappers + Extended Library Coverage + External Templates
+**Phase:** 2 -- CLI Variant + Wrappers + Extended Library Coverage + External Templates
 **Confidence:** HIGH (Context7-verified across 13 libraries; 1 critical correction to v1 research: harmonica + glow are NOT on charm.land; Go version floors re-verified against each go.mod; latest stable pins confirmed via `go list -m -versions`)
 
 ### Key Findings
 
-1. **harmonica + glow are still on `github.com/charmbracelet/...`** — the v1 CI grep blanket `github.com/charmbracelet/` ban must be refined to a per-module deny-list (8 modules that migrated; harmonica + glow stay allow-listed).
+1. **harmonica + glow are still on `github.com/charmbracelet/...`** -- the v1 CI grep blanket `github.com/charmbracelet/` ban must be refined to a per-module deny-list (8 modules that migrated; harmonica + glow stay allow-listed).
 2. **All charm v2 stable libs require Go 1.25.0+**; huh/glamour/log want 1.25.8, wish/glow want 1.25.9. Decision: every generated `go.mod` uses `go 1.25.0` (the fang v2.0.1 floor that covers everything else transitively).
-3. **All 11 version pins are stale** — Phase 1's `DefaultPins` (bubbletea v2.0.0, lipgloss v2.0.0-beta.2, bubbles v2.0.0) should be bumped to the latest stable on `go list -m -versions` (v2.0.7 / v2.0.3 / v2.1.0 respectively). The lipgloss bump is the one flagged in MEMORY.md.
+3. **All 11 version pins are stale** -- Phase 1's `DefaultPins` (bubbletea v2.0.0, lipgloss v2.0.0-beta.2, bubbles v2.0.0) should be bumped to the latest stable on `go list -m -versions` (v2.0.7 / v2.0.3 / v2.1.0 respectively). The lipgloss bump is the one flagged in MEMORY.md.
 4. **External template override** needs only a 5-line refactor to `template.go` (swap `FS` for `currentFS(p.ExternalDir)`) plus a new `internal/scaffold/repo.go`. The overlay engine itself is unchanged.
-5. **`--all` variant** is a single binary with cobra's `tui` subcommand, not a `--tui` bool flag — subcommand composition is cleaner for future flags.
+5. **`--all` variant** is a single binary with cobra's `tui` subcommand, not a `--tui` bool flag -- subcommand composition is cleaner for future flags.
 6. **Wrapper subcommands** all share one `ToolSpec` + `RunWithFallback` helper. The "preferred tool, fall back with install hint" pattern is identical across `run`, `build`, `test`, `vet`, `fmt`; only the `prism` detector (Go 1.24+ check) has unique logic.
 
 ### Open Questions

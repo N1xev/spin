@@ -11,6 +11,7 @@ coverage.txt
 # Build output
 /tmp/
 /dist/
+/.tmp/
 
 # IDE / OS
 .DS_Store

@@ -71,7 +71,7 @@ requirements:
     evidence: "cmd/new.go:48 (--fang bool flag registered as forward-compat); same constraint as FLAG-13: 'default-on for CLI projects' not testable until CLI variant lands in Phase 2"
   - id: FLAG-15
     status: partial
-    evidence: "cmd/new.go:49 (--viper bool flag registered); template content deferred to Phase 2 per spec ('Viper (opt-in) — Only wired when user passes --viper; do not import unconditionally'). Flag binding present; viper template injection deferred."
+    evidence: "cmd/new.go:49 (--viper bool flag registered); template content deferred to Phase 2 per spec ('Viper (opt-in) -- Only wired when user passes --viper; do not import unconditionally'). Flag binding present; viper template injection deferred."
   - id: FLAG-16
     status: satisfied
     evidence: "cmd/new.go:35 (--module flag), internal/scaffold/resolve.go:40-44 + 154-157 (defaults Module to Name when empty); verified 'spin new modapp --module github.com/example/modapp' produces go.mod with 'module github.com/example/modapp'"
@@ -153,7 +153,7 @@ test_results:
     notes: "Rejects with 'directory \"v1\" already exists; pass --force to overwrite'"
   - command: "cd /tmp && /tmp/spin new foo --tui --not-a-real-flag"
     exit: 1
-    notes: "Unknown flag rejected (no suggestion because distance too high; this is correct — SuggestionsMinimumDistance=2)"
+    notes: "Unknown flag rejected (no suggestion because distance too high; this is correct -- SuggestionsMinimumDistance=2)"
   - command: "cd /tmp && /tmp/spin new foo --tui --bubbltea"
     exit: 1
     notes: "Unknown flag --bubbltea rejected with 'Did you mean --bubbletea?' (Levenshtein distance 1)"
@@ -214,7 +214,7 @@ notes: |
   an automated `git init` + initial commit, and is free of v1 charmbracelet
   API leaks per the 22-pattern grep suite. The generated main.go is a
   working bubbletea v2 program using `tea.View`, `tea.KeyPressMsg`,
-  `tea.NewProgram`, and `tea.WindowSizeMsg` — the v2 API surface only.
+  `tea.NewProgram`, and `tea.WindowSizeMsg` -- the v2 API surface only.
   .air.toml uses the modern `build.entrypoint` field; Taskfile.yml ships
   the `setup:` target that installs gofumpt + goimports + air + prism.
   All `--help` output renders with fang styling. Name validation rejects
@@ -229,7 +229,7 @@ notes: |
   "default-on for CLI projects" / "viper opt-in wiring" behaviors ship in
   Phase 2. The template engine explicitly returns `--type=cli: this variant
   ships in Phase 2` (template.go:60-66) so end-to-end behavior cannot be
-  tested yet. Flag binding is present, content is deferred — this matches
+  tested yet. Flag binding is present, content is deferred -- this matches
   the plan's intent and the ROADMAP's Phase 2/3/4 boundary.
 
   (2) TOOL-02 (go 1.23 when no --bubbles) is satisfied at the template
@@ -243,7 +243,7 @@ notes: |
 
   (3) IN-001 (test asserts hardcoded `0.1.0` literal) and IN-002 (string
   match on `walkErr.Error()` instead of `errors.Is`) are deferred info
-  findings from the code review — neither blocks Phase 1, and both are
+  findings from the code review -- neither blocks Phase 1, and both are
   easy to address when next touched.
 
   Pre-existing issue called out in the user prompt: `DefaultPins.Lipgloss`
@@ -289,7 +289,7 @@ notes: |
 
 30 in-scope requirements (SCAF-01..08, FLAG-01..06 + FLAG-13..18, TMPL-01 + TMPL-04..07, TOOL-01..05).
 - **27 satisfied** with file:line evidence
-- **3 partial** (FLAG-13, FLAG-14, FLAG-15 — flag binding present, default behavior depends on Phase 2 CLI variant)
+- **3 partial** (FLAG-13, FLAG-14, FLAG-15 -- flag binding present, default behavior depends on Phase 2 CLI variant)
 
 ### Test Results
 

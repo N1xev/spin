@@ -51,4 +51,4 @@ deviations_from_plan:
   - file:// URLs accepted (plan §5 said "reject" but plan §verification used file://).
     Reconciled by accepting file:// in IsValidTemplateRepo.
   - Walker root prefix and missing-file wording fixes bundled into Task 7 commit
-    (found during smoke test 2 — plan-oversight).
+    (found during smoke test 2 -- plan-oversight).

@@ -25,7 +25,7 @@ requirements:
   - INT-03
 key_findings:
   - "pflag v1.0.6 does not support multi-char Flag.Aliases (only single-letter Shorthand). Worked around by registering --no-interactive, --yes, and --batch as three separate bool flags and OR-ing the alias values into p.NoInteractive in ResolveFlags."
-  - "errors.As needs a non-nil pointer to the error type's pointer (*prompt.Canceled, not prompt.Canceled). A *prompt.Canceled value pointer would not satisfy the type constraint — the error type IS the pointer, so the second arg to errors.As must be a pointer to the pointer."
+  - "errors.As needs a non-nil pointer to the error type's pointer (*prompt.Canceled, not prompt.Canceled). A *prompt.Canceled value pointer would not satisfy the type constraint -- the error type IS the pointer, so the second arg to errors.As must be a pointer to the pointer."
   - "isatty.IsTerminal takes a uintptr fd, not *os.File. Must call os.Stdin.Fd() to extract the descriptor before passing."
   - "go mod tidy silently removes go-isatty from go.mod when no source file imports it. The dependency only becomes a direct require after detect.go imports it in Task 2."
   - "Plan 01 ships a stub detect.go (IsInteractive returns false) so the package compiles before Task 2. The Task 2 commit replaces the stub body with the real three-layer guard."
@@ -37,7 +37,7 @@ one_line_summary: "TTY/CI guard chokepoint, --no-interactive/--yes/--batch alias
 This plan establishes the single chokepoint through which every prompt UI
 call must pass in Phase 3. Per the locked UI-SPEC contract, the plan ships
 the contract surface (ShouldPrompt, Fill, Canceled) but no actual prompt
-UI — Plans 02 and 03 wire huh v2 and gum respectively.
+UI -- Plans 02 and 03 wire huh v2 and gum respectively.
 
 ## Performance
 
@@ -82,22 +82,22 @@ UI — Plans 02 and 03 wire huh v2 and gum respectively.
 ## Files Created/Modified
 
 ### Created
-- `internal/prompt/prompt.go` — Canceled error, ErrCanceled, Fill, ShouldPrompt
-- `internal/prompt/prompt_test.go` — TestFillNoop, TestCanceledErrorIs
-- `internal/prompt/detect.go` — IsInteractive + ciEnv (replaced stub in Task 2)
-- `internal/prompt/detect_test.go` — TestIsInteractive_TTYCheck, _EnvOverride, _CIEnv (5 sub-cases), _AllLayersOff
+- `internal/prompt/prompt.go` -- Canceled error, ErrCanceled, Fill, ShouldPrompt
+- `internal/prompt/prompt_test.go` -- TestFillNoop, TestCanceledErrorIs
+- `internal/prompt/detect.go` -- IsInteractive + ciEnv (replaced stub in Task 2)
+- `internal/prompt/detect_test.go` -- TestIsInteractive_TTYCheck, _EnvOverride, _CIEnv (5 sub-cases), _AllLayersOff
 
 ### Modified
-- `cmd/new.go` — relaxed Args, added 3 bool flags, wired prompt.Fill, imported internal/prompt
-- `internal/scaffold/project.go` — added `NoInteractive bool` field
-- `internal/scaffold/resolve.go` — wired no-interactive/yes/batch → p.NoInteractive
-- `internal/scaffold/resolve_test.go` — registered 3 new flags in newResolveCmd; added TestResolveFlags_NoInteractiveAliases (4 sub-cases)
-- `main.go` — 3-branch error handling; errors.As for *prompt.Canceled → exit 130
-- `go.mod` / `go.sum` — go-isatty v0.0.22 (direct require); promoted pflag and golang.org/x/mod from indirect to direct (project source imports them)
+- `cmd/new.go` -- relaxed Args, added 3 bool flags, wired prompt.Fill, imported internal/prompt
+- `internal/scaffold/project.go` -- added `NoInteractive bool` field
+- `internal/scaffold/resolve.go` -- wired no-interactive/yes/batch → p.NoInteractive
+- `internal/scaffold/resolve_test.go` -- registered 3 new flags in newResolveCmd; added TestResolveFlags_NoInteractiveAliases (4 sub-cases)
+- `main.go` -- 3-branch error handling; errors.As for *prompt.Canceled → exit 130
+- `go.mod` / `go.sum` -- go-isatty v0.0.22 (direct require); promoted pflag and golang.org/x/mod from indirect to direct (project source imports them)
 
 ## Decisions Made
 
-1. **Three separate bool flags, not multi-char aliases** — pflag v1.0.6
+1. **Three separate bool flags, not multi-char aliases** -- pflag v1.0.6
    does not support `Flag.Aliases` (only single-letter `Shorthand`). The
    plan's instruction to use `pf.Lookup("no-interactive").Aliases =
    []string{"yes", "batch"}` would not compile. Implemented by
@@ -106,24 +106,24 @@ UI — Plans 02 and 03 wire huh v2 and gum respectively.
    init block with a code comment.
 
 2. **`*prompt.Canceled` matched via `errors.As` with `var canceled *prompt.Canceled`**
-   — the error type IS the pointer (`*prompt.Canceled` implements
+   -- the error type IS the pointer (`*prompt.Canceled` implements
    `error` via the pointer receiver). `errors.As` needs a non-nil
    pointer to that pointer. A `var canceled prompt.Canceled` would
    not satisfy the type constraint.
 
-3. **Stub `detect.go` in Task 1, full body in Task 2** — Task 1's
+3. **Stub `detect.go` in Task 1, full body in Task 2** -- Task 1's
    `prompt.go` references `IsInteractive()` (defined in `detect.go`).
    Without a stub in Task 1, the package fails to compile before
    Task 2 lands. Stub is marked with a clear "Plan 02 Task 2 replaces
    this body" comment.
 
-4. **p.NoInteractive checked in cmd/new.go, not in Fill** — per
+4. **p.NoInteractive checked in cmd/new.go, not in Fill** -- per
    prompt.go's docstring (locked by Task 1's action): Fill itself
    consults only the three-layer guard (env/TTY/CI). The flag
    `--no-interactive` is the explicit user opt-out, which is read
    in runNew BEFORE calling Fill. Keeps the env/TTY/CI check
    independent of the cobra flag plumbing (RESEARCH §"Don't
-   Hand-Roll" — single chokepoint).
+   Hand-Roll" -- single chokepoint).
 
 ## Deviations from Plan
 
@@ -162,7 +162,7 @@ files I touched in Plan 01 (`internal/prompt/{prompt,prompt_test,detect,detect_t
 `cmd/new.go`, `main.go`, `internal/scaffold/{project,resolve,resolve_test}.go`).
 Pre-existing scaffold files (`repo.go`, `scaffold_test.go`, `template.go`,
 etc.) have gofumpt issues that are out of scope (not introduced by my
-changes — they predate Plan 01 in Phase 2 work).
+changes -- they predate Plan 01 in Phase 2 work).
 
 **Files modified:** none (read-only check)
 
@@ -170,7 +170,7 @@ changes — they predate Plan 01 in Phase 2 work).
 which has the side effect of breaking a pre-existing test
 (`TestFmt_GofumptMissing_NoStrict` in `internal/wrap/fmt_test.go`) that
 expects `gofumpt` to be missing. The test fails at the base commit
-(`8c82071`) too when gofumpt is installed — this is a pre-existing
+(`8c82071`) too when gofumpt is installed -- this is a pre-existing
 environment-dependent test, not a regression from Plan 01.
 
 **Commits:** none (read-only check)
@@ -200,23 +200,23 @@ environment-dependent test, not a regression from Plan 01.
 - `go test ./cmd/...` all pass (TestNew, TestFang*, TestUnknown, TestVersion, TestRootCmd)
 - `gofumpt -l` clean on all files modified in this plan
 - `spin new --help` shows `--no-interactive`, `--yes`, `--batch` as documented flags
-- `go test ./... -count=1` — all packages pass except the pre-existing
+- `go test ./... -count=1` -- all packages pass except the pre-existing
   `TestFmt_GofumptMissing_NoStrict` (environment-dependent: this test
   fails whenever `gofumpt` is installed in `$PATH`. The test was
-  failing at the base commit `8c82071` too — not a regression from
+  failing at the base commit `8c82071` too -- not a regression from
   Plan 01.)
 
 ## Known Stubs
 
 The plan ships 1 documented stub:
 
-- **`internal/prompt/detect.go` is replaced wholesale by Task 2** — the
+- **`internal/prompt/detect.go` is replaced wholesale by Task 2** -- the
   Plan 01 commit ships a stub `IsInteractive() bool { return false }`
   body so the package compiles before Task 2 lands. Task 2's commit
   replaces this body with the full three-layer guard. The stub is
   marked with a "Plan 02 Task 2 replaces this body" comment.
 
-- **`prompt.Fill` is a documented no-op** — Plan 01's body returns
+- **`prompt.Fill` is a documented no-op** -- Plan 01's body returns
   `nil` when prompting is gated off. Plans 02 and 03 wire the huh
   v2 and gum backends respectively. The chokepoint is established
   so the rest of the system can wire against it without churning.
@@ -244,7 +244,7 @@ The plan ships 1 documented stub:
   `TestFmt_GofumptMissing_NoStrict` in `internal/wrap/fmt_test.go`
   fails when `gofumpt` is installed in `$PATH`. Confirmed by
   checking out the base commit (`8c82071`) and running the same
-  test — it fails identically. The test was passing in the
+  test -- it fails identically. The test was passing in the
   Phase 2 closeout state because `gofumpt` was not installed in
   the executor's environment. My `go install mvdan.cc/gofumpt@latest`
   (to enable the plan's `gofumpt -l` verification step) put
@@ -258,7 +258,7 @@ The plan ships 1 documented stub:
   `huh.ErrUserAborted` translations.
 - **Plan 03 (gum backend)** can wire `fillWithGum` similarly.
 - **Plan 04 (AGENTS.md template)** is independent of this plan's
-  chokepoint — it adds a `lib/ai/AGENTS.md.tmpl` overlay gated on
+  chokepoint -- it adds a `lib/ai/AGENTS.md.tmpl` overlay gated on
   `p.AI` (already on the struct from Phase 2) and uses the existing
   template engine.
 - The `--no-interactive` / `--yes` / `--batch` flags are wired and

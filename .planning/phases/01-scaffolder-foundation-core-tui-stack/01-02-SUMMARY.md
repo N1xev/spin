@@ -184,13 +184,13 @@ completed: 2026-06-02
 
 ---
 
-**Total deviations:** 6 auto-fixed (6 Rule 1/2 — all bugs or missing-critical fixes; no architectural changes)
+**Total deviations:** 6 auto-fixed (6 Rule 1/2 -- all bugs or missing-critical fixes; no architectural changes)
 **Impact on plan:** All auto-fixes necessary for correctness or for the plan's own success criteria (FLAG-18 specifically required the FlagErrorFunc). The Walking Skeleton's overlay engine, Project struct design, embed root, and post-scaffold flow are unchanged. Only the smoke test step count and the flag-suggestion mechanism diverged from the plan's literal spec.
 
 ## Issues Encountered
 
 - **Fang suppresses ANSI codes in non-TTY pipes** (lipgloss auto-detects TTY). TestFangStyledHelp originally asserted on `\x1b[`; rewrote to assert on fang's structural markers (uppercase "USAGE" / "COMMANDS" / "FLAGS" headers that cobra's plain default doesn't use). The TTY-allocated test (TestFangTTYEmitsANSI via `script -qc`) covers the actual ANSI assertion.
-- **TestE2EScaffold (Walking Skeleton) still works** after the scaffold.New refactor — it constructs a Project with a non-existent target dir, chdirs into tmp, and calls New(). Validate is called by runNew in production but tests bypass runNew; the test passes because the dir is fresh.
+- **TestE2EScaffold (Walking Skeleton) still works** after the scaffold.New refactor -- it constructs a Project with a non-existent target dir, chdirs into tmp, and calls New(). Validate is called by runNew in production but tests bypass runNew; the test passes because the dir is fresh.
 - **20s `TestVerifyBuild_Failing` runtime** is dominated by `go mod tidy` trying to fetch the deliberately broken `nonexistent.invalid/nope` module before timing out. Acceptable for a unit test; could be sped up with a local proxy in CI but that's out of scope.
 - **`script` binary and t.TempDir() interaction in Nix sandboxes** produced "Permission denied" errors. Workaround: build outside t.TempDir() + graceful skip on permission errors. The test still validates fang on TTY in normal Linux environments.
 
@@ -227,7 +227,7 @@ PASSED.
 - `./spin new myapp --bubbles` (implies --bubbletea) - scaffold generates both libs in p.Libs
 - `./spin new myapp --no-git` exits 0; no `.git/` in the project
 - `./spin new myapp --no-verify` exits 0; smoke test skipped (no `go mod tidy`/`go build` run)
-- `./spin new myapp --license apache-2.0` exits 0; `p.License = "apache-2.0"` (no LICENSE file yet — that's Plan 03's template content)
+- `./spin new myapp --license apache-2.0` exits 0; `p.License = "apache-2.0"` (no LICENSE file yet -- that's Plan 03's template content)
 - `spin new myapp --tui --bubbletea --bubbles --lipgloss` produces a project with `.git/` and 1 initial commit "scaffold myapp with spin 0.1.0"
 - No `STATE.md` or `ROADMAP.md` modifications (orchestrator owns those)
 

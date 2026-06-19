@@ -300,10 +300,16 @@ func TestClient_Add_LocalPath(t *testing.T) {
 	}
 }
 
-// TestClient_Add_ShorthandRejected verifies that a "user/repo"
-// shorthand is rejected with a clear error message, since the
-// registry server is not deployed.
-func TestClient_Add_ShorthandRejected(t *testing.T) {
+// TestClient_Add_ShorthandExpands verifies that a "user/repo"
+// shorthand is transparently expanded to https://github.com/
+// user/repo.git before being treated as a git URL. We stub
+// exec.Command via PATH manipulation: by pointing PATH at an
+// empty tempdir, `git clone` fails, and we assert the error
+// mentions the expanded URL.
+func TestClient_Add_ShorthandExpands(t *testing.T) {
+	emptyBin := t.TempDir()
+	t.Setenv("PATH", emptyBin)
+
 	c := &Client{
 		IndexURL: "https://example.invalid/v1",
 		HTTP:     http.DefaultClient,
@@ -311,10 +317,11 @@ func TestClient_Add_ShorthandRejected(t *testing.T) {
 	}
 	_, err := c.Add("vercel/nextjs-tailwind")
 	if err == nil {
-		t.Fatal("Add() err = nil, want error for shorthand")
+		t.Fatal("Add() err = nil, want git-failure error for shorthand")
 	}
-	if !strings.Contains(err.Error(), "not yet supported") {
-		t.Errorf("err=%v, want it to mention 'not yet supported'", err)
+	want := "https://github.com/vercel/nextjs-tailwind.git"
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("err=%v, want it to mention expanded URL %q", err, want)
 	}
 }
 

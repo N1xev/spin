@@ -25,8 +25,8 @@ tech-stack:
     - "ErrModuleNotFound sentinel + 404-to-sentinel mapping so a single local-only dep does not fail the batch"
     - "semver.Prerelease(v) == '' as the stable filter (covers -beta, -rc, -alpha, -pre, -anything)"
     - "CommandRunner interface indirection for testing Apply's go-test avoidance contract"
-    - "Dep.Target field set by the (Plan 04-04) caller; Apply is a pure executor — does not know NewStable vs NewLatest"
-    - "go mod tidy runs once per Apply, not per dep (batched) — TestApply_MultipleUpgrades_BatchedTidy guards this"
+    - "Dep.Target field set by the (Plan 04-04) caller; Apply is a pure executor -- does not know NewStable vs NewLatest"
+    - "go mod tidy runs once per Apply, not per dep (batched) -- TestApply_MultipleUpgrades_BatchedTidy guards this"
 
 key-files:
   created:
@@ -39,19 +39,19 @@ key-files:
   modified: []
 
 key-decisions:
-  - "Reused golang.org/x/mod v0.36.0 (already a direct dep) for both modfile.Parse and semver.{Compare,IsValid,Prerelease,Canonical} — no new direct dep"
+  - "Reused golang.org/x/mod v0.36.0 (already a direct dep) for both modfile.Parse and semver.{Compare,IsValid,Prerelease,Canonical} -- no new direct dep"
   - "10s HTTP client timeout per module fetch (threat T-04-20); user can ctrl-C out of the longer go get/tidy/build"
   - "404 from the proxy degrades to NewStable == NewLatest == Old for that single dep; non-404 fetch errors bubble up so the user sees the network failure"
   - "HTTPMirror's BaseURL field exists for httptest.NewServer; production code leaves it nil (defaults to https://proxy.golang.org)"
   - "Apply and ApplyWithRunner are two functions (not one with optional runner): production code reads Apply; tests use ApplyWithRunner to inject a fake. Kept both because Apply's call site (Plan 04-04's cmd/update.go) should be the zero-arg ergonomic form"
-  - "Excluded `//go:build`-style constraints and --all from this plan — those are Plan 04-04 (UI) concerns"
-  - "Did not import internal/version from a non-test file: HTTPMirror is in resolve.go (production) and reads version.Version. Kept the import minimal — only the User-Agent string needs the version"
-  - "ModuleProxy returns ErrModuleNotFound (a package-level sentinel) so callers can match with errors.Is — easier to test than a string match on the error message"
+  - "Excluded `//go:build`-style constraints and --all from this plan -- those are Plan 04-04 (UI) concerns"
+  - "Did not import internal/version from a non-test file: HTTPMirror is in resolve.go (production) and reads version.Version. Kept the import minimal -- only the User-Agent string needs the version"
+  - "ModuleProxy returns ErrModuleNotFound (a package-level sentinel) so callers can match with errors.Is -- easier to test than a string match on the error message"
 
 patterns-established:
   - "Pattern: external-tool wrapper for the user's toolchain = three-layer seam: read input (parse.go) → consult external state (resolve.go) → apply (apply.go). The same skeleton will generalize to other Go tools (e.g. `spin fmt` might adopt it)"
   - "Pattern: 404 → sentinel error → degraded per-row result; protects the batch from one missing item"
-  - "Pattern: D-10 contract enforcement via test fixture (marker file on disk) — gives a CI-visible regression test, not just an inline comment"
+  - "Pattern: D-10 contract enforcement via test fixture (marker file on disk) -- gives a CI-visible regression test, not just an inline comment"
 
 requirements-completed: [HLTH-03]
 
@@ -63,7 +63,7 @@ status: complete
 
 # Phase 4 Plan 3: spin update engine Summary
 
-**`internal/update` engine — universal Go dep updater (parse, resolve, apply) with no UI, ready for Plan 04-04 to wire to a huh v2 form.**
+**`internal/update` engine -- universal Go dep updater (parse, resolve, apply) with no UI, ready for Plan 04-04 to wire to a huh v2 form.**
 
 ## Performance
 
@@ -75,36 +75,36 @@ status: complete
 
 ## Accomplishments
 
-- **`internal/update/parse.go`** — `ListDeps` (sorted, `includeIndirect` filter) and `FindGoMod` (parent-walk until `go.mod` hit) using `golang.org/x/mod/modfile`; 6 tests covering the direct/indirect toggle, missing-file error wrapping, deterministic ordering, and the parent-walk
-- **`internal/update/resolve.go`** — `Resolver` over a `ModuleProxy` seam; `HTTPMirror` fetches `https://proxy.golang.org/<m>/@v/list` with a 10s timeout and `spin/<ver>` User-Agent; `pickHighest` excludes pre-releases from the stable slot per D-08; 8 tests covering the pre-release exclusion, the 404-degraded mode, empty list, and `httptest.NewServer`-based URL construction
-- **`internal/update/apply.go`** — `Apply` runs `go get <m>@<v>` per dep, then `go mod tidy` once, then `CGO_ENABLED=0 go build ./...` per D-10 (no `go test`); `ApplyWithRunner` + `CommandRunner` seam enables test injection; 6 tests covering single-upgrade, no-op, build failure, the D-10 no-go-test guard, batched tidy, and `Target == Old` skip
+- **`internal/update/parse.go`** -- `ListDeps` (sorted, `includeIndirect` filter) and `FindGoMod` (parent-walk until `go.mod` hit) using `golang.org/x/mod/modfile`; 6 tests covering the direct/indirect toggle, missing-file error wrapping, deterministic ordering, and the parent-walk
+- **`internal/update/resolve.go`** -- `Resolver` over a `ModuleProxy` seam; `HTTPMirror` fetches `https://proxy.golang.org/<m>/@v/list` with a 10s timeout and `spin/<ver>` User-Agent; `pickHighest` excludes pre-releases from the stable slot per D-08; 8 tests covering the pre-release exclusion, the 404-degraded mode, empty list, and `httptest.NewServer`-based URL construction
+- **`internal/update/apply.go`** -- `Apply` runs `go get <m>@<v>` per dep, then `go mod tidy` once, then `CGO_ENABLED=0 go build ./...` per D-10 (no `go test`); `ApplyWithRunner` + `CommandRunner` seam enables test injection; 6 tests covering single-upgrade, no-op, build failure, the D-10 no-go-test guard, batched tidy, and `Target == Old` skip
 - **D-08 contract test**: `TestResolver_FakeProxy_Stable` asserts `v2.0.0-beta.1` is NOT picked as `NewStable`
 - **D-10 contract test**: `TestApply_DoesNotRunGoTest` writes a marker file if `go test` is ever invoked; after `Apply` the file must not exist
 - **D-15 contract test**: `TestApply_MultipleUpgrades_BatchedTidy` proves `go mod tidy` runs exactly once across N deps
 
 ## Task Commits
 
-1. **Task 1: parse.go — go.mod reader using golang.org/x/mod/modfile** — `1da0da7` (feat)
-2. **Task 2: resolve.go — fetch version lists from proxy.golang.org, compute newStable/newLatest** — `6209722` (feat)
-3. **Task 3: apply.go — go get + go mod tidy + CGO=0 go build (no go test)** — `eb3c989` (feat)
+1. **Task 1: parse.go -- go.mod reader using golang.org/x/mod/modfile** -- `1da0da7` (feat)
+2. **Task 2: resolve.go -- fetch version lists from proxy.golang.org, compute newStable/newLatest** -- `6209722` (feat)
+3. **Task 3: apply.go -- go get + go mod tidy + CGO=0 go build (no go test)** -- `eb3c989` (feat)
 
 ## Files Created/Modified
 
-- `internal/update/parse.go` — `Dep`, `ListDeps`, `FindGoMod` (177 LOC incl. doc comments)
-- `internal/update/parse_test.go` — 6 tests: `TestListDeps_DirectOnly`, `TestListDeps_IncludeIndirect`, `TestListDeps_MissingFile`, `TestListDeps_Deterministic`, `TestFindGoMod_FromSubdir`, `TestFindGoMod_NoModAnywhere`
-- `internal/update/resolve.go` — `Dep` (shared), `ModuleProxy`, `ErrModuleNotFound`, `HTTPMirror`, `Resolver`, `NewResolver`, `pickHighest`
-- `internal/update/resolve_test.go` — 8 tests covering the D-08 pre-release exclusion, 404-degraded mode, empty list, multi-dep fetching, and the URL construction via `httptest.NewServer`
-- `internal/update/apply.go` — `Apply`, `ApplyWithRunner`, `CommandRunner`, `execRunner`, `countTargeted`
-- `internal/update/apply_test.go` — 6 tests including the D-10 no-go-test guard and the batched-tidy guard
+- `internal/update/parse.go` -- `Dep`, `ListDeps`, `FindGoMod` (177 LOC incl. doc comments)
+- `internal/update/parse_test.go` -- 6 tests: `TestListDeps_DirectOnly`, `TestListDeps_IncludeIndirect`, `TestListDeps_MissingFile`, `TestListDeps_Deterministic`, `TestFindGoMod_FromSubdir`, `TestFindGoMod_NoModAnywhere`
+- `internal/update/resolve.go` -- `Dep` (shared), `ModuleProxy`, `ErrModuleNotFound`, `HTTPMirror`, `Resolver`, `NewResolver`, `pickHighest`
+- `internal/update/resolve_test.go` -- 8 tests covering the D-08 pre-release exclusion, 404-degraded mode, empty list, multi-dep fetching, and the URL construction via `httptest.NewServer`
+- `internal/update/apply.go` -- `Apply`, `ApplyWithRunner`, `CommandRunner`, `execRunner`, `countTargeted`
+- `internal/update/apply_test.go` -- 6 tests including the D-10 no-go-test guard and the batched-tidy guard
 
 ## Verification
 
-- `go test ./internal/update/... -count=1` — 20 tests, all pass
-- `go build ./...` — clean
-- `go vet ./...` — clean
-- `bash scripts/check-v1-leaks.sh ./internal/update` — OK, no v1 leaks
-- `go mod tidy` — no diff (used existing `golang.org/x/mod v0.36.0`)
-- `git status` — clean
+- `go test ./internal/update/... -count=1` -- 20 tests, all pass
+- `go build ./...` -- clean
+- `go vet ./...` -- clean
+- `bash scripts/check-v1-leaks.sh ./internal/update` -- OK, no v1 leaks
+- `go mod tidy` -- no diff (used existing `golang.org/x/mod v0.36.0`)
+- `git status` -- clean
 
 ## Deviations from Plan
 
@@ -114,15 +114,15 @@ status: complete
 - **Found during:** Task 3 post-implementation cleanup
 - **Issue:** I initially declared `const applyLog` and `func joinArgs` in apply.go as "test helpers / phrasings" but neither was referenced. `go build` and `go vet` did not flag this (unexported package-level identifiers are not errors), but the dead code is noise. Removed and dropped the now-unused `strings` import.
 - **Files modified:** `internal/update/apply.go`
-- **Commit:** `eb3c989` (same commit as Task 3 — caught before commit)
+- **Commit:** `eb3c989` (same commit as Task 3 -- caught before commit)
 
 **2. [Rule 1 - Bug] Fixed fakeRunner argv-length guard off-by-one**
 - **Found during:** Task 3 test execution
 - **Issue:** The `case` clauses for `go build ./...` and `go test ./...` used `len(args) >= 4`, but the argv length is 3 (`[go, build, ./...]` or `[go, test, ./...]`). All 5 apply tests failed with "fakeRunner: unhandled argv". Changed `>= 4` to `>= 3` in both arms. The `TestApply_BuildFailure_ReturnsError` then revealed a second bug: the marker file was being written in the `go build` arm, which made the D-10 test see a false positive. Moved the marker write to the `go test` arm only.
 - **Files modified:** `internal/update/apply_test.go`
-- **Commit:** `eb3c989` (same commit as Task 3 — caught before commit)
+- **Commit:** `eb3c989` (same commit as Task 3 -- caught before commit)
 
-### Architectural Observations (not applied — out of plan scope)
+### Architectural Observations (not applied -- out of plan scope)
 
 - The `execRunner` struct is defined but never used (only `ApplyWithRunner` is used in tests; `Apply` is the public API). Could be removed if Plan 04-04 does not need it; keeping for now in case Plan 04-04 wants to wire a non-default runner (e.g. for the spin-doctor-style `CGO=0` env override at the call site rather than in apply.go).
 - The `applyLog` constant and `joinArgs` helper were speculative additions that did not earn their keep. Documenting here so a future cleanup pass knows they were considered.
@@ -146,8 +146,8 @@ The plan's STRIDE table identifies T-04-14 through T-04-21. Mitigations applied:
 ## What Plan 04-04 Will Build
 
 This plan is the engine only. Plan 04-04 will:
-- Add `internal/update/form.go` — huh v2 multi-Select form rendering rows of `old → newStable → newLatest` with `[Skip | newStable | newLatest]` per dep; default `newStable` per D-09
-- Add `cmd/update.go` — cobra subcommand with `--all` flag (D-07), calling `ListDeps` → `Resolver.Resolve` → the huh form → set `Dep.Target` per row → `Apply`
+- Add `internal/update/form.go` -- huh v2 multi-Select form rendering rows of `old → newStable → newLatest` with `[Skip | newStable | newLatest]` per dep; default `newStable` per D-09
+- Add `cmd/update.go` -- cobra subcommand with `--all` flag (D-07), calling `ListDeps` → `Resolver.Resolve` → the huh form → set `Dep.Target` per row → `Apply`
 - Add non-TTY table fallback for CI/scripted use
 - Add a `--yes` / `--batch` flag to auto-pick `newStable` for every dep (D-09 default + Plan 04-04 noise reduction)
 

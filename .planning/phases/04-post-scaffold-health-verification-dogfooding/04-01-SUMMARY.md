@@ -74,22 +74,22 @@ completed: 2026-06-05
 
 ## Task Commits
 
-1. **Task 1: Build internal/doctor package — Check interface, registry, 4 universal checks** - `133f659` (feat)
+1. **Task 1: Build internal/doctor package -- Check interface, registry, 4 universal checks** - `133f659` (feat)
 2. **Task 2: Add human + JSON renderers + format selector** - `5c867e8` (feat)
 3. **Task 3: Wire cmd/doctor.go cobra subcommand with all 4 flags** - `ef07af7` (feat)
 4. **Plan metadata: go.mod promotion of lipgloss/v2 to direct** - `ebc6090` (chore)
 
 ## Files Created/Modified
 
-- `internal/doctor/doctor.go` — `Status` enum (pass/warn/fail), `CheckResult`, `Check` interface, `Fixer` interface, `Registry`, `RunOptions`, top-level `Run` orchestrator, `exitCode` math (0/1 with strict promotion)
-- `internal/doctor/checks.go` — `GoVersionCheck` (parses `go version` output, classifies via `semver.Compare`), `ToolPresenceCheck` (exec.LookPath for the 4 default tools; implementer of Fixer), `GoModHygieneCheck` (modfile.Parse with go/module presence and direct/indirect duplicate detection; implementer of Fixer), `CGOBuildCheck` (60s timeout exec.CommandContext with CGO_ENABLED=0 env), `DeepLintCheck` (registered only when opts.Deep is true; warn-not-fail when golangci-lint missing)
-- `internal/doctor/render.go` — `RenderHuman` (lipgloss-styled icon glyphs only; summary line "N passed, M warned, K failed"; indented hint lines), `RenderJSON` (json.Encoder to a stable schema with `jsonCheck` view type), `FormatSelector` (dispatcher; rejects unknown formats with a message naming the allowed set)
-- `internal/doctor/doctor_test.go` — 5 tests for the exit-code math: all-pass, any-fail, warn-no-strict, warn-strict, end-to-end fix-error-surfaces-in-result
-- `internal/doctor/checks_test.go` — 8 tests: GoVersionCheck accepts current + rejects too old (hermetic boundary), ToolPresenceCheck detects missing, GoModHygieneCheck no-go-mod + valid-mod, CGOBuildCheck pass-on-spin-itself, DeepLintCheck registered-when-deep, default-registry-has-four-base-checks
-- `internal/doctor/render_test.go` — 5 tests: RenderHuman all-pass + fail-with-hint, RenderJSON schema unmarshal, FormatSelector rejects-unknown + defaults-to-human
-- `cmd/doctor.go` — `doctorCmd` registered via init() with `--format`, `--strict`, `--deep`, `--fix`; `runDoctor` reads flags, builds `doctor.RunOptions`, calls `doctor.Run` then `doctor.FormatSelector`; non-zero exit wraps "N check(s) failed" in a cobra error for fang
-- `cmd/doctor_test.go` — 3 tests: registration via pointer identity, all 4 flags with expected defaults, `spin doctor --help` mentions all flags
-- `go.mod` — `charm.land/lipgloss/v2` promoted from `// indirect` to direct (no new modules; lipgloss was already in the graph via fang/huh/log)
+- `internal/doctor/doctor.go` -- `Status` enum (pass/warn/fail), `CheckResult`, `Check` interface, `Fixer` interface, `Registry`, `RunOptions`, top-level `Run` orchestrator, `exitCode` math (0/1 with strict promotion)
+- `internal/doctor/checks.go` -- `GoVersionCheck` (parses `go version` output, classifies via `semver.Compare`), `ToolPresenceCheck` (exec.LookPath for the 4 default tools; implementer of Fixer), `GoModHygieneCheck` (modfile.Parse with go/module presence and direct/indirect duplicate detection; implementer of Fixer), `CGOBuildCheck` (60s timeout exec.CommandContext with CGO_ENABLED=0 env), `DeepLintCheck` (registered only when opts.Deep is true; warn-not-fail when golangci-lint missing)
+- `internal/doctor/render.go` -- `RenderHuman` (lipgloss-styled icon glyphs only; summary line "N passed, M warned, K failed"; indented hint lines), `RenderJSON` (json.Encoder to a stable schema with `jsonCheck` view type), `FormatSelector` (dispatcher; rejects unknown formats with a message naming the allowed set)
+- `internal/doctor/doctor_test.go` -- 5 tests for the exit-code math: all-pass, any-fail, warn-no-strict, warn-strict, end-to-end fix-error-surfaces-in-result
+- `internal/doctor/checks_test.go` -- 8 tests: GoVersionCheck accepts current + rejects too old (hermetic boundary), ToolPresenceCheck detects missing, GoModHygieneCheck no-go-mod + valid-mod, CGOBuildCheck pass-on-spin-itself, DeepLintCheck registered-when-deep, default-registry-has-four-base-checks
+- `internal/doctor/render_test.go` -- 5 tests: RenderHuman all-pass + fail-with-hint, RenderJSON schema unmarshal, FormatSelector rejects-unknown + defaults-to-human
+- `cmd/doctor.go` -- `doctorCmd` registered via init() with `--format`, `--strict`, `--deep`, `--fix`; `runDoctor` reads flags, builds `doctor.RunOptions`, calls `doctor.Run` then `doctor.FormatSelector`; non-zero exit wraps "N check(s) failed" in a cobra error for fang
+- `cmd/doctor_test.go` -- 3 tests: registration via pointer identity, all 4 flags with expected defaults, `spin doctor --help` mentions all flags
+- `go.mod` -- `charm.land/lipgloss/v2` promoted from `// indirect` to direct (no new modules; lipgloss was already in the graph via fang/huh/log)
 
 ## Decisions Made
 
@@ -118,7 +118,7 @@ completed: 2026-06-05
 - **Verification:** `TestToolPresenceCheck_DetectsMissing` passes; `TestRenderHuman_FailWithHint` (Task 2) unaffected
 - **Committed in:** `133f659` (Task 1 commit)
 
-**3. [Rule 1 - Bug] `modfile.Module.Mod` is a struct, not a pointer — `== nil` is invalid**
+**3. [Rule 1 - Bug] `modfile.Module.Mod` is a struct, not a pointer -- `== nil` is invalid**
 - **Found during:** Task 1 (first build)
 - **Issue:** `internal/doctor/checks.go` had `mf.Module == nil || mf.Module.Mod == nil || mf.Module.Mod.Path == ""`. The compiler error: `mismatched types module.Version and untyped nil`. `module.Version` is a value type, not a pointer
 - **Fix:** Drop the `mf.Module.Mod == nil` check; the struct's `Path` field being empty is sufficient
@@ -128,13 +128,13 @@ completed: 2026-06-05
 
 ---
 
-**Total deviations:** 3 auto-fixed (all Rule 1 — code-doesn't-work bugs caught by tests)
+**Total deviations:** 3 auto-fixed (all Rule 1 -- code-doesn't-work bugs caught by tests)
 **Impact on plan:** All three fixes were necessary for the package to compile and tests to pass. No scope creep; no spec changes; no architectural decisions.
 
 ## Issues Encountered
 
 - **Pre-existing test hangs in `internal/wrap` and `internal/scaffold`:** Running `go test ./...` hung on `TestRun_WithAirToml` (wrap) and a scaffold test, both of which shell out to `air` and never receive a TTY signal to exit. These hang in this worktree environment regardless of my changes; they predate plan 04-01. Verification was done by running `./internal/doctor/...`, `./cmd/...`, and `./internal/prompt/...` individually with `-short` and timeouts. Not in scope; the orchestrator can address these when consolidating the test suite.
-- **`semver` import missing in `checks_test.go`:** `TestGoVersionCheck_RejectsTooOld` needed the `golang.org/x/mod/semver` package for its hermetic boundary check. The fix was a one-line import addition — not a deviation, but worth noting in case a future plan runs the same boundary test pattern.
+- **`semver` import missing in `checks_test.go`:** `TestGoVersionCheck_RejectsTooOld` needed the `golang.org/x/mod/semver` package for its hermetic boundary check. The fix was a one-line import addition -- not a deviation, but worth noting in case a future plan runs the same boundary test pattern.
 - **Initial `exitCode` test in `doctor_test.go` over-engineered:** First draft of `TestRun_Orchestrator_FixFlagDoesNotChangeExitCode` used two boolean helpers (`yesFix`, `optsFix`) that obscured the assertion. Simplified to drive the same code paths `Run()` does (build registry, run, conditionally fix, annotate, compute exit) without the wrapper helpers. Net: the test is now readable, and the fix-error annotation path is exercised directly.
 
 ## Threat Model Coverage
@@ -144,11 +144,11 @@ All STRIDE mitigations in PLAN.md were applied:
 - **T-04-01 (GoModHygieneCheck):** uses `golang.org/x/mod/modfile.Parse` (no eval, no shell-out). Verified by `TestGoModHygieneCheck_NoGoMod` and `TestGoModHygieneCheck_ValidMod`
 - **T-04-02 (CGOBuildCheck):** static argv (no interpolation), `CGO_ENABLED=0` env passed via `cmd.Env` (not shell), 60s context timeout, output truncated to 1KB. Verified by `TestCGOBuildCheck_PassOnSpinItself`
 - **T-04-03 (ToolPresenceCheck):** `exec.LookPath` only (no execution). Verified by `TestToolPresenceCheck_DetectsMissing`
-- **T-04-04 (JSON output):** schema contains only name/status/message/hint — no env vars, no paths beyond the `module <path>` string in the message
-- **T-04-05 (--fix elevation):** `go mod tidy` is read-mostly; `go install` only fires for the 4 whitelisted tools with pinned install commands in code — no user input interpolated. Verified by code review (defaultTools is a package-level const)
+- **T-04-04 (JSON output):** schema contains only name/status/message/hint -- no env vars, no paths beyond the `module <path>` string in the message
+- **T-04-05 (--fix elevation):** `go mod tidy` is read-mostly; `go install` only fires for the 4 whitelisted tools with pinned install commands in code -- no user input interpolated. Verified by code review (defaultTools is a package-level const)
 - **T-04-06 (DoS via huge monorepo):** 60s `exec.CommandContext` timeout on CGOBuildCheck, 90s on DeepLintCheck, 5min per tool in ToolPresenceCheck.Fix
 - **T-04-07 (exit code contract):** 5 tests in `doctor_test.go` exercise the exit-code matrix (all-pass, any-fail, warn-no-strict, warn-strict, fix-failure downgrades pass→warn)
-- **T-04-08 (no new package installs):** verified — `charm.land/lipgloss/v2` was already in the module graph; the only go.mod change is the `// indirect` → direct promotion
+- **T-04-08 (no new package installs):** verified -- `charm.land/lipgloss/v2` was already in the module graph; the only go.mod change is the `// indirect` → direct promotion
 
 ## Next Phase Readiness
 
