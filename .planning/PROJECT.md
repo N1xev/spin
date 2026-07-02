@@ -188,4 +188,5 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-03 -- started v2.x local-registry milestone (Phase 6+)*
+*Last updated: 2026-07-03 -- v2.x local-registry milestone Phases 6-8 complete (manager + index + resolver + HTTP cleanup)*
+

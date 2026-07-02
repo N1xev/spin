@@ -1,8 +1,3 @@
-// Package template - tests for the no-TTY prompt fallbacks. These
-// functions are what scripts, CI runs, and piped `spin new` calls
-// get when no human is around to answer interactive prompts. They
-// must always return a "safe to continue" answer; a missing
-// fallback or a panic here would hang CI or surprise scripts.
 package template
 
 import (

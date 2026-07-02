@@ -1,15 +1,3 @@
-// Package cmd: spin update.
-//
-// `spin update [name]` re-clones or re-copies the on-disk cache of
-// a pinned template and updates its recorded version. If `name` is
-// omitted, every pinned template is updated. The user gets a
-// per-template success line and a summary count.
-//
-// Rollback semantics: the old on-disk cache is moved to a sibling
-// `.bak-<unix-ts>` directory before the refresh runs. If the
-// refresh fails, the .bak dir is moved back into place and the pin
-// record is left untouched. If the refresh succeeds, the .bak is
-// deleted.
 package cmd
 
 import (

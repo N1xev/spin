@@ -1,16 +1,3 @@
-// Package cmd: spin init.
-//
-// `spin init <name>` scaffolds a new external template directory
-// in the current working directory. The result is a ready-to-hack
-// template: spin.toml + a _base/ tree with one example file. The
-// user edits the spin.toml (description, params, post steps) and
-// the _base/ tree to taste, then `spin new <project> --template
-// <dir>` renders it.
-//
-// We deliberately keep init simple: a fixed manifest, a single
-// placeholder file, and a README. Template authors will edit all
-// of these; the value of `spin init` is "give me a working
-// skeleton in 1 second", not "guess what I want".
 package cmd
 
 import (

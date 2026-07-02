@@ -1,8 +1,3 @@
-// Package cmd wires the spin cobra root command.
-//
-// Subcommand files attach themselves to rootCmd via init(). RootCmd()
-// is the constructor accessor; main and tests use it to obtain the
-// fully-populated command tree.
 package cmd
 
 import (

@@ -1,14 +1,3 @@
-// Package cmd wires the spin cobra root command.
-//
-// new.go is the v2 scaffolding entry point: `spin new <name>
-// --template <spec>`. It loads an external template (git URL, local
-// path, or future registry reference) via internal/template, prompts
-// the user for any required params, renders the _base/ tree against
-// the resolved values, and runs the template's [[post]] steps.
-//
-// The v2 ecosystem path (Ecosystem interface, defaultRegistry,
-// dispatchV2) was archived in v2.x; templates are the only
-// extension surface now.
 package cmd
 
 import (
@@ -33,27 +22,31 @@ import (
 )
 
 var newCmd = &cobra.Command{
-	Use:   "new <name>",
+	Use:   "new <name> [<template>]",
 	Short: "Scaffold a new project from a template",
-	Long:  "Scaffold a new project from an external template. A template is a git repo, local path, or pinned spec that contains a spin.toml manifest and a _base/ tree of overlay files.",
-	Example: `  # From a pinned template (recommended; works offline)
+	Long:  "Scaffold a new project from an external template. A template is a git repo, local path, or pinned spec that contains a spin.toml manifest and a _base/ tree of overlay files. If <name> or <template> is omitted, spin prompts for it when running interactively.",
+	Example: `  # Positional name + template (no flag needed)
+  spin new myapp my-template
+  spin new demoapp https://github.com/me/go-cli-template.git
+
+  # Interactive: spin asks for the name (and template) when missing
+  spin new
+
+  # From a pinned template (recommended; works offline)
   spin new myapp --template my-template
 
   # From a local path
   spin new myapp --template ~/code/templates/go-cli
 
-  # From a git URL
-  spin new myapp --template https://github.com/me/go-cli-template.git
-
   # Non-interactive (CI / scripts): pre-set every param
-  spin new myapp --template go-cli --param port=8080 --param api_key=... --param features=ci,release
+  spin new myapp go-cli --param port=8080 --param api_key=... --param features=ci,release
 
   # Preview the template's params without scaffolding
-  spin new myapp --template <spec> --print-params
+  spin new myapp <spec> --print-params
 
   # Preview the rendered tree without writing files
-  spin new myapp --template <spec> --dry-run`,
-	Args:          cobra.ExactArgs(1),
+  spin new myapp <spec> --dry-run`,
+	Args:          validateNewArgs,
 	RunE:          runNew,
 	SilenceUsage:  true,
 	SilenceErrors: true,
@@ -68,7 +61,7 @@ var (
 )
 
 func init() {
-	newCmd.Flags().StringVarP(&newTemplate, "template", "t", "", "template spec: user/repo, git URL, or local path (required)")
+	newCmd.Flags().StringVarP(&newTemplate, "template", "t", "", "template spec: user/repo, git URL, or local path (or pass positionally as the second argument)")
 	newCmd.Flags().StringVarP(&newDest, "dest", "d", "", "destination directory (default: ./<name>)")
 	newCmd.Flags().BoolVar(&newPrintParams, "print-params", false, "print the template's params as JSON and exit (no files written)")
 	newCmd.Flags().BoolVar(&newDryRun, "dry-run", false, "render to a temp dir, print the file list, and clean up (no project written)")
@@ -76,17 +69,15 @@ func init() {
 	rootCmd.AddCommand(newCmd)
 }
 
-// runNew is the RunE for `spin new`. Loads a v2 template, resolves
-// its params (interactive or default), renders the project tree,
-// and runs the template's [[post]] steps.
-//
-// Two preview flags short-circuit the write:
-//   --print-params: print the resolved params map as JSON and exit
-//   --dry-run:      render to a temp dir, print the file list, exit
+// runNew is the RunE for `spin new`. Resolves name + template
+// (positional / flag / interactive prompt), loads the template,
+// collects params (interactive or via --param), renders the
+// project, and runs [[post]] steps. Honors --print-params and
+// --dry-run as preview-only short circuits.
 func runNew(cmd *cobra.Command, args []string) error {
-	name := args[0]
-	if newTemplate == "" {
-		return fmt.Errorf("spin new: --template is required (use `spin search <query>` to find one, or `spin list` for pinned)")
+	name, tplSpec, err := resolveNameAndTemplate(cmd, args)
+	if err != nil {
+		return err
 	}
 	dest, err := resolveDest(newDest, name)
 	if err != nil {
@@ -94,27 +85,19 @@ func runNew(cmd *cobra.Command, args []string) error {
 	}
 
 	loader := template.NewLoader("")
-	// Wire the keep/remove prompt for invalid pinned templates and
-	// the reuse/pin/wipe prompt for an existing clone at the
-	// destination. Only attach in interactive mode -- non-interactive
-	// runs (CI, scripts) get the wipe-and-reclone fallback.
 	if isInteractive() {
 		loader.PromptInvalidPinned = promptInvalidPinned
 		loader.PromptExistingDest = promptExistingDest
 	}
-	tpl, err := loader.Load(newTemplate)
+	tpl, err := loader.Load(tplSpec)
 	if err != nil {
-		return fmt.Errorf("spin new: load template: %w", err)
+		return fmt.Errorf("spin new: %w", err)
 	}
 
 	values := map[string]any{
 		"name":         name,
 		"project_name": name,
 	}
-	// --param values layer on top of the name map, then any
-	// template-defaults are applied by ResolveForm. Validation
-	// against the param spec happens here so the user gets a
-	// clear error before the (skipped) form or render.
 	if len(newParams) > 0 {
 		parsed, err := applyParamFlags(tpl, newParams)
 		if err != nil {
@@ -122,16 +105,14 @@ func runNew(cmd *cobra.Command, args []string) error {
 		}
 		maps.Copy(values, parsed)
 	}
-	// --print-params and --dry-run should never open a form: the
-	// caller wants the values as-is (defaults) without typing.
-	// --param also forces non-interactive: the user already
-	// supplied answers, so opening a form is hostile.
+	// --print-params, --dry-run, and --param all force
+	// non-interactive so we never reask the user for answers they
+	// already supplied.
 	interactive := isInteractive() && !newPrintParams && !newDryRun && len(newParams) == 0
 	resolved, err := tpl.ResolveForm(values, interactive)
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
-			// Bypass fang's error print (it would render "Aborted."
-			// and duplicate our friendly message). Exit 130 = SIGINT.
+			// Bypass fang's "Aborted." banner. Exit 130 = SIGINT.
 			printInfo("cancelled -- no project was created")
 			os.Exit(130)
 		}
@@ -151,22 +132,16 @@ func runNew(cmd *cobra.Command, args []string) error {
 
 	printSuccess("created %s at %s", name, dest)
 
-	// After a successful scaffold from a remote source, offer to pin
-	// it so future runs work offline. Skipped for local paths
-	// (already on disk) and already-pinned templates.
 	if isInteractive() && tpl.Repo != "" {
 		promptPinAfterSuccess(name, tpl)
 	}
 	return nil
 }
 
-// printResolvedParams dumps the resolved param values as JSON so
-// the caller can pipe them into a script. Honors --print-params.
-//
-// The output groups all template metadata under a `template` key
-// (so user params named "description", "version", etc. don't
-// collide with template-level fields), and the resolved values
-// under a `values` key.
+// printResolvedParams writes the template metadata + resolved
+// values as JSON to stdout. Groups under `template` and `values`
+// keys so user params named "description"/"version" don't collide
+// with template-level fields.
 func printResolvedParams(tpl *template.Template, values map[string]any) error {
 	meta := map[string]any{
 		"name": tpl.Name,
@@ -186,9 +161,8 @@ func printResolvedParams(tpl *template.Template, values map[string]any) error {
 	return enc.Encode(out)
 }
 
-// dryRunRender walks the template's _base/ tree, lists the files
-// that WOULD be written (with the rendered content for .tmpl files),
-// then cleans up. No project is left on disk. Honors --dry-run.
+// dryRunRender renders to a temp dir and lists the file paths
+// the project WOULD contain. No files are written to the dest.
 func dryRunRender(tpl *template.Template, values map[string]any, dest string) error {
 	files, err := tpl.Render(values)
 	if err != nil {
@@ -201,8 +175,8 @@ func dryRunRender(tpl *template.Template, values map[string]any, dest string) er
 	return nil
 }
 
-// isInteractive reports whether stdin is a TTY. Used to decide
-// whether to show the huh form or apply defaults silently.
+// isInteractive reports whether stdin is a TTY. Drives the
+// non-interactive path (--param, --print-params, --dry-run, CI).
 func isInteractive() bool {
 	fi, err := os.Stdin.Stat()
 	if err != nil {
@@ -211,10 +185,8 @@ func isInteractive() bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-// promptInvalidPinned is the Loader.PromptInvalidPinned callback.
-// Drives a huh confirm: "Keep the broken clone, or remove it?".
-// Short on purpose -- the user already saw the path in the error
-// line, so the form just needs the question and the two actions.
+// promptInvalidPinned is the Loader.PromptInvalidPinned hook.
+// Asks "keep the broken clone, or remove it?"
 func promptInvalidPinned(name, localPath string, detectErr error) (bool, error) {
 	var keep bool
 	form := huh.NewForm(
@@ -236,14 +208,9 @@ func promptInvalidPinned(name, localPath string, detectErr error) (bool, error) 
 	return keep, nil
 }
 
-// promptExistingDest is the Loader.PromptExistingDest callback.
-// Asks the user what to do when a previous clone already lives at
-// the destination. Three actions + cancel. Pin and Reuse are
-// identical in the loader (both call Detect on the existing
-// clone) -- the difference is the post-scaffold prompt also
-// persists the pin, so the user gets `spin new --template <name>`
-// working offline going forward. Wipe nukes the existing clone
-// and falls through to a fresh `git clone`. Cancel aborts.
+// promptExistingDest is the Loader.PromptExistingDest hook.
+// Reuse uses the existing clone as-is; Pin also persists the
+// source for offline use; Wipe re-clones; Cancel aborts.
 func promptExistingDest(name, localPath string) (template.DestAction, error) {
 	var action string
 	form := huh.NewForm(
@@ -278,17 +245,14 @@ func promptExistingDest(name, localPath string) (template.DestAction, error) {
 	}
 }
 
-// promptPinAfterSuccess offers to pin a freshly-used template so
-// subsequent `spin new` calls can use it offline. Fires only when
-// the source was a remote URL (Repo != "") and the user is on a
-// TTY. Local-path and pinned-name sources don't need this.
+// promptPinAfterSuccess offers to pin a freshly-used remote
+// template so future runs work offline. Skipped for local paths
+// and already-pinned sources.
 func promptPinAfterSuccess(_ string, tpl *template.Template) {
 	client := registry.New()
-	// Skip silently if it's already pinned (e.g. user re-ran on a
-	// pin they had).
 	for _, p := range pinnedSnapshot(client) {
 		if p.LocalPath == tpl.Source {
-			return
+			return // already pinned
 		}
 	}
 	var pin bool
@@ -322,9 +286,8 @@ func promptPinAfterSuccess(_ string, tpl *template.Template) {
 	printSuccess("pinned %q (cloned to %s)", pinned.Name, pinned.LocalPath)
 }
 
-// pinnedSnapshot is a tiny helper that swallows errors from
-// ListPinned -- the snapshot is best-effort; an unreadable
-// pinned.json is "no pins", not a fatal condition.
+// pinnedSnapshot returns the pin list. Swallows read errors:
+// "no pins" is the safe answer for a corrupt pinned.json.
 func pinnedSnapshot(client *registry.Client) []registry.Pinned {
 	pinned, err := client.ListPinned()
 	if err != nil {
@@ -333,12 +296,9 @@ func pinnedSnapshot(client *registry.Client) []registry.Pinned {
 	return pinned
 }
 
-// resolveDest returns the absolute destination path for `spin new`.
-// Precedence: explicit --dest (expanded and made absolute) > name
-// (resolved against cwd). A leading "~" or "~/" is expanded via
-// the user's home directory; everything else is made absolute via
-// filepath.Abs so the user always sees a full path in the success
-// line, not a relative path that depends on the shell's CWD.
+// resolveDest returns the absolute destination path. Expands
+// ~ and ~/ via the user's home; everything else via filepath.Abs
+// so the success line always shows a full path.
 func resolveDest(dest, name string) (string, error) {
 	if dest == "" {
 		return filepath.Abs(name)
@@ -360,18 +320,10 @@ func resolveDest(dest, name string) (string, error) {
 	return filepath.Abs(dest)
 }
 
-// applyParamFlags turns a slice of `key=value` strings (from the
-// repeated --param flag) into a typed map[string]any suitable for
-// layering on top of ResolveForm's values. Coerces each value
-// according to the param's declared Type (number -> int, bool ->
-// bool, multiselect -> []string via comma split) so the rendered
-// template sees the right primitive. Unknown keys, malformed
-// `key=value` syntax, or out-of-range numbers produce clear errors
-// that name the offending flag.
-//
-// The returned map only contains the keys the caller passed; the
-// template's own defaults are still applied later by ResolveForm
-// (which respects our explicit overrides).
+// applyParamFlags parses the repeated --param slice into a typed
+// map keyed on the template's param spec. Unknown keys, malformed
+// key=value, or out-of-range numbers produce clear errors naming
+// the offending flag.
 func applyParamFlags(tpl *template.Template, raw []string) (map[string]any, error) {
 	out := make(map[string]any, len(raw))
 	for i, entry := range raw {
@@ -392,10 +344,8 @@ func applyParamFlags(tpl *template.Template, raw []string) (map[string]any, erro
 	return out, nil
 }
 
-// splitParamEntry parses one --param argument. Accepts
-//   key=value
-// but rejects empty key, empty value (since `key=` is almost
-// always a typo and easy to surface), or missing `=`.
+// splitParamEntry parses one "key=value" string. Rejects empty
+// key and missing '='.
 func splitParamEntry(s string) (key, value string, err error) {
 	key, value, ok := strings.Cut(s, "=")
 	if !ok {
@@ -409,8 +359,7 @@ func splitParamEntry(s string) (key, value string, err error) {
 }
 
 // coerceParamValue parses raw (always a string from the CLI) into
-// the primitive the param type expects. The set of supported
-// coercions mirrors what `huh` writes back via Apply/Value.
+// the primitive the param type expects.
 func coerceParamValue(spec params.Spec, raw string) (any, error) {
 	switch spec.Type {
 	case params.TypeNumber:
@@ -433,7 +382,7 @@ func coerceParamValue(spec params.Spec, raw string) (any, error) {
 		return b, nil
 	case params.TypeMultiSelect:
 		// Comma-split, trim each, drop empties so a trailing comma
-		// or whitespace doesn't produce phantom options.
+		// or stray whitespace doesn't produce phantom options.
 		parts := strings.Split(raw, ",")
 		out := make([]string, 0, len(parts))
 		for _, p := range parts {
@@ -455,9 +404,8 @@ func coerceParamValue(spec params.Spec, raw string) (any, error) {
 	}
 }
 
-// parseLooseBool accepts the obvious truthy/falsy spellings so
-// `spin new --param verbose=true` and `--param verbose=1` both
-// work. Anything else errors out with a helpful message.
+// parseLooseBool accepts truthy/falsy spellings: true/1/yes/y/on
+// and false/0/no/n/off.
 func parseLooseBool(s string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case "true", "1", "yes", "y", "on":
@@ -468,8 +416,8 @@ func parseLooseBool(s string) (bool, error) {
 	return false, fmt.Errorf("expected bool, got %q (use true/false, 1/0, yes/no)", s)
 }
 
-// joinKnownParams renders the param spec keys in a stable order
-// for the unknown-key error. Used only on the error path.
+// joinKnownParams renders the param spec keys in stable order
+// for the unknown-key error path.
 func joinKnownParams(specs map[string]params.Spec) string {
 	names := make([]string, 0, len(specs))
 	for k := range specs {
@@ -477,4 +425,131 @@ func joinKnownParams(specs map[string]params.Spec) string {
 	}
 	sort.Strings(names)
 	return strings.Join(names, ", ")
+}
+
+// validateNewArgs is the cobra.Args validator. Accepts 0, 1, or 2
+// positionals and rejects positional <template> + --template.
+func validateNewArgs(cmd *cobra.Command, args []string) error {
+	if len(args) > 2 {
+		return fmt.Errorf("spin new: accepts at most 2 positional args (<name> [<template>]), got %d", len(args))
+	}
+	if len(args) == 2 && cmd.Flags().Changed("template") {
+		return fmt.Errorf("spin new: cannot pass <template> both positionally and via --template")
+	}
+	return nil
+}
+
+// resolveNameAndTemplate fills name and template from args /
+// --template / interactive prompts. Returns precise non-interactive
+// errors naming whichever slot is missing.
+func resolveNameAndTemplate(cmd *cobra.Command, args []string) (string, string, error) {
+	var name, tpl string
+	if len(args) >= 1 {
+		name = args[0]
+	}
+	if len(args) >= 2 {
+		tpl = args[1]
+	}
+	// Validator already rejected positional + --template; this is
+	// defense in depth -- prefer positional if both slipped through.
+	if cmd.Flags().Changed("template") {
+		if tpl != "" && newTemplate != "" && tpl != newTemplate {
+			printWarn("ignoring --template %q in favor of positional %q", newTemplate, tpl)
+		} else if tpl == "" {
+			tpl = newTemplate
+		}
+	}
+
+	if name == "" {
+		if !isInteractive() {
+			return "", "", fmt.Errorf("spin new: <name> is required in non-interactive mode")
+		}
+		v, err := promptForName()
+		if err != nil {
+			return "", "", err
+		}
+		name = v
+	}
+	if tpl == "" {
+		if !isInteractive() {
+			return "", "", fmt.Errorf("spin new: <template> is required in non-interactive mode (use `spin search <query>` to find one, or `spin list` for pinned)")
+		}
+		v, err := promptForTemplate()
+		if err != nil {
+			return "", "", err
+		}
+		tpl = v
+	}
+	return name, tpl, nil
+}
+
+// promptForName asks for the project name via a huh Input. Exits
+// 130 on cancel.
+func promptForName() (string, error) {
+	var name string
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Project name").
+				Description("Folder name; injected as {{ name }} / {{ project_name }} in the template.").
+				Value(&name).
+				Validate(func(s string) error {
+					if strings.TrimSpace(s) == "" {
+						return fmt.Errorf("name cannot be empty")
+					}
+					return nil
+				}),
+		),
+	)
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			printInfo("cancelled -- no project was created")
+			os.Exit(130)
+		}
+		return "", err
+	}
+	return strings.TrimSpace(name), nil
+}
+
+// promptForTemplate asks the user to pick a pinned template via a
+// Select. Huh's Select has a built-in `/` filter, so the user
+// narrows the list inline instead of answering a separate input.
+// Returns a "no pinned templates" error when the cache is empty.
+func promptForTemplate() (string, error) {
+	client := registry.New()
+	pinned, err := client.ListPinned()
+	if err != nil {
+		return "", fmt.Errorf("spin new: list pinned: %w", err)
+	}
+	if len(pinned) == 0 {
+		return "", fmt.Errorf("spin new: no pinned templates; add a template link or path, or use `spin search` to find one")
+	}
+
+	names := make([]string, 0, len(pinned))
+	for _, p := range pinned {
+		names = append(names, p.Name)
+	}
+	sort.Strings(names)
+
+	var choice string
+	opts := make([]huh.Option[string], 0, len(names))
+	for _, n := range names {
+		opts = append(opts, huh.NewOption(n, n))
+	}
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Pick a pinned template").
+				Value(&choice).
+				Options(opts...),
+		),
+	)
+	if err := form.Run(); err != nil {
+		if errors.Is(err, huh.ErrUserAborted) {
+			printInfo("cancelled -- no project was created")
+			os.Exit(130)
+		}
+		return "", err
+	}
+	return choice, nil
 }

@@ -1,7 +1,3 @@
-// Package params defines the typed parameter spec shared by spin.toml
-// (external templates) and ecosystem flag declarations. It maps the
-// user-facing prompt types onto huh.Field at form-build time, and onto
-// a uniform Value at render time.
 package params
 
 import (

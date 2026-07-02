@@ -1,10 +1,3 @@
-// Package cmd: spin list.
-//
-// `spin list` prints every template pinned locally via
-// `spin add` as a styled table. `spin list --json` emits the
-// same data as a JSON array on stdout (no colors, no padding)
-// so scripts and other CLIs can consume it without parsing a
-// human-readable table.
 package cmd
 
 import (
@@ -31,9 +24,11 @@ var listCmd = &cobra.Command{
 }
 
 var listJSONFlag bool
+var listAllFlag bool
 
 func init() {
 	listCmd.Flags().BoolVar(&listJSONFlag, "json", false, "emit pinned templates as JSON to stdout (machine-readable, no styling)")
+	listCmd.Flags().BoolVar(&listAllFlag, "all", false, "include removed pins (marked with `(removed)` next to the name)")
 	rootCmd.AddCommand(listCmd)
 }
 
@@ -48,6 +43,7 @@ type pinnedRow struct {
 	Description string `json:"description,omitempty"`
 	Source      string `json:"source"`
 	LocalPath   string `json:"local_path"`
+	Removed     bool   `json:"removed,omitempty"`
 }
 
 // execList prints the pinned templates. Default is a styled
@@ -56,31 +52,44 @@ type pinnedRow struct {
 // consistent.
 func execList(cmd *cobra.Command, args []string) error {
 	client := registry.New()
-	pinned, err := client.ListPinned()
+	var pinned []registry.Pinned
+	var err error
+	if listAllFlag {
+		pinned, err = client.ListAllPinned()
+	} else {
+		pinned, err = client.ListPinned()
+	}
 	if err != nil {
 		return err
 	}
 	if len(pinned) == 0 {
 		if listJSONFlag {
-			// Even on empty, emit a valid (empty) JSON array so
-			// `jq` consumers don't choke.
 			fmt.Fprintln(cmd.OutOrStdout(), "[]")
 			return nil
 		}
-		printInfo("no pinned templates")
+		if listAllFlag {
+			printInfo("no pinned templates (active or removed)")
+		} else {
+			printInfo("no pinned templates")
+		}
 		printHint("use `spin add <spec>` to pin one (local path or git URL)")
 		return nil
 	}
 
 	rows := make([]pinnedRow, 0, len(pinned))
 	for _, p := range pinned {
+		name := p.Name
+		if p.Removed {
+			name = p.Name + " (removed)"
+		}
 		rows = append(rows, pinnedRow{
-			Name:        p.Name,
+			Name:        name,
 			Version:     p.Version,
 			PinnedAt:    p.PinnedAt,
 			Description: pinnedDescription(p.LocalPath),
 			Source:      p.Source,
 			LocalPath:   p.LocalPath,
+			Removed:     p.Removed,
 		})
 	}
 

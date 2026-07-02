@@ -3,12 +3,7 @@ package registry
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,120 +11,23 @@ import (
 	"time"
 )
 
-// Client is the registry HTTP client.
+// Client is the local pin store. It owns ~/.config/spin/pinned.json
+// and the per-template caches under ~/.config/spin/templates/. The
+// v2.x registry layer (manager.go) owns a separate registries store
+// at ~/.config/spin/registries.json plus per-registry clones under
+// ~/.config/spin/registries/<alias>/.
 type Client struct {
-	IndexURL string
-	HTTP     *http.Client
 	CacheDir string // where Pinned entries are stored; defaults to ~/.config/spin/pinned.json
 }
 
-// New builds a Client. The index URL is read from SPIN_REGISTRY_URL
-// (preferred) or SPIN_REGISTRY (fallback for v2.0-skeleton callers),
-// and defaults to DefaultIndexURL -- a known-unreachable host so the
-// friendly "not yet deployed" message is shown until the real
-// registry server is deployed.
+// New returns a Client rooted at the default config dir.
 func New() *Client {
-	u := os.Getenv("SPIN_REGISTRY_URL")
-	if u == "" {
-		u = os.Getenv("SPIN_REGISTRY")
-	}
-	if u == "" {
-		u = DefaultIndexURL
-	}
 	cache, _ := os.UserConfigDir()
 	if cache == "" {
 		cache = "."
 	}
-	return &Client{
-		IndexURL: u,
-		HTTP:     &http.Client{Timeout: 15 * time.Second},
-		CacheDir: filepath.Join(cache, "spin"),
-	}
+	return &Client{CacheDir: filepath.Join(cache, "spin")}
 }
-
-// Search queries the public index. Returns ErrNotDeployed (never a
-// raw connection error) when the server is unreachable (DNS failure,
-// connection refused, timeout) or returns HTTP 404. Other HTTP
-// failures are returned as wrapped errors that include the status.
-func (c *Client) Search(query string) (*SearchResult, error) {
-	return c.SearchWithLimit(query, 0)
-}
-
-// SearchWithLimit is Search with an optional cap on the returned
-// entries. limit <= 0 means "no cap".
-func (c *Client) SearchWithLimit(query string, limit int) (*SearchResult, error) {
-	u, err := url.Parse(c.IndexURL + "/search")
-	if err != nil {
-		return nil, fmt.Errorf("registry: parse %s: %w", c.IndexURL, err)
-	}
-	q := u.Query()
-	q.Set("q", query)
-	u.RawQuery = q.Encode()
-
-	resp, err := c.HTTP.Get(u.String())
-	if err != nil {
-		if isNetworkError(err) {
-			return nil, ErrNotDeployed
-		}
-		return nil, fmt.Errorf("registry: GET %s: %w", u, err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrNotDeployed
-	}
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("registry: %s: %s", resp.Status, string(body))
-	}
-	var out SearchResult
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, fmt.Errorf("registry: decode: %w", err)
-	}
-	if limit > 0 && len(out.Entries) > limit {
-		out.Entries = out.Entries[:limit]
-	}
-	return &out, nil
-}
-
-// isNetworkError reports whether err is a DNS failure, connection
-// refused, timeout, or other "could not reach the server" condition
-// -- as opposed to a protocol-level error after the connection was
-// established. Such errors all map to ErrNotDeployed so the CLI
-// shows a friendly message instead of a stack trace.
-func isNetworkError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// DNS resolution failure
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return true
-	}
-	// Connection refused / timeout / unreachable host
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
-		return true
-	}
-	// Fall back to string inspection: the stdlib wraps *net.OpError
-	// in *url.Error in many paths, but some low-level errors (e.g.
-	// "context deadline exceeded") don't satisfy errors.As above.
-	msg := err.Error()
-	for _, needle := range []string{
-		"connection refused",
-		"no such host",
-		"i/o timeout",
-		"context deadline exceeded",
-		"network is unreachable",
-		"no route to host",
-	} {
-		if strings.Contains(msg, needle) {
-			return true
-		}
-	}
-	return false
-}
-
-// ─── Add / Pin / Unpin ────────────────────────────────────────────
 
 // Add resolves a spec (local path, git URL, or GitHub user/repo
 // shorthand) into a Pinned template. The clone/copy is performed
@@ -388,10 +286,12 @@ func (c *Client) PinnedPath() string {
 	return filepath.Join(c.CacheDir, "pinned.json")
 }
 
-// ListPinned returns the persisted Pinned entries. A missing file
-// is not an error -- it returns (nil, nil), which the CLI formats as
-// "No pinned templates".
-func (c *Client) ListPinned() ([]Pinned, error) {
+// ListAllPinned returns every persisted Pinned entry, including the
+// soft-deleted ones (Removed=true). A missing file is not an error:
+// it returns (nil, nil). Use this when you need to see removed pins
+// (e.g. `spin list --all`) or look up a pin that may already have
+// been un-pinned.
+func (c *Client) ListAllPinned() ([]Pinned, error) {
 	b, err := os.ReadFile(c.PinnedPath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -405,6 +305,23 @@ func (c *Client) ListPinned() ([]Pinned, error) {
 	var out []Pinned
 	if err := json.Unmarshal(b, &out); err != nil {
 		return nil, fmt.Errorf("registry: pinned.json: %w", err)
+	}
+	return out, nil
+}
+
+// ListPinned returns the active Pinned entries (Removed=false).
+// Soft-deleted pins are filtered out so the default views of
+// `spin list`, `spin new`, and `spin update` don't surface them.
+func (c *Client) ListPinned() ([]Pinned, error) {
+	all, err := c.ListAllPinned()
+	if err != nil {
+		return nil, err
+	}
+	out := all[:0]
+	for _, x := range all {
+		if !x.Removed {
+			out = append(out, x)
+		}
 	}
 	return out, nil
 }
@@ -431,15 +348,46 @@ func (c *Client) Pin(p Pinned) error {
 	return c.writePinned(all)
 }
 
-// Unpin removes the Pinned record with the given name (if any). It
-// does NOT remove the on-disk clone/copy -- the user can do that
-// manually if they want.
+// Unpin soft-deletes the Pinned record with the given name: it
+// marks Removed=true so the entry is hidden from ListPinned but
+// still in pinned.json. The on-disk cache is left alone -- call
+// Purge(name) to drop the entry AND delete its cache.
 func (c *Client) Unpin(name string) error {
-	all, _ := c.ListPinned()
+	all, _ := c.ListAllPinned()
+	found := false
+	for i, x := range all {
+		if x.Name == name {
+			all[i].Removed = true
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	return c.writePinned(all)
+}
+
+// Purge removes the named Pinned record entirely and deletes its
+// on-disk cache (if any). Use this after Unpin to fully reclaim
+// disk space; calling it on an already-removed pin is fine. Returns
+// an error if no pin (active or removed) is named that.
+func (c *Client) Purge(name string) error {
+	all, _ := c.ListAllPinned()
+	var match *Pinned
 	out := all[:0]
-	for _, x := range all {
-		if x.Name != name {
-			out = append(out, x)
+	for i, x := range all {
+		if x.Name == name {
+			match = &all[i]
+			continue
+		}
+		out = append(out, x)
+	}
+	if match == nil {
+		return fmt.Errorf("registry: purge: no pinned template named %q", name)
+	}
+	if match.LocalPath != "" {
+		if err := os.RemoveAll(match.LocalPath); err != nil {
+			return fmt.Errorf("registry: purge: delete cache %s: %w", match.LocalPath, err)
 		}
 	}
 	return c.writePinned(out)

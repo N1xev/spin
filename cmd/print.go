@@ -1,16 +1,3 @@
-// Package cmd: shared output helpers.
-//
-// Every spin command that prints a success line, info line, error
-// line, warning, or table goes through this file. We deliberately
-// reuse the same fang color scheme the error path uses, so the
-// whole CLI reads as one cohesive surface (success = green like
-// the ANSI flag color; info = blue like the title; warning =
-// yellow/orange; hint = dimmed base). The marks ("✓", "ℹ", "⚠",
-// "✗") are unicode dingbats -- they look at home next to fang's
-// fang styles and stay one codepoint per call site.
-//
-// If you find yourself reaching for fmt.Printf or fmt.Fprintln
-// directly in another cmd file, add a helper here instead.
 package cmd
 
 import (
