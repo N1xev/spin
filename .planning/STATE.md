@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v2.x local-registry
 milestone_name: local-registry
 status: planning
-last_updated: "2026-07-02T21:42:56.807Z"
-last_activity: 2026-07-02
+last_updated: "2026-07-03T22:00:00.000Z"
+last_activity: 2026-07-03
 progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_phases: 8
+  completed_phases: 5
+  total_plans: 23
+  completed_plans: 23
   percent: 0
 ---
 
@@ -17,17 +17,17 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-02)
+See: .planning/PROJECT.md (updated 2026-07-03)
 
-**Core value:** Generate a perfect, runnable Go project using charmbracelet v2 libraries with a single command.
-**Current focus:** Milestone complete
+**Core value:** Generate a runnable project from any external template with one command. `spin new myapp --template go-cli && cd myapp && go run .` produces a project that builds, tests, and runs without extra setup -- regardless of language, framework, or build tool. The template author owns the details; `spin` owns the load / prompt / render / post-hook pipeline.
+**Current focus:** Roadmap created for v2.x local-registry milestone (Phases 6-8)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: Phase 6 (planning -- roadmap created, plans not yet written)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-07-02 — Milestone v2.x local-registry started
+Status: Roadmap drafted; awaiting /gsd:plan-phase 6
+Last activity: 2026-07-03 -- v2.x local-registry roadmap created with 3 phases; 31 v2.x requirements mapped
 
 ## Performance Metrics
 
@@ -135,9 +135,9 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-06-09
-Stopped at: Phase 05 Plan 04 complete; phase 05 complete; milestone v2.0-skeleton DONE
-Next: Milestone v2.0-skeleton is complete. Phase 5 success criteria all met. Future: v2.x roadmap (Builder, external ecosystems, hosted registry).
+Last session: 2026-07-03
+Stopped at: v2.x local-registry roadmap created (Phases 6-8, 31 requirements mapped 100%); Phase 6 not yet planned
+Next: /gsd:plan-phase 6 -- derive plans for the Registry Manager + `spin registry` CLI + `registries.json`
 
 ## v2.0 Skeleton (in progress, 2026-06-08)
 
@@ -284,3 +284,19 @@ Build state post-pivot:
 - `go test -run='^$' ./...` (test compile) -- all packages green
 
 Next: ship 2-3 real templates (Go CLI, Python CLI, Rust CLI) to validate the template system end-to-end, then design the registry.
+
+## v2.x local-registry milestone (2026-07-03)
+
+User direction: replace the HTTP-based registry stub with a zero-backend git/local registry model.
+
+Phases planned:
+
+- Phase 6 -- Registry Manager + `spin registry` CLI + `registries.json`
+- Phase 7 -- Index Reader + `<alias>/<id>` Resolver + Rewire Search/Add/New
+- Phase 8 -- Delete HTTP Client + Docs Pass
+
+Requirements coverage: 31 v2.x requirements mapped to 3 phases (100%). See `.planning/ROADMAP.md` for details.
+
+Current stop: roadmap created; plans for Phase 6 not yet written.
+
+Next: /gsd:plan-phase 6.

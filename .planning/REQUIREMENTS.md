@@ -3,7 +3,7 @@
 **Defined:** 2026-06-02
 **Core Value:** Generate a runnable project from any external template with one command. `spin new myapp --template go-cli && cd myapp && go run .` produces a project that builds, tests, and runs without extra setup -- regardless of language, framework, or build tool. The template author owns the details; `spin` owns the load / prompt / render / post-hook pipeline.
 
-**Last updated:** 2026-07-03 -- v2.x local-registry requirements added; v2.0 registry items (REG-05..REG-08) replaced by local-registry model.
+**Last updated:** 2026-07-03 -- v2.x local-registry requirements added; v2.0 registry items (REG-05..REG-08) replaced by local-registry model; traceability table updated for Phases 6-8.
 
 ## v1 Requirements
 
@@ -221,7 +221,7 @@ The v2.x milestone replaces the v2.0 HTTP registry stub with a zero-backend git/
 ## Out of Scope (anti-features for v2.x)
 
 | Feature | Why Excluded |
-|---------|--------------|
+|---------|-------------|
 | Centralized registry server / HTTP API | Defeats the zero-backend pitch; registries ARE git repos |
 | Auto-publish on `spin init` / first run | Silent network on startup; users who never asked for discovery get auto-registered registries |
 | Cross-device sync of `registries.json` | Dotfiles managers (chezmoi, stow, bare repos) already solve this |
@@ -319,13 +319,45 @@ The v2.x milestone replaces the v2.0 HTTP registry stub with a zero-backend git/
 | RUN-09..RUN-14 | Phase 5 | Pending |
 | REG-05..REG-08 | Phase 5 | Pending |
 | BC-01..BC-03 | Phase 5 | Pending |
+| REG-09 | Phase 6 | Pending |
+| REG-10 | Phase 6 | Pending |
+| REG-11 | Phase 6 | Pending |
+| REG-12 | Phase 6 | Pending |
+| REG-13 | Phase 6 | Pending |
+| REG-14 | Phase 6 | Pending |
+| REG-15 | Phase 6 | Pending |
+| REG-16 | Phase 6 | Pending |
+| REG-17 | Phase 6 | Pending |
+| REG-18 | Phase 6 | Pending |
+| REG-19 | Phase 6 | Pending |
+| BCX-01 | Phase 6 | Pending |
+| BCX-02 | Phase 6 | Pending |
+| BCX-03 | Phase 6 | Pending |
+| SRCH-05 | Phase 6 | Pending |
+| SRCH-06 | Phase 6 | Pending |
+| SRCH-01 | Phase 7 | Pending |
+| SRCH-02 | Phase 7 | Pending |
+| SRCH-03 | Phase 7 | Pending |
+| SRCH-04 | Phase 7 | Pending |
+| RES-01 | Phase 7 | Pending |
+| RES-02 | Phase 7 | Pending |
+| RES-03 | Phase 7 | Pending |
+| RES-04 | Phase 7 | Pending |
+| RES-05 | Phase 7 | Pending |
+| RES-06 | Phase 7 | Pending |
+| CLN-01 | Phase 8 | Pending |
+| CLN-02 | Phase 8 | Pending |
+| CLN-03 | Phase 8 | Pending |
+| CLN-04 | Phase 8 | Pending |
+| CLN-05 | Phase 8 | Pending |
 
 **Coverage:**
 - v1 requirements: 59 total
-- v2 requirements: 41 total (ECO 12 + TPL 7 + RUN 6 + REG 4 + BC 3 + 9 deferred)
-- Mapped to phases: 100/100
+- v2 requirements (Phase 5): 41 total (ECO 12 + TPL 7 + RUN 6 + REG 4 + BC 3 + 9 deferred)
+- v2.x requirements (Phases 6-8): 31 total (REG 11 + SRCH 6 + RES 6 + BCX 3 + CLN 5)
+- Mapped to phases: 131/131
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-06-02*
-*Last updated: 2026-06-02 after roadmap creation*
+*Last updated: 2026-07-03 after v2.x local-registry roadmap creation*
