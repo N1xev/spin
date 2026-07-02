@@ -1,7 +1,9 @@
 # Requirements: spin
 
 **Defined:** 2026-06-02
-**Core Value:** Generate a perfect, runnable Go project using charmbracelet v2 libraries with a single command.
+**Core Value:** Generate a runnable project from any external template with one command. `spin new myapp --template go-cli && cd myapp && go run .` produces a project that builds, tests, and runs without extra setup -- regardless of language, framework, or build tool. The template author owns the details; `spin` owns the load / prompt / render / post-hook pipeline.
+
+**Last updated:** 2026-07-03 -- v2.x local-registry requirements added; v2.0 registry items (REG-05..REG-08) replaced by local-registry model.
 
 ## v1 Requirements
 
@@ -132,10 +134,10 @@ The v2.0 pivot turns spin into a universal, language-agnostic scaffolder and tas
 
 ### Registry (REG)
 
-- [ ] **REG-05**: `spin search <query>` calls the registry server; returns a friendly "registry not yet deployed" message when unreachable (never a stack trace)
-- [ ] **REG-06**: `spin add <user/repo>` pins to `~/.config/spin/pinned.json`; `spin add` without args shows pinned list
-- [ ] **REG-07**: `spin list` shows pinned templates with their resolved local path (relative to `~/.config/spin/templates/`)
-- [ ] **REG-08**: Registry client has a configurable `SPIN_REGISTRY_URL` env override; defaults to a stub URL until the server is deployed
+- [x] **REG-05**: ~~`spin search <query>` calls the registry server; returns a friendly "registry not yet deployed" message when unreachable (never a stack trace)~~ (superseded by SRCH-01 in v2.x; HTTP path removed in Phase 8)
+- [x] **REG-06**: `spin add <user/repo>` pins to `~/.config/spin/pinned.json`; `spin add` without args shows pinned list
+- [x] **REG-07**: `spin list` shows pinned templates with their resolved local path (relative to `~/.config/spin/templates/`)
+- [x] **REG-08**: ~~Registry client has a configurable `SPIN_REGISTRY_URL` env override~~ (env var removed in Phase 8; no longer needed)
 
 ### Backward Compat (BC)
 
@@ -154,6 +156,83 @@ The v2.0 pivot turns spin into a universal, language-agnostic scaffolder and tas
 | TUI mode for the scaffolder itself | CLI is enough; TUI in scaffolded projects only |
 | Free-form `--lib <module-path>` for arbitrary Go modules | Defer; use a template that pre-wires it |
 | `spin workspace` / `go.work` management | Defer; per-project config in v2.x |
+
+## v2.x Requirements -- local-registry milestone
+
+The v2.x milestone replaces the v2.0 HTTP registry stub with a zero-backend git/local registry model. Registries are cloned (git) or symlinked (local) directories containing `registry.toml` + `templates/*.toml`. `spin search` reads them directly from disk. `<alias>/<id>` shorthand works in `spin add` and `spin new`.
+
+### Registry Management (REG)
+
+- [ ] **REG-09**: User can register a git URL as a registry with `spin registry add <alias> <git-url>` (shallow clone to `~/.config/spin/registries/<alias>/`)
+- [ ] **REG-10**: User can register a local path as a registry with `spin registry add <alias> <path>` (symlink; copy fallback on Windows)
+- [ ] **REG-11**: User can list registered registries with `spin registry list` showing alias, source, kind (git/local), cache path, template count, last-updated timestamp; `--json` for scripting
+- [ ] **REG-12**: User can update one or all git registries with `spin registry update [alias]` (git fetch + reset); no-op with notice for local registries; `--quiet` suppresses per-registry output
+- [ ] **REG-13**: User can remove a registry with `spin registry remove <alias>` (deletes entry + cache dir)
+- [ ] **REG-14**: `spin registry add` rejects invalid alias format (no `/`, `\\`, `:`, whitespace, `..`, leading `-`, NUL) before any filesystem write
+- [ ] **REG-15**: `spin registry add` refuses duplicate alias with a clear error unless `--force` is passed; no filesystem mutation before validation
+- [ ] **REG-16**: `spin registry add` validates that the source contains `registry.toml` after clone/symlink; rolls back and errors otherwise
+- [ ] **REG-17**: `spin registry remove` refuses if pinned templates depend on the registry (lists dependent pin names); user can override with `--purge-pinned`
+- [ ] **REG-18**: `registries.json` is written atomically (temp file + rename) -- a crash mid-write never leaves an unparseable file
+- [ ] **REG-19**: Each registry record carries a `last_updated` timestamp set by successful `spin registry update` (git registries only)
+
+### Local Index & Search (SRCH)
+
+- [ ] **SRCH-01**: `spin search <query>` reads from local registries only -- no network call
+- [ ] **SRCH-02**: `spin search` scans `~/.config/spin/registries/*/templates/*.toml`, parses with `github.com/BurntSushi/toml`, and filters by substring match on `id`, `name`, `description`, `tags`
+- [ ] **SRCH-03**: `spin search --json` returns a structured object with `query`, `total`, `entries[]` (each entry carries `alias`, `id`, `name`, `description`, `source`, `tags`)
+- [ ] **SRCH-04**: Search results are sorted by relevance (exact id match > name match > description match > tag match) with `id` alphabetical tie-break
+- [ ] **SRCH-05**: Invalid template metadata files are skipped (not indexed) and reported in `spin registry update` summary -- one bad file never aborts the run
+- [ ] **SRCH-06**: Registry-level validation requires `registry.toml` to parse, required fields (`id`, `name`) to be present, and `templates/` directory to exist
+
+### Shorthand Resolution (RES)
+
+- [ ] **RES-01**: `<alias>/<id>` shorthand is accepted by `spin add` -- resolves via `ResolveShorthand` to the template's `source` field in the registry's `templates/<id>.toml`
+- [ ] **RES-02**: `<alias>/<id>` shorthand is accepted by `spin new` -- same resolution path as RES-01; sets `tpl.Repo` from the metadata `source` (not the cache path) so `promptPinAfterSuccess` fires correctly
+- [ ] **RES-03**: Resolution precedence is fixed and tested: local path > git URL > `<alias>/<id>` > legacy `Pinned.Name` > `user/repo` shorthand
+- [ ] **RES-04**: A string like `example/go-api` containing exactly one `/` (neither side empty, neither side contains another `/`) is detected as `<alias>/<id>` shorthand; other patterns fall through to `user/repo` shorthand resolution
+- [ ] **RES-05**: If a registry template's `source` is itself a `<alias>/<id>`, the resolver recurses once (max depth 2); cycles are rejected with a clear error
+- [ ] **RES-06**: Transient clones for `spin new <alias>/<id>` (when not pinned) are written to a temp dir under the cache root, then either renamed to the pinned location or removed -- never leaked on disk after the run completes
+
+### Backward Compatibility (BCX)
+
+- [ ] **BCX-01**: `~/.config/spin/pinned.json` format is unchanged -- every existing pin keeps working through the local-registry era
+- [ ] **BCX-02**: The legacy `Pinned.Name` resolution path (last in the cascade) is preserved so un-pinned removal of a registry does not break existing scaffold workflows
+- [ ] **BCX-03**: `spin remove --purge` continues to delete the on-disk cache for a pinned template (regression coverage already in `cmd/remove_list_test.go`)
+
+### Cleanup (CLN)
+
+- [ ] **CLN-01**: HTTP client code is removed from `internal/registry` (no `Client.Search`, `Client.SearchWithLimit`, HTTP timeout, `isNetworkError`)
+- [ ] **CLN-02**: `SPIN_REGISTRY_URL` and `SPIN_REGISTRY` env vars are dropped -- the env-var reader in `Client.New()` is removed
+- [ ] **CLN-03**: `DefaultIndexURL`, `ErrNotDeployed`, `ErrNotImplemented` constants are removed from `internal/registry`
+- [ ] **CLN-04**: `internal/registry/client.go` is renamed to `pin.go` (HTTP pieces deleted); `internal/registry/{manager,index,resolve}.go` are introduced as the new layered surface
+- [ ] **CLN-05**: `internal/registry/search.go` is removed (was the HTTP-result formatter); search is implemented in `cmd/search.go` reading from the local index
+
+## Future (deferred beyond v2.x)
+
+| Feature | Why Deferred |
+|---------|--------------|
+| `spin registry doctor` (health check across all registries) | No demand signal yet; v2.x ships the manager, not monitoring |
+| `spin search --registry <alias>` filter | User can pipe through `grep`/`jq`; flag is a small future win |
+| `spin registry info <alias>` (detailed registry view) | `spin registry list --json` covers scripting needs |
+| Registry schema versioning (migrations) | Premature; add when a breaking change is actually proposed |
+| `spin.lock` pinning registry commit SHAs | Adds complexity; pin record already stores `version` SHA from `gitHeadSHA` |
+| Authenticated registry login beyond git credentials | Git's credential helper covers private registries today |
+
+## Out of Scope (anti-features for v2.x)
+
+| Feature | Why Excluded |
+|---------|--------------|
+| Centralized registry server / HTTP API | Defeats the zero-backend pitch; registries ARE git repos |
+| Auto-publish on `spin init` / first run | Silent network on startup; users who never asked for discovery get auto-registered registries |
+| Cross-device sync of `registries.json` | Dotfiles managers (chezmoi, stow, bare repos) already solve this |
+| Registry health checks / registry ratings / stars | Requires a server or N pings; adds noise to local-first UX |
+| `<alias>/<sub-alias>/<id>` deeply nested ids | Spec is one-slash deep; users namespace by naming templates (e.g. `backend-go-api`) |
+| Auto-update registries on every `spin search` | Network on every search is hostile to offline users |
+| Search results cache across runs | TOML read is sub-millisecond; cache adds invalidation complexity |
+| Built-in default registry | Couples spin to a specific org's governance/branding |
+| `spin registry login` / authenticated registries | Git's existing credential helper handles auth for `https://` and SSH URLs |
+| Web UI / TUI for browsing registries | Anti-feature per PROJECT.md -- CLI is the scaffolder UI |
+| Auto-add templates on `spin registry add` | Couples `add` to a network fetch + write to `pinned.json`; surprising side effect |
 
 ## Out of Scope
 
