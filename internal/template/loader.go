@@ -63,6 +63,7 @@ func NewLoader(cacheDir string) *Loader {
 // Load fetches a template by source spec. The spec can be:
 //   - a local path:        "/path/to/template"
 //   - a git URL:           "https://github.com/foo/bar.git"
+//   - a `<alias>/<id>` shorthand resolved via a registered registry
 //   - a pinned name:       "my-template" (resolved from ~/.config/spin/pinned.json)
 func (l *Loader) Load(spec string) (*Template, error) {
 	// Local path
@@ -73,6 +74,14 @@ func (l *Loader) Load(spec string) (*Template, error) {
 	if isGitURL(spec) {
 		return l.cloneGit(spec)
 	}
+	// Registry shorthand `<alias>/<id>`: resolve to the template's
+	// upstream source, then route to the appropriate existing path
+	// (cloneGit or Detect). The original spec is preserved on the
+	// returned Template so `promptPinAfterSuccess` knows where the
+	// user started.
+	if registry.IsShorthand(spec) {
+		return l.loadShorthand(spec)
+	}
 	// Pinned name: look it up in pinned.json. The user's
 	// `spin new --template <name>` shorthand relies on this.
 	if t, err := l.loadPinned(spec); err != nil {
@@ -80,7 +89,38 @@ func (l *Loader) Load(spec string) (*Template, error) {
 	} else if t != nil {
 		return t, nil
 	}
-	return nil, fmt.Errorf("template loader: %q is not a local path, git URL, or pinned name (run `spin add %s` first to pin a git URL or user/repo shorthand)", spec, spec)
+	return nil, fmt.Errorf("%q is not a local path, git URL, or pinned name (run `spin add %s` first to pin a git URL or user/repo shorthand)", spec, spec)
+}
+
+// loadShorthand resolves `<alias>/<id>` against the registry
+// manager, then routes the resolved Source through the existing
+// git-URL or local-path path. tpl.Repo is set to the resolved
+// source so promptPinAfterSuccess fires correctly.
+func (l *Loader) loadShorthand(spec string) (*Template, error) {
+	mgr := registry.NewManager()
+	resolved, err := mgr.ResolveShorthand(spec)
+	if err != nil {
+		return nil, err
+	}
+	var tpl *Template
+	switch {
+	case isLocalPath(resolved.Source):
+		tpl, err = Detect(resolved.Source)
+	case isGitURL(resolved.Source):
+		tpl, err = l.cloneGit(resolved.Source)
+	default:
+		return nil, fmt.Errorf("registry: shorthand %q resolved to %q which is neither a local path nor a git URL", spec, resolved.Source)
+	}
+	if err != nil {
+		return nil, err
+	}
+	// Preserve the user's original spec so the post-scaffold pin
+	// prompt offers to re-pin the registry shorthand (not the
+	// upstream source URL).
+	if tpl != nil {
+		tpl.Spec = spec
+	}
+	return tpl, nil
 }
 
 // loadPinned looks up spec in the registry's pinned.json. Returns
@@ -90,12 +130,12 @@ func (l *Loader) loadPinned(spec string) (*Template, error) {
 	client := registry.New()
 	pinned, err := client.ListPinned()
 	if err != nil {
-		return nil, fmt.Errorf("template loader: read pinned: %w", err)
+		return nil, fmt.Errorf("read pinned: %w", err)
 	}
 	for _, p := range pinned {
 		if p.Name == spec {
 			if _, err := os.Stat(p.LocalPath); err != nil {
-				return nil, fmt.Errorf("template loader: pinned %q missing on disk at %s -- re-run `spin add %s`", p.Name, p.LocalPath, p.Source)
+				return nil, fmt.Errorf("pinned %q missing on disk at %s -- re-run `spin add %s`", p.Name, p.LocalPath, p.Source)
 			}
 			t, err := Detect(p.LocalPath)
 			if err != nil {
@@ -111,9 +151,9 @@ func (l *Loader) loadPinned(spec string) (*Template, error) {
 					if rerr := client.Unpin(p.Name); rerr == nil {
 						_ = os.RemoveAll(p.LocalPath)
 					}
-					return nil, fmt.Errorf("template loader: pinned %q removed (was: %w)", p.Name, err)
+					return nil, fmt.Errorf("pinned %q removed (was: %w)", p.Name, err)
 				}
-				return nil, fmt.Errorf("template loader: pinned %q: %w", p.Name, err)
+				return nil, fmt.Errorf("pinned %q: %w", p.Name, err)
 			}
 			l.warnMinSpinVersion(t)
 			return t, nil
@@ -165,10 +205,10 @@ func (l *Loader) cloneGit(url string) (*Template, error) {
 			return l.detectOrPromptInvalid(registry.SanitiseRepoName(url), dest)
 		case destWipe:
 			if err := os.RemoveAll(dest); err != nil {
-				return nil, fmt.Errorf("template loader: clear cache for %s: %w", dest, err)
+				return nil, fmt.Errorf("clear cache for %s: %w", dest, err)
 			}
 		case destCancel:
-			return nil, fmt.Errorf("template loader: %q exists at %s; cancelled", registry.SanitiseRepoName(url), dest)
+			return nil, fmt.Errorf("%q exists at %s; cancelled", registry.SanitiseRepoName(url), dest)
 		}
 	}
 
@@ -235,9 +275,9 @@ func (l *Loader) detectOrPromptInvalid(name, dest string) (*Template, error) {
 	}
 	if !keep {
 		_ = os.RemoveAll(dest)
-		return nil, fmt.Errorf("template loader: %q at %s removed (was: %w)", name, dest, err)
+		return nil, fmt.Errorf("%q at %s removed (was: %w)", name, dest, err)
 	}
-	return nil, fmt.Errorf("template loader: %q at %s: %w", name, dest, err)
+	return nil, fmt.Errorf("%q at %s: %w", name, dest, err)
 }
 
 // Lister returns the basenames of all top-level entries in the

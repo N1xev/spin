@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -13,11 +12,11 @@ import (
 
 var searchCmd = &cobra.Command{
 	Use:   "search <query>",
-	Short: "Search the public template registry",
-	Long:  "Search the public template registry for templates matching the given query. When the registry server is unreachable, a friendly message is shown -- never a stack trace. Override the endpoint via SPIN_REGISTRY_URL.",
+	Short: "Search locally-registered template registries",
+	Long:  "Search across every template in every registered registry. Reads ~/.config/spin/registries/*/templates/*.toml directly -- no network call. Use `spin registry add` to register a registry first.",
 	Example: `  spin search "go cli"
-  spin search rust cli
-  spin search tauri --limit 10 --json`,
+  spin search rust --limit 5
+  spin search tauri --json`,
 	Args:          cobra.MinimumNArgs(1),
 	RunE:          runSearch,
 	SilenceUsage:  true,
@@ -35,31 +34,70 @@ func init() {
 	rootCmd.AddCommand(searchCmd)
 }
 
+type searchEntry struct {
+	Alias       string   `json:"alias"`
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Source      string   `json:"source"`
+	Tags        []string `json:"tags,omitempty"`
+	Type        string   `json:"type,omitempty"`
+	Language    string   `json:"language,omitempty"`
+	Version     string   `json:"version,omitempty"`
+}
+
+type searchResultView struct {
+	Query   string        `json:"query"`
+	Total   int           `json:"total"`
+	Entries []searchEntry `json:"entries"`
+}
+
 func runSearch(cmd *cobra.Command, args []string) error {
-	client := registry.New()
-	res, err := client.SearchWithLimit(args[0], searchLimit)
+	query := args[0]
+	mgr := registry.NewManager()
+	idx, _, err := mgr.Build()
 	if err != nil {
-		// All "registry not yet deployed" cases -- DNS failure,
-		// connection refused, HTTP 404, etc -- collapse into a
-		// single friendly message. Never a stack trace.
-		if errors.Is(err, registry.ErrNotDeployed) {
-			printInfo("the public registry is not yet deployed")
-			printHint("in the meantime, use `spin new <name> --template <git-url>` to scaffold from a git repo,")
-			printHint("or `spin add <path-or-url>` to pin a template locally for offline use")
-			return nil
-		}
-		return err
+		return fmt.Errorf("spin search: build index: %w", err)
 	}
+	results := idx.Search(query, searchLimit)
+
+	view := searchResultView{Query: query, Total: len(results), Entries: make([]searchEntry, 0, len(results))}
+	for _, e := range results {
+		view.Entries = append(view.Entries, searchEntry{
+			Alias:       e.Alias,
+			ID:          e.ID,
+			Name:        e.Name,
+			Description: e.Description,
+			Source:      e.Source,
+			Tags:        e.Tags,
+			Type:        e.Type,
+			Language:    e.Language,
+			Version:     e.Version,
+		})
+	}
+
 	if searchJSON {
 		enc := json.NewEncoder(os.Stdout)
-		// Field names stay lower-camel to match the wire format the
-		// public registry ships; SearchResult is tagged for json in
-		// internal/registry/types.go.
-		if err := enc.Encode(res); err != nil {
-			return fmt.Errorf("encode search result: %w", err)
-		}
+		enc.SetIndent("", "  ")
+		return enc.Encode(view)
+	}
+	if view.Total == 0 {
+		printInfo("no templates matched %q", query)
+		printHint("run `spin registry add <alias> <git-or-local-source>` to register a registry")
 		return nil
 	}
-	fmt.Print(registry.FormatSearch(res, false))
+	headers := []string{"ALIAS/ID", "NAME", "LANG", "DESCRIPTION"}
+	rows := make([][]string, 0, len(results))
+	for _, e := range results {
+		rows = append(rows, []string{
+			e.Alias + "/" + e.ID,
+			e.Name,
+			e.Language,
+			e.Description,
+		})
+	}
+	printTable(os.Stdout, headers, rows)
+	fmt.Fprintln(os.Stdout)
+	printHint("add a template: spin add <alias>/<id>")
 	return nil
 }

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -43,6 +44,35 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 
 	spec := strings.TrimSpace(args[0])
+
+	// `<alias>/<id>` shorthand: resolve via the registry index,
+	// then pin the resolved source as if the user had typed it
+	// directly. The pin's Name stays the template's id (so
+	// `spin new <name>` keeps working) and the Source stores the
+	// resolved git URL or local path.
+	if registry.IsShorthand(spec) {
+		mgr := registry.NewManager()
+		resolved, err := mgr.ResolveShorthand(spec)
+		if err != nil {
+			return fmt.Errorf("spin add: %w", err)
+		}
+		pinned, err := client.Add(resolved.Source)
+		if err != nil {
+			return err
+		}
+		pinned.Name = resolved.ID
+		pinned.PinnedAt = time.Now().UTC().Format(time.RFC3339)
+		if err := client.Pin(*pinned); err != nil {
+			return err
+		}
+		kind := "cloned from"
+		if pinned.Version == "local" {
+			kind = "local at"
+		}
+		printSuccess("added %s (%s %s, resolved from %s)", pinned.Name, kind, pinned.LocalPath, spec)
+		return nil
+	}
+
 	pinned, err := client.Add(spec)
 	if err != nil {
 		return err

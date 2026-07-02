@@ -1,8 +1,3 @@
-// Package template handles external templates -- git repos containing
-// a spin.toml manifest, a _base/ tree of file overlays, and an
-// optional _post/ hook. Templates are language-agnostic; the CLI
-// resolves the user's params (via internal/params) and renders the
-// overlays through Go's text/template engine.
 package template
 
 import (
@@ -16,6 +11,7 @@ type Template struct {
 	Name        string   // dir name, e.g. "rust-cli"
 	Source      string   // local path on disk (post-clone)
 	Repo        string   // git URL, if any
+	Spec        string   // original spec the user typed (may differ from Repo/Source when resolved via a registry shorthand)
 	SpinToml    *SpinToml // parsed spin.toml
 	BaseDir     string   // _base/ inside Source
 	PostHookDir string   // _post/ inside Source (optional)
