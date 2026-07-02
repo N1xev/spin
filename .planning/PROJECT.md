@@ -13,6 +13,27 @@ The v2.0 milestone shipped an Ecosystem system (charm, rust) and a task runner; 
 
 **Core Value:** Scaffold a ready-to-run project for any language, lib, or framework from a single template spec -- `spin new myapp --template <user/repo>` produces a project that builds and runs cleanly on first try.
 
+## Current Milestone: v2.x local-registry
+
+**Goal:** Replace the HTTP-based registry stub (`https://registry.spin.invalid/v1`) with a zero-backend git/local registry model. Registries are cloned (git) or symlinked (local) directories containing `registry.toml` + `templates/*.toml`; `spin search` reads them directly from disk.
+
+**Target features:**
+- `spin registry add <alias> <source>` — register a git URL or local path as a registry
+- `spin registry list | update [alias] | remove <alias>` — manage registered registries
+- `spin search <query>` — local-only, scans every `~/.config/spin/registries/*/templates/*.toml`
+- `<alias>/<id>` shorthand accepted by `spin add` and `spin new`, resolved via the local index
+- Storage layout: `~/.config/spin/registries.json` (config) + `~/.config/spin/registries/<alias>/` (clone/symlink)
+
+**Phases:**
+- Phase 6 (A): manager + `spin registry` CLI + `registries.json`
+- Phase 7 (B): index reader + `<alias>/<id>` resolver + rewire `search`/`add`/`new`/`loader`
+- Phase 8 (C): delete HTTP client code + docs pass
+
+**Constraints carried forward:**
+- `pinned.json` format unchanged — every existing pin keeps working
+- No new deps needed; reuse `github.com/BurntSushi/toml` for registry metadata
+- Drop `SPIN_REGISTRY_URL` / `SPIN_REGISTRY` env vars; drop `ErrNotDeployed` / `DefaultIndexURL`
+
 ## v2.x Pivot (2026-06-10)
 
 After Phase 5 (v2.0 Universal Scaffolder & Task Runner) completed, the user reviewed the design and chose to focus on the scaffolding layer first. The full v2 ecosystem system and task runner were archived to `~/Projects/Golang/spin-ecosys-tasks-archieve/` so the codebase can ship and validate templates before committing to the bigger architecture.
@@ -167,4 +188,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-09 after Phase 5 execution (v2.0 milestone complete)*
+*Last updated: 2026-07-03 -- started v2.x local-registry milestone (Phase 6+)*

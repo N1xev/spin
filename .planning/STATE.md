@@ -1,17 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.x-pivot
-milestone_name: v2.x pivot (templates only)
-status: pivot_in_progress
-stopped_at: v2.x pivot on 2026-06-10 -- Phase 5 deliverables archived; cmd/new.go rewritten on internal/template
-last_updated: 2026-06-10
-last_activity: 2026-06-10 -- v2.x pivot: archive ecosystem+runner; rewrite cmd/new.go on internal/template
+milestone: v2.x local-registry
+milestone_name: local-registry
+status: planning
+last_updated: "2026-07-02T21:42:56.807Z"
+last_activity: 2026-07-02
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 23
-  completed_plans: 23
-  percent: 100
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -25,12 +24,10 @@ See: .planning/PROJECT.md (updated 2026-06-02)
 
 ## Current Position
 
-Phase: v2.x pivot
-Plans: Phase 5 (4/4) was built and validated, then archived in the v2.x pivot
-Status: Pivot in progress -- build green on templates-only foundation
-Last activity: 2026-06-10
-
-Progress: [███████░░░] templates-only foundation, real templates TBD
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-02 — Milestone v2.x local-registry started
 
 ## Performance Metrics
 
@@ -266,18 +263,22 @@ as proof of universality; 5.3 -- registry server MVP (separate project).
 User direction after Phase 5 completion: focus on the **scaffolding layer only**. Archive the v2 ecosystem + task runner implementation. Templates become the sole extension surface.
 
 Archived to `~/Projects/Golang/spin-ecosys-tasks-archieve/`:
+
 - `internal/ecosystem/` -- Ecosystem interface + Registry + Flag + Detector + Loader stub
 - `internal/ecosystems/{charm,rust}/` -- first-class ecosystem implementations
 - `internal/runner/` + `runner/sources/` -- universal task runner
 - `cmd/ecosystem.go`, `cmd/new_charm.go`, `cmd/new_rust.go`, `cmd/run.go` -- CLI wiring
 
 Restored to `cmd/` (was mis-archived; uses `internal/registry`, not `internal/runner`):
+
 - `cmd/list.go` -- pinned-template lister
 
 Rewritten on `internal/template`:
+
 - `cmd/new.go` -- was v2 ecosystem dispatch (dispatchV2); now loads templates via `template.Loader`, resolves params via `tpl.ResolveForm`, renders via `tpl.RenderToWithPost`.
 
 Build state post-pivot:
+
 - `go build ./...` -- green
 - `go vet ./...` -- green
 - `go test -run='^$' ./...` (test compile) -- all packages green
