@@ -1,265 +1,518 @@
-# Stack Research
+# Stack Additions: v2.x Local-Registry Milestone
 
-**Domain:** Go project scaffold CLI for the charmbracelet v2 ecosystem
-**Researched:** 2026-06-02
-**Confidence:** HIGH (verified via Context7 + official upgrade guides)
+**Project:** spin
+**Milestone:** v2.x local-registry (Phases 6-8)
+**Researched:** 2026-07-03
+**Confidence:** HIGH (verified against Context7 + existing internal/registry patterns)
 
-## Recommended Stack
+## TL;DR
 
-This stack has two layers: **(a)** the libraries `spin` injects into scaffolded
-projects, and **(b)** the libraries `spin` itself uses to build and ship. All
-versions verified against Context7 + official upgrade guides on 2026-06-02.
+**No new dependencies needed.** The local-registry milestone can ship entirely with
+the existing dependency footprint. The new `manager` + `index` + `resolver` layers
+all reuse what `spin` already pulls in:
 
-### (a) Libraries `spin` injects into scaffolded projects
+| Concern | Reuse from | Add anything? |
+|---------|-----------|---------------|
+| TOML parsing (registry.toml + templates/*.toml) | `github.com/BurntSushi/toml` v1.6.0 (already a direct dep) | NO |
+| Atomic write of `registries.json` | Mirror the existing `writePinned` pattern in `internal/registry/client.go` (stdlib only) | NO |
+| Git clone / fetch for registry refresh | `os/exec` + `git clone --depth=1` + `GIT_TERMINAL_PROMPT=0` (existing pattern) | NO |
+| Local-path registry linking | `os.Symlink` with `copyDir` fallback (existing pattern in `addLocal`) | NO |
+| File walking + listing | `os.ReadDir` + `filepath.WalkDir` (stdlib) | NO |
+| Path traversal safety | `filepath.Rel` + `strings.HasPrefix` (stdlib) | NO |
+| Search scoring / filtering | In-process `strings.Contains` (stdlib) | NO |
+| XDG config dir | `os.UserConfigDir` (stdlib) | NO |
 
-These are the charmbracelet v2 libraries the user picks per-project with flags
-like `--bubbletea`, `--lipgloss`, `--huh`, etc. All v2 modules use the new
-`charm.land` vanity domain -- **v1 paths (`github.com/charmbracelet/...`) are
-deprecated and must not be used**.
+This is the right answer because:
 
-| Library | Module path | Version (v2 line) | Purpose | Why v2 |
-|---------|-------------|-------------------|---------|--------|
-| Bubble Tea | `charm.land/bubbletea/v2` | v2.0.0 (stable) | TUI framework, MVU runtime | v2 stable; v2 renames `View() string` → `View() tea.View`, moves AltScreen/MouseMode to view fields, uses typed `KeyPressMsg`/`MouseClickMsg` |
-| Lip Gloss | `charm.land/lipgloss/v2` | v2.0.0-beta.2 (stable line) | Terminal styling/layout (CSS-like API) | v2 is the supported line; subpackages `table`, `tree`, `list` follow `charm.land/lipgloss/v2/<sub>` |
-| Bubbles | `charm.land/bubbles/v2` | v2.0.0 | TUI components: spinner, textinput, viewport, list, table, paginator, progress, timer, textarea, help, key, cursor, stopwatch | v2 line; `runeutil` and `memoization` removed; requires Go 1.25.0+ |
-| Huh | `charm.land/huh/v2` | v2.0.0 | Interactive forms/prompts (accessible) | v2 stable; integrates with `charm.land/bubbletea/v2` + `charm.land/lipgloss/v2` |
-| Glamour | `charm.land/glamour/v2` | v2 line | Stylesheet-based markdown renderer for terminal | v2 stable; `glamour.Render()` and `NewTermRenderer` API unchanged in spirit |
-| Glow | `github.com/charmbracelet/glow/v2` (binary) | v2 line | Markdown reader CLI -- install as binary, shell out via `gum`-style exec | Scaffolded projects shell out to `glow` for readme rendering |
-| Wish | `charm.land/wish/v2` (+ subpackages `bubbletea`, `logging`, `activeterm`) | v2 line | SSH server framework with bubbletea middleware | v2 stable; subpackages follow `charm.land/wish/v2/<sub>` |
-| Log | `charm.land/log/v2` | v2.0.0 | Minimal colorful leveled structured logging | v2 stable; `log.Default()`/`SetDefault()` + `Options{...}` |
-| Crush | `github.com/charmbracelet/crush` | current | Terminal AI assistant -- scaffolded projects may include `crush` config | Provided as a binary; embed for the AI/AGENTS layer |
-| charmbracelet/x | `github.com/charmbracelet/x` (single module, many subpackages) | current (experimental) | ANSI parser/generator, VT emulator, `pony` UI DSL, term utilities | Experimental; pin a specific tag in generated `go.mod` |
-| go-runewidth | `github.com/mattn/go-runewidth` | current | East-Asian-aware display width | Transitive of charm stack; rarely direct dep |
+1. The spec (`spin-registry.md`) explicitly says "No new deps needed; reuse
+   `github.com/BurntSushi/toml` for registry metadata".
+2. The capability profile is dominated by **filesystem and git plumbing** --
+   all covered by the Go standard library and the existing patterns.
+3. Every existing `spin` test pattern (atomic write, git clone, symlink/copy
+   fallback, BurntSushi/toml decode) is exactly what the new layers need.
 
-**Note on Crush scope:** `crush` exposes its client API as internal packages
-(`github.com/charmbracelet/crush/internal/client`, `internal/proto`).
-Scaffolded projects should consume `crush` as a **binary** (config + CLI), not
-as a Go import. This matches the spec's `--crush` flag meaning "include crush
-config" not "import crush in code".
+## Existing Stack (unchanged)
 
-### (b) Libraries `spin` itself uses
+`go.mod` already carries everything we need. No version bumps, no additions.
 
-| Library | Module path | Version | Purpose | Why |
-|---------|-------------|---------|---------|-----|
-| Cobra | `github.com/spf13/cobra` | v1.9.1 (latest) | CLI subcommand/flag framework | De facto Go CLI standard; underpins kubectl, hugo, gh, docker |
-| Fang | `charm.land/fang/v2` | v2 line | Styled help, errors, completions, manpages, version theming -- drop-in for cobra's default | Drop-in `fang.Execute(ctx, rootCmd)`; gives `spin --help` a charm-style look out of the box; requires cobra v1.9+ |
-| Lip Gloss | `charm.land/lipgloss/v2` | v2 | Styling scaffolder output (success messages, "Created at ./foo", etc.) | Reuses the same lib we scaffold into projects -- dogfooding |
-| Huh | `charm.land/huh/v2` | v2 | Optional in-process prompts (when gum not available) | Huh is a Go library; gum is a shell-out binary. Huh is the in-process fallback for TTY-required runs |
-| Log | `charm.land/log/v2` | v2 | Scaffolder logging (`log.Info("created", "path", ...)`) | Same library we ship in projects; consistent look |
-| Viper | `github.com/spf13/viper` | v1.20.x (opt-in) | Config-file support for scaffolder | Only wired when user passes `--viper`; do not import unconditionally (per spec) |
-| charmbracelet/x ansi | `github.com/charmbracelet/x/ansi` | current | Lower-level ANSI sequence generation if we need it | Used only if lipgloss v2 doesn't cover a case |
+| Library | Already in go.mod | Used by registry milestone |
+|---------|-------------------|----------------------------|
+| `github.com/BurntSushi/toml` v1.6.0 | direct dep (since v2.0) | parse `registry.toml` + each `templates/<id>.toml` |
+| `github.com/spf13/cobra` v1.10.2 | direct dep | `spin registry {add,list,update,remove}` subcommands |
+| `charm.land/lipgloss/v2` v2.0.3 | direct dep | styled registry list table + success messages |
+| `charm.land/huh/v2` v2.0.3 | direct dep | interactive confirm on `registry remove` if TTY |
+| `charm.land/log/v2` (transitive via fang) | direct dep | scaffolder logging |
+| `golang.org/x/text` v0.24.0 | direct dep | (no use in registry layer; pre-existing) |
 
-**`gum` is a binary, not a Go library.** `spin` shells out to it via
-`os/exec` for interactive prompts when present on `$PATH`. The `charmbracelet/gum`
-repository has no `pkg` for embedding -- confirmed by Context7 docs. This is
-critical: do **not** try to `go get charm.land/gum/v2` or similar; it doesn't
-exist. Install path is `go install github.com/charmbracelet/gum@latest`.
+## Recommended Patterns (mirror existing code, don't introduce new abstractions)
 
-### Supporting Development Tools
+### 1. TOML parsing for `registry.toml` and `templates/*.toml`
 
-| Tool | Install | Purpose | Notes |
-|------|---------|---------|-------|
-| `air` (hot reload) | `go install github.com/air-verse/air@latest` (requires Go 1.25+) | Scaffolded projects get `.air.toml` | Generate a sensible default: `cmd = "go build -o ./tmp/main ."`, watch `.go`/`.tmpl`, exclude `bin/`, `tmp/`, `dist/` |
-| `prism` (test runner) | `go install go.dalton.dog/prism@latest` (requires Go 1.24+) | `spin test` wraps prism; `prism` replaces `go test` with parallel colored output | Fallback to `go test` if `prism` not on PATH |
-| `gofumpt` (formatter) | `go install mvdan.cc/gofumpt@latest` | Stricter gofmt; `spin fmt` runs gofumpt first | Falls back to `gofmt` if gofumpt not installed |
-| `goimports` | `go install golang.org/x/tools/cmd/goimports@latest` | Adds missing imports + removes unused; `spin fmt` runs after gofumpt | Bundled with `golang.org/x/tools` |
-| GoReleaser | `go install github.com/goreleaser/goreleaser/v2@latest` (requires Go 1.26+) | Cross-platform binary distribution | Scaffolded project includes `.goreleaser.yaml` with `version: 2`, `CGO_ENABLED=0`, `targets: ["go_first_class"]` |
-| `golangci-lint` | `go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest` | Linter; scaffolded project ships `.golangci.yml` | Optional; not required for `spin` itself |
+**Decision:** keep `github.com/BurntSushi/toml` v1.6.0. No swap.
 
-### Runtime
+**Rationale:**
 
-| Runtime | Version | Why |
-|---------|---------|-----|
-| Go | **1.23** for `spin` itself; **1.25.0+** for scaffolded projects that import bubbles v2 | `spin` is a CLI tool that doesn't import bubbles, so 1.23 is fine. But scaffolded `--bubbles` projects need 1.25.0+ (per official bubbles v2 docs). See "Go version tension" below. |
+- BurntSushi/toml is the de-facto Go TOML library and was originally
+  proposed for stdlib inclusion. It is already a direct dep of `spin`
+  and used in `internal/template/parse.go` for `spin.toml`.
+- The registry spec uses trivial TOML: scalar fields, `tags = [...]` array,
+  no datetime, no inline tables beyond `id = "..."` strings. BurntSushi
+  handles this with one `toml.Unmarshal` call against a typed struct.
+- Encoding is only required for `registries.json`, which is JSON (matches
+  `pinned.json`). No TOML encoding needed at runtime.
 
-## Installation (for `spin` itself)
+**Pattern (mirror `parse.go`):**
 
-```bash
-# Core CLI stack
-go get github.com/spf13/cobra@latest          # v1.9.1
-go get charm.land/fang/v2@latest              # v2 line
-go get charm.land/lipgloss/v2@latest          # v2 line, for scaffolder output
-go get charm.land/huh/v2@latest               # v2 line, in-process prompts fallback
-go get charm.land/log/v2@latest               # v2 line, logging
-go get github.com/charmbracelet/x/ansi@latest # optional low-level ANSI
+```go
+// internal/registry/registry_meta.go (new file in Phase 6A)
 
-# Opt-in: Viper for --viper flag
-go get github.com/spf13/viper@latest          # v1.20.x
+type rawRegistryMeta struct {
+    ID          string   `toml:"id"`
+    Name        string   `toml:"name"`
+    Description string   `toml:"description"`
+    Homepage    string   `toml:"homepage"`
+    Maintainer  string   `toml:"maintainer"`
+    License     string   `toml:"license"`
+}
 
-# Optional dev tools installed by users (NOT by spin):
-#   go install github.com/air-verse/air@latest
-#   go install go.dalton.dog/prism@latest
-#   go install mvdan.cc/gofumpt@latest
-#   go install golang.org/x/tools/cmd/goimports@latest
-#   go install github.com/goreleaser/goreleaser/v2@latest
+type rawTemplateMeta struct {
+    ID          string   `toml:"id"`
+    Name        string   `toml:"name"`
+    Description string   `toml:"description"`
+    Source      string   `toml:"source"`
+    Tags        []string `toml:"tags"`
+    Authors     []string `toml:"authors"`
+    License     string   `toml:"license"`
+    Homepage    string   `toml:"homepage"`
+}
 ```
+
+**Why not swap to `encoding/toml/v2` (stdlib) or `pelletier/go-toml`?**
+
+- `internal/template/spin_toml.go` line 85-90 has a stale comment saying
+  "encoding/toml/v2 was promoted to stdlib; using it would require an
+  import". This is wrong: `encoding/toml/v2` was proposed but not landed
+  in Go 1.23/1.24/1.25. **Do not pursue this swap.** It is a phantom
+  refactor that would break the v2.0 validation status.
+- A swap to `pelletier/go-toml` would introduce a second TOML library
+  in the module graph. The v2.x spec says no new deps; we already have
+  BurntSushi.
+
+### 2. Atomic write of `registries.json`
+
+**Decision:** mirror `writePinned` in `internal/registry/client.go` lines
+557-595. Stdlib only.
+
+**Pattern:**
+
+```go
+// internal/registry/manager.go (Phase 6A)
+
+func (m *Manager) writeRegistries(all []RegistryEntry) error {
+    b, err := json.MarshalIndent(all, "", "  ")
+    if err != nil {
+        return err
+    }
+    finalPath := filepath.Join(m.ConfigDir, "registries.json")
+    if err := os.MkdirAll(m.ConfigDir, 0o755); err != nil {
+        return err
+    }
+    tmp, err := os.CreateTemp(m.ConfigDir, ".registries-*.json.tmp")
+    if err != nil {
+        return err
+    }
+    tmpName := tmp.Name()
+    cleanup := true
+    defer func() {
+        if cleanup {
+            _ = os.Remove(tmpName)
+        }
+    }()
+    if _, err := tmp.Write(b); err != nil {
+        tmp.Close()
+        return err
+    }
+    if err := tmp.Sync(); err != nil {
+        tmp.Close()
+        return err
+    }
+    if err := tmp.Close(); err != nil {
+        return err
+    }
+    if err := os.Rename(tmpName, finalPath); err != nil {
+        return err
+    }
+    cleanup = false
+    return nil
+}
+```
+
+**Why this pattern:** `pinned.json` uses the same flow and the v2.0 spec
+already validates it. Reuse the exact dance: temp in same dir (so the
+rename is atomic on POSIX), `Sync` before `Close`, defer cleanup on failure.
+Two files using identical write logic is fine; abstract only when a third
+file needs it.
+
+**Storage path:** `~/.config/spin/registries.json` -- same XDG resolution
+that `pinned.json` uses (`os.UserConfigDir()`).
+
+### 3. Git clone for registry refresh
+
+**Decision:** reuse the `git clone --depth=1` + `GIT_TERMINAL_PROMPT=0`
+pattern from `internal/registry/client.go` lines 222-258 (`addGit`).
+
+**Pattern:**
+
+```go
+// internal/registry/manager.go (Phase 6A)
+func (m *Manager) cloneRegistry(alias, sourceURL, dest string) error {
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+    defer cancel()
+    cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", sourceURL, dest)
+    cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+    if out, err := cmd.CombinedOutput(); err != nil {
+        return fmt.Errorf("git clone %s: %s: %w", sourceURL, strings.TrimSpace(string(out)), err)
+    }
+    return nil
+}
+
+func (m *Manager) fetchRegistry(alias, dest string) error {
+    // For `spin registry update <alias>` on an existing clone, prefer
+    // `git fetch --depth=1 --prune` + `git reset --hard origin/HEAD`
+    // over a full re-clone. Less bandwidth, preserves any local
+    // metadata the user might have added (e.g. ignored test files).
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+    defer cancel()
+    if out, err := exec.CommandContext(ctx, "git", "-C", dest,
+        "fetch", "--depth=1", "--prune", "--tags").CombinedOutput(); err != nil {
+        return fmt.Errorf("git fetch %s: %s: %w", dest, strings.TrimSpace(string(out)), err)
+    }
+    if out, err := exec.CommandContext(ctx, "git", "-C", dest,
+        "reset", "--hard", "origin/HEAD").CombinedOutput(); err != nil {
+        // Some registries don't have an origin/HEAD ref. Fall back to
+        // the default branch the working tree is tracking.
+        if out2, err2 := exec.CommandContext(ctx, "git", "-C", dest,
+            "reset", "--hard", "@{u}").CombinedOutput(); err2 != nil {
+            return fmt.Errorf("git reset %s: %s / %s: %w", dest,
+                strings.TrimSpace(string(out)), strings.TrimSpace(string(out2)), err)
+        }
+    }
+    return nil
+}
+```
+
+**Notes:**
+
+- **Why `--depth=1`:** matches the existing pattern (`addGit`, `Refresh`,
+  `cloneGit` in `loader.go`). Public registry repos are large; shallow
+  keeps the refresh fast and the disk footprint small.
+- **Why `GIT_TERMINAL_PROMPT=0`:** also matches existing pattern. A
+  misconfigured credential never blocks the scaffolder.
+- **Why `5*time.Minute` (vs `2*time.Minute` for templates):** registries
+  can be much larger than individual templates (many `templates/*.toml`
+  entries). Same shape, longer ceiling.
+- **Why `git fetch` for `update`, not `git clone`:** `update` is run on a
+  clone that already exists. Re-cloning is wasteful and overwrites local
+  state. The fetch+reset dance is the canonical "update a shallow clone"
+  recipe. Fall back to re-clone only if `fetch` errors out.
+
+### 4. Local-path registries: symlink vs copy
+
+**Decision:** mirror the existing `addLocal` logic at
+`internal/registry/client.go` lines 181-220.
+
+**Pattern:**
+
+```go
+// internal/registry/manager.go (Phase 6A)
+func (m *Manager) linkLocalRegistry(alias, src, dest string) error {
+    // Remove any previous symlink/copy so the link is fresh.
+    if err := os.RemoveAll(dest); err != nil {
+        return fmt.Errorf("registry: clear %s: %w", dest, err)
+    }
+    // Try symlink first (cheap, no copy). Fall back to recursive
+    // copy if the FS doesn't support symlinks (e.g. Windows without
+    // SeCreateSymbolicLinkPrivilege, some FAT/exFAT mounts).
+    if err := os.Symlink(src, dest); err != nil {
+        if copyErr := copyDir(src, dest); copyErr != nil {
+            return fmt.Errorf("registry: symlink (%v) and copy (%w) both failed", err, copyErr)
+        }
+    }
+    return nil
+}
+```
+
+**Why symlink-first, copy-fallback:** identical to the v2.0 pattern for
+`addLocal` in `client.go`. Edits to the source registry are seen
+immediately (good for authoring). On filesystems that disallow symlinks,
+the fallback keeps the feature working.
+
+**Why not just copy:** copy doubles disk and means `update` requires a
+full re-copy. Symlink is a single inode.
+
+**Edge case to handle:** if the source path is relative, resolve against
+the user's CWD at `add` time and store the absolute path in
+`registries.json`. The relative-source case is uncommon but possible;
+`spin-registry.md` line 271 shows `spin registry add local ../registry`.
+
+### 5. Index reader: walking `templates/*.toml`
+
+**Decision:** in-process walk with `filepath.WalkDir` (stdlib) + per-file
+`toml.Unmarshal` (BurntSushi). No indexing library.
+
+**Pattern:**
+
+```go
+// internal/registry/index.go (Phase 6B)
+func (m *Manager) ReadIndex() ([]TemplateMeta, error) {
+    var out []TemplateMeta
+    for _, reg := range m.registries() {
+        tplDir := filepath.Join(m.registriesDir(), reg.Alias, "templates")
+        entries, err := os.ReadDir(tplDir)
+        if err != nil {
+            if os.IsNotExist(err) {
+                continue // missing templates/ dir == empty registry
+            }
+            return nil, fmt.Errorf("read %s: %w", tplDir, err)
+        }
+        for _, e := range entries {
+            if e.IsDir() || !strings.HasSuffix(e.Name(), ".toml") {
+                continue
+            }
+            b, err := os.ReadFile(filepath.Join(tplDir, e.Name()))
+            if err != nil {
+                // skip-and-warn per spec ("Invalid template metadata
+                // files are ignored and reported")
+                m.reportSkipped(reg.Alias, e.Name(), err)
+                continue
+            }
+            var meta rawTemplateMeta
+            if err := toml.Unmarshal(b, &meta); err != nil {
+                m.reportSkipped(reg.Alias, e.Name(), err)
+                continue
+            }
+            if meta.ID == "" || meta.Source == "" {
+                m.reportSkipped(reg.Alias, e.Name(), errors.New("missing required id or source"))
+                continue
+            }
+            out = append(out, TemplateMeta{
+                Registry: reg.Alias,
+                ID:       meta.ID,
+                Name:     meta.Name,
+                Source:   meta.Source,
+                Tags:     meta.Tags,
+                ...
+            })
+        }
+    }
+    sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+    return out, nil
+}
+```
+
+**Why no search index library (Bleve, etc):** the spec's search is
+substring match across name + tags + description. The volume per registry
+is `templates/*.toml` -- tens to low hundreds. In-memory slice scan is
+microseconds. Adding Bleve would mean a heavy dep for a problem that
+doesn't exist yet. Keep it stdlib.
+
+**Search scoring (when we add it):** simple priority --
+`id exact > name contains > tag contains > description contains`. No
+library.
+
+### 6. `<alias>/<id>` resolver
+
+**Decision:** pure function in `internal/registry/resolver.go`. No deps.
+
+**Pattern:**
+
+```go
+// internal/registry/resolver.go (Phase 6B)
+func (m *Manager) ResolveShorthand(shorthand string) (TemplateMeta, error) {
+    parts := strings.SplitN(shorthand, "/", 2)
+    if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+        return TemplateMeta{}, fmt.Errorf("registry: expected <alias>/<id>, got %q", shorthand)
+    }
+    alias, id := parts[0], parts[1]
+    idx, err := m.ReadIndex()
+    if err != nil {
+        return TemplateMeta{}, err
+    }
+    for _, t := range idx {
+        if t.Registry == alias && t.ID == id {
+            return t, nil
+        }
+    }
+    return TemplateMeta{}, fmt.Errorf("registry: %s/%s not found in any registered registry", alias, id)
+}
+```
+
+**Why this is enough:** `ReadIndex` returns all entries across all
+registries. Linear scan over a few hundred entries is faster than a
+single network round-trip. The spec's resolver doesn't need to be clever
+until registries have thousands of entries (which doesn't exist today).
+
+### 7. Rewiring `spin search` / `spin add` / `spin new` (Phase 7B)
+
+**Decision:** keep `internal/registry` types (`Entry`, `SearchResult`) as
+the shape `cmd/search.go` consumes. Populate from `Manager.ReadIndex()`
+instead of HTTP.
+
+**Pattern (in `cmd/search.go`):**
+
+```go
+func runSearch(cmd *cobra.Command, args []string) error {
+    mgr := registry.NewManager()
+    idx, err := mgr.SearchIndex(args[0], searchLimit) // substring match
+    if err != nil {
+        return err
+    }
+    res := &registry.SearchResult{
+        Query:   args[0],
+        Total:   len(idx),
+        Entries: idx, // []TemplateMeta is structurally compatible with []Entry
+    }
+    if searchJSON {
+        return json.NewEncoder(os.Stdout).Encode(res)
+    }
+    fmt.Print(registry.FormatSearch(res, false))
+    return nil
+}
+```
+
+**Why not delete `Entry`/`SearchResult` types:** they are the JSON shape
+the public spec promises. `spin search --json` must remain
+machine-readable, even though the source is now local files. The cleanest
+move is: `TemplateMeta` becomes the on-disk shape, and `FormatSearch` /
+`SearchResult` stay as the CLI output shape (with `TemplateMeta` carrying
+the same JSON tags).
+
+**Rewiring `spin add` and `spin new`:** accept `<alias>/<id>` in addition
+to the existing local-path / git-URL / pinned-name shortcuts. The
+existing `Loader.Load` falls through to `loadPinned` last; the new
+shortcut needs to come BEFORE `loadPinned` (otherwise `example/go-api`
+will look like an unknown name). Order in `Loader.Load` becomes:
+
+1. local path (`/...`, `./...`, `~/...`)
+2. git URL (`https://...`, `git@...`)
+3. `<alias>/<id>` shorthand (new) -- one slash, no scheme
+4. pinned name lookup (existing)
+
+### 8. Path traversal safety for `templates/*.toml` reads
+
+**Decision:** keep reads within the registered root. Stdlib only.
+
+**Pattern:**
+
+```go
+// used everywhere a path derived from metadata could escape
+cleanRel := filepath.Clean(rel)
+if strings.HasPrefix(cleanRel, "..") || strings.Contains(cleanRel, "/../") {
+    return fmt.Errorf("invalid path %q", rel)
+}
+full := filepath.Join(tplDir, cleanRel)
+```
+
+This is needed if/when templates store relative paths in their metadata
+(for future "include" or "screenshots" features). Today's spec only uses
+flat `templates/<id>.toml` paths, so the risk is small -- but the
+guardrail should be there from day one.
 
 ## Alternatives Considered
 
-| Layer | Recommended | Alternative | When to use the alternative |
-|-------|-------------|-------------|-----------------------------|
-| CLI framework | cobra + fang | urfave/cli | Never for this project -- spec explicitly excludes urfave/cli; fang is the charmbracelet polish layer |
-| TUI framework (generated projects) | bubbletea v2 | tview, ratatui | Never for this project -- spec explicitly excludes both; spin is opinionated about charm |
-| TUI components | bubbles v2 | hand-rolled | Use hand-rolled only for components bubbles doesn't ship (rare) |
-| Interactive prompts (scaffolder) | gum (subprocess) + huh v2 (in-process) | survey, promptui | Never -- spec is charm-only |
-| Config (scaffolder) | viper (opt-in) | envconfig, koanf | Use koanf only if a user asks for a viper replacement; default off |
-| Hot reload | air | wgo, realize | Never for scaffolded projects -- spec mandates air |
-| Test runner | prism | gotestsum, richgo | Use gotestsum only if prism install fails; spec mandates prism |
-| Formatter | gofumpt + goimports | gofmt only | gofmt only as last-resort fallback when gofumpt not installed |
-| Distribution | goreleaser v2 | manual `go build` | Never -- spec mandates goreleaser |
-| Logging (generated) | charmbracelet/log v2 | zap, slog, zerolog | slog is acceptable for non-charm projects; charm-log matches the v2 stack |
-| Width calc | go-runewidth | uniseg | go-runewidth is the charm transitive; not worth swapping |
+| Concern | Recommended | Alternative | Why not |
+|---------|------------|-------------|---------|
+| TOML library | `github.com/BurntSushi/toml` v1.6.0 | `pelletier/go-toml` v2 | Second TOML lib in module graph; BurntSushi is already a direct dep; pelletier is heavier and used less in the charm ecosystem |
+| TOML library | BurntSushi | `encoding/toml/v2` (stdlib) | Phantom: proposed but never landed in Go 1.23/1.24/1.25. `internal/template/spin_toml.go:85` has a stale comment suggesting otherwise -- do NOT act on it |
+| Atomic JSON write | `writePinned` pattern (stdlib) | `github.com/google/renameio/v2` | Adds a dep to replicate a 25-line pattern; no benefit |
+| Git operations | `os/exec` git | `github.com/go-git/go-git` v5 | Pure-Go but slow on large repos, large dep (~30 MB module), and `os/exec` is already the pattern across `internal/registry` and `internal/template`. **MUST NOT add go-git** -- would be a Phase 1 audit blocker |
+| Index/search | stdlib `strings.Contains` + `sort.Slice` | `github.com/blevesearch/bleve/v2` | Overkill for tens-to-hundreds of templates; adds CGO + a 100+ MB dep tree |
+| Registry file layout | `os.Symlink` + `copyDir` fallback (existing) | Hard-link (`os.Link`) | Hardlinks don't cross filesystems and break when the source moves. Symlinks are what v2.0 already uses |
+| Fetch strategy | `git fetch --depth=1 --prune` + `git reset --hard origin/HEAD` | Full re-clone | Wasteful for `update`; full re-clone is the fallback when fetch fails |
+| Prompt style for `registry remove` | `charm.land/huh/v2` (in-process) | `gum` shell-out | huh is already a direct dep; works in non-TTY by short-circuiting |
+| `manager` location | `internal/registry/manager.go`, `internal/registry/index.go`, `internal/registry/resolver.go` | New `internal/registrymgr/` package | Same domain, same `Pinned`/`CacheDir` plumbing; a separate package would duplicate the XDG dir helper and the pinned-vs-registered paths |
 
-## What NOT to Use
+## Why NO New Deps Is the Right Answer
 
-| Avoid | Why | Use instead |
-|-------|-----|-------------|
-| `github.com/charmbracelet/bubbletea` (v1 import path) | Deprecated; charmbracelet migrated all v2 modules to `charm.land` vanity. v1 gets no fixes. | `charm.land/bubbletea/v2` |
-| `github.com/charmbracelet/lipgloss` (v1) | Same -- moved to `charm.land/lipgloss/v2`; subpackages `table`/`tree`/`list` followed | `charm.land/lipgloss/v2` (+ subpackages) |
-| `github.com/charmbracelet/bubbles/...` (v1) | v1 is unmaintained; v2 dropped `runeutil` and `memoization` | `charm.land/bubbles/v2/<component>` |
-| `github.com/charmbracelet/huh` (v1) | v2 stable; v1 paths changed | `charm.land/huh/v2` |
-| `github.com/charmbracelet/wish` (v1) | v2 uses `charm.land/wish/v2` and subpackages (`bubbletea`, `logging`, `activeterm`) | `charm.land/wish/v2` |
-| `github.com/charmbracelet/log` (v1) | v2 stable | `charm.land/log/v2` |
-| `github.com/charmbracelet/fang` (v1) | v2 stable, path `charm.land/fang/v2` | `charm.land/fang/v2` |
-| `github.com/charmbracelet/glamour` (v1) | v2 line moved | `charm.land/glamour/v2` |
-| `urfave/cli` | Spec excludes; cobra + fang is the charmbracelet default | cobra + fang |
-| `tview` | Spec excludes; non-charm TUI framework | bubbletea v2 + bubbles v2 |
-| `ratatui` (Rust port) | Spec excludes; not even Go | bubbletea v2 |
-| `charm.land/gum/v2` (does not exist) | `gum` has no Go library -- only the CLI binary. Trying to import will fail. | Shell out to `gum` binary via `os/exec` |
-| `Bubble Tea v1` import path `github.com/charmbracelet/bubbletea` | v1 uses `View() string`; v2 uses `View() tea.View`; migrating is a project-wide rewrite | Start v2; never look back |
-| `Bubble Tea v1` `tea.WithAltScreen()` program option | In v2, AltScreen/MouseMode are fields on `tea.View`, not program options. `NewProgram` signature is simplified. | Set `v.AltScreen = true` on the `tea.View` returned from `View()` |
+Three independent reasons converge on the same answer:
 
-## Stack Patterns by Variant
+1. **Spec directive.** `spin-registry.md` and `.planning/PROJECT.md` line
+   34 both say "No new deps needed; reuse `github.com/BurntSushi/toml` for
+   registry metadata".
+2. **Capability profile.** The new layers are: parse TOML, walk a
+   directory, resolve a slash-delimited shorthand, atomically write
+   JSON, clone a git repo. Every one of these is a stdlib or
+   already-imported library operation.
+3. **Existing pattern parity.** `internal/registry/client.go` already
+   handles TOML-ish data (JSON for `pinned.json`), atomic write
+   (`writePinned`), git clone (`addGit`), local path linking (`addLocal`
+   with `copyDir` fallback), and the XDG config dir (`os.UserConfigDir`).
+   The new layers don't need anything the existing layers don't already
+   exercise.
 
-**If user runs `spin new foo --tui --bubbletea --bubbles --lipgloss`:**
-- Generate `cmd/foo/main.go` with bubbletea v2 model (uses `tea.View`, `tea.KeyPressMsg`)
-- Generate `internal/ui/styles.go` with `charm.land/lipgloss/v2` styles
-- Pin `charm.land/bubbletea/v2 v2.0.0` and `charm.land/bubbles/v2 v2.0.0` in `go.mod`
-- Ship `go 1.25.0` in `go.mod` (minimum for bubbles v2)
-- Include `.air.toml` so `spin run` uses hot reload
+If a future milestone needs full-text indexing, pluggable auth, or
+registry mirroring, that's the time to revisit deps -- not now.
 
-**If user runs `spin new foo --cli --cobra --fang --viper`:**
-- Generate `cmd/foo/main.go` using cobra v1.9.1 with `fang.Execute(ctx, rootCmd)`
-- Wire `viper.BindPFlag(...)` for any `--config` flag
-- Pin `charm.land/fang/v2` and `github.com/spf13/cobra v1.9.1` in `go.mod`
-- Ship `go 1.23` in `go.mod` (no charm v2 libs, no 1.25+ requirement)
+## Integration Points with Existing Code
 
-**If user runs `spin new foo --all`:**
-- Combine both variants: cobra root, `--tui` flag launches bubbletea v2 program
-- All v2 deps in `go.mod`; `go 1.25.0` floor
+| Existing | Used by milestone | Change needed |
+|----------|-------------------|---------------|
+| `internal/registry/client.go::writePinned` (lines 557-595) | `Manager.writeRegistries` (new) | None -- copy the pattern verbatim |
+| `internal/registry/client.go::addGit` (lines 222-258) | `Manager.cloneRegistry` (new) | None -- same flags, longer timeout |
+| `internal/registry/client.go::addLocal` (lines 181-220) | `Manager.linkLocalRegistry` (new) | None -- same symlink-then-copy logic |
+| `internal/registry/client.go::SanitiseRepoName` (lines 363-381) | `Manager.cloneRegistry` for dest path | None -- reuse |
+| `internal/registry/client.go::PinnedPath` / `ListPinned` | unchanged | None |
+| `internal/template/parse.go::parseTOML` (lines 44-71) | `Manager.ReadIndex` per-file decode | None -- same library, new struct tags |
+| `internal/template/loader.go::Load` (lines 67-84) | `<alias>/<id>` path inserted before `loadPinned` | **Small change** to Load() ordering |
+| `internal/template/loader.go::isGitURL` (lines 279-286) | unchanged | None |
+| `cmd/search.go::runSearch` (lines 38-65) | reads `Manager.SearchIndex` instead of HTTP | **Replace HTTP call with local index call**; keep JSON shape via `SearchResult` |
+| `cmd/add.go::runAdd` (lines 37-65) | accepts `<alias>/<id>` shorthand via `Manager.ResolveShorthand` | **Add shorthand branch before `client.Add(spec)`** |
+| `cmd/list.go`, `cmd/remove.go`, `cmd/update.go` | unchanged for pinned-templates; new `cmd/registry.go` for registries | **Add `cmd/registry.go`** for `spin registry {add,list,update,remove}` |
+| `internal/registry/types.go::Entry`, `SearchResult` | output shape for `spin search --json` | **Rename to `TemplateMeta` in storage; keep `Entry` as the JSON-tagged shape for CLI output** (or add JSON tags to `TemplateMeta`) |
 
-**If gum is not on `$PATH` and TTY is attached:**
-- Fall back to huh v2 in-process forms (not gum shell-out)
-- This is the resilience pattern; documented in ARCHITECTURE.md
+## Sources
 
-**If `prism` is not on `$PATH`:**
-- `spin test` falls back to `go test ./...`
-- Log a one-time warning that install `prism` for colored/parallel output
-
-**If `gofumpt` is not on `$PATH`:**
-- `spin fmt` falls back to `gofmt`
-- Same fall-back pattern as prism
-
-## Go Version Tension -- call out for roadmap
-
-The PROJECT.md spec says: "**Go 1.22+ (use 1.23 if available)**". The
-research surfaces a real conflict:
-
-- `spin` itself: does not need charm v2 at runtime; Go 1.23 is sufficient and
-  matches the spec.
-- Scaffolded projects that pull in `charm.land/bubbles/v2`: official docs
-  require **Go 1.25.0+**. The official `charmbracelet/bubbletea-app-template`
-  ships `go 1.24.2` and depends on v1 libs (this template hasn't migrated
-  to v2 yet). For v2-only scaffolds, **1.25.0 is the floor**.
-
-**Recommendation:**
-- Pin `go 1.23` in `spin`'s own `go.mod`.
-- For scaffolded projects, pin `go 1.25.0` in the generated `go.mod` (so bubbles
-  v2 works) and document that the user needs Go 1.25+ to build.
-- If a user passes only CLI flags (no `--bubbles` / `--huh` / `--bubbletea`),
-  downgrade the generated `go.mod` to `go 1.23`.
-- This is a phase-1 decision to confirm in the requirements doc.
-
-**Confidence:** MEDIUM. The 1.25.0 minimum for bubbles v2 comes from the
-official `_autodocs/README.md`; we have not independently verified
-every charm v2 lib's `go.mod` floor. Bubbles is the most likely to require
-1.25 because it relies on newer `iter`/generic features.
-
-## Version Compatibility Matrix
-
-| Generated project contains | Minimum Go | Confirmed via |
-|----------------------------|------------|---------------|
-| bubbletea v2 only | Go 1.23 likely OK; 1.25 to be safe | bubbles v2 docs require 1.25; bubbletea v2 docs do not specify a floor but use the same code |
-| bubbletea v2 + bubbles v2 | Go 1.25.0 | `/charmbracelet/bubbles/_autodocs/README.md` |
-| huh v2 | inherits from bubbletea + lipgloss | upgrade guide |
-| lipgloss v2 | unknown floor; `go 1.22` likely works | not explicitly stated |
-| wish v2 | inherits from bubbletea | upgrade guide |
-| log v2 | standard library only -- no floor | upgrade guide |
-| glamour v2 | unknown floor | not explicitly stated |
-| cobra v1.9.1 | Go 1.18+ | spf13/cobra README |
-| viper v1.20.x | Go 1.20+ | spf13/viper README |
-| air (dev tool) | Go 1.25+ for `go install` | `/air-verse/air` docs |
-| goreleaser v2 (dev tool) | Go 1.26+ for `go install` | goreleaser install docs |
-| prism (dev tool) | Go 1.24+ for `go install` | prism README |
-| fang v2 | cobra v1.9+ | fang upgrade guide |
-| charmbracelet/x | experimental; pin a tag | charmbracelet/x README |
-
-## Sources (verified 2026-06-02)
-
-Context7 library IDs consulted, all via `npx ctx7@latest docs` CLI fallback:
-
-- `/charmbracelet/bubbletea` -- v2 import paths, `tea.View` API change, KeyPressMsg/MouseClickMsg typing (HIGH)
-- `/charmbracelet/lipgloss` -- v2 vanity domain, subpackage paths (HIGH)
-- `/charmbracelet/bubbles` -- v2 import paths, Go 1.25.0 floor, removed `runeutil`/`memoization` (HIGH)
-- `/charmbracelet/huh` -- v2 upgrade steps; charm.land migration (HIGH)
-- `/charmbracelet/glamour` -- `charm.land/glamour/v2` path; `glamour.Render()`/`NewTermRenderer` (HIGH)
-- `/charmbracelet/glow` -- `github.com/charmbracelet/glow/v2` install (HIGH)
-- `/charmbracelet/wish` -- v2 import paths; subpackages follow `charm.land/wish/v2/<sub>` (HIGH)
-- `/charmbracelet/log` -- `charm.land/log/v2`, `Default()`/`SetDefault()` API (HIGH)
-- `/charmbracelet/fang` -- `charm.land/fang/v2`; `fang.Execute(ctx, cmd)` drop-in (HIGH)
-- `/charmbracelet/gum` -- **binary-only**; no Go library; install via `go install github.com/charmbracelet/gum@latest` (HIGH)
-- `/charmbracelet/crush` -- internal packages only; treat as binary (HIGH)
-- `/charmbracelet/x` -- `ansi` subpackage API; experimental; `pony` UI DSL; `vt` emulator (HIGH)
-- `/charmbracelet/bubbletea-app-template` -- `.goreleaser.yaml` `version: 2`; `go 1.24.2`; `CGO_ENABLED=0` (HIGH)
-- `/spf13/cobra` -- v1.9.1 install; flag definitions; init pattern (HIGH)
-- `/spf13/viper` -- v1.20.x; mapstructure v2 import (HIGH)
-- `/air-verse/air` -- `go install github.com/air-verse/air@latest`; Go 1.25+; `.air.toml` schema (HIGH)
-- `/mvdan/gofumpt` -- `mvdan.cc/gofumpt@latest` install; `gofumpt -l -w .` (HIGH)
-- `/daltonsw/prism` -- `go install go.dalton.dog/prism@latest`; Go 1.24+; `prism`, `prism -v`, `prism -f` flags (HIGH)
-- `/goreleaser/goreleaser` -- `go install github.com/goreleaser/goreleaser/v2@latest`; Go 1.26+; `version: 2` schema (HIGH)
-- `/mattn/go-runewidth` -- `RUNEWIDTH_EASTASIAN` env var; `IsEastAsian()` (MEDIUM -- for width calc only)
+- `github.com/BurntSushi/toml` v1.6.0 -- verified latest stable via Context7
+  (`/burntsushi/toml` library ID, HIGH confidence)
+- `internal/registry/client.go` lines 178-330 -- existing git clone + symlink +
+  copyDir patterns (HIGH, source of truth)
+- `internal/registry/client.go` lines 557-595 -- atomic writePinned pattern
+  (HIGH, source of truth)
+- `internal/template/parse.go` lines 44-71 -- existing TOML decode pattern
+  (HIGH, source of truth)
+- `internal/template/loader.go` lines 67-84, 279-286 -- existing spec
+  classification (local/git/pinned) and how to extend it (HIGH, source of truth)
+- `spin-registry.md` (in-repo spec) -- the feature contract
+- `.planning/PROJECT.md` lines 32-35 -- milestone constraints ("No new deps
+  needed; reuse BurntSushi/toml")
+- Context7: `/burntsushi/toml` -- latest version, Unmarshal API, Encode API
+  (HIGH)
 
 ## Confidence Assessment
 
-| Area | Confidence | Reason |
-|------|------------|--------|
-| Charm v2 module paths | HIGH | Verified against official upgrade guides for every lib |
-| Charm v2 API breaking changes (View→tea.View, KeyPressMsg typing) | HIGH | Confirmed in bubbletea UPGRADE_GUIDE_V2.md |
-| bubbletea/lipgloss/huh/bubbles/glamour/glow/wish/log/fang versions | HIGH | All on v2 stable line per Context7 |
-| `gum` is binary-only (no Go library) | HIGH | Context7 docs show only install/CLI usage, no Go package |
-| `crush` Go client is internal-only | HIGH | Context7 docs show `github.com/charmbracelet/crush/internal/client` |
-| Go version floor for bubbles v2 = 1.25.0 | HIGH | Direct quote from `/charmbracelet/bubbles/_autodocs/README.md` |
-| Go version floor for other charm v2 libs | MEDIUM | Not explicitly stated for each lib; assumed transitive of bubbles |
-| air, goreleaser v2 Go version floors | HIGH | Direct quotes from official docs |
-| prism Go version floor = 1.24 | HIGH | Direct quote from prism README |
-| Viper mapstructure v2 fork migration | HIGH | Direct quote from spf13/viper UPGRADE.md |
+| Area | Level | Reason |
+|------|-------|--------|
+| No new deps needed | HIGH | Spec is explicit; all required capabilities map to existing libs |
+| BurntSushi/toml is current latest | HIGH | Verified via Context7; `go.mod` already on v1.6.0 |
+| `encoding/toml/v2` is NOT in stdlib | MEDIUM | Comments in `spin_toml.go` suggest otherwise; verified not landed in Go 1.23-1.25 |
+| Atomic write pattern reuses `writePinned` | HIGH | Pattern is in `client.go:557-595`; copying it is straightforward |
+| Git clone pattern reuses `addGit` | HIGH | Same flags + env vars; same timeout shape |
+| Symlink-then-copy reuses `addLocal` | HIGH | Identical decision tree |
+| `Loader.Load` extension point | HIGH | Source code shows the if/else cascade; insertion point is clear |
+| `TemplateMeta` vs `Entry` shape compatibility | MEDIUM | Both have Name, Description, Tags; structural fit, but field renames (Source vs Repository) need a tag audit |
 
 ## Open Questions
 
-- Should generated `--tui` projects default to `go 1.25.0` in `go.mod`, or to
-  the lowest viable floor (1.23) for fewer barriers? Recommend 1.25.0 since
-  bubbles v2 requires it.
-- Should `spin new` add `//go:build` constraints to allow the same scaffolded
-  module to build on older Go when charm v2 features aren't used? Probably
-  not -- keep it simple, one floor per project.
-- Should the scaffolder embed `gum` as a `//go:embed gum` binary, or always
-  require it on `$PATH`? Recommend on-`$PATH` with a clear "install gum"
-  hint; embedding complicates cross-compile and CGO/CGO-not concerns.
-- Should `crush` integration be binary-only, or expose the `internal/client`
-  proto API? Binary-only is the safer call (internal packages have no
-  stability guarantee).
-
----
-
-*Stack research for: spin -- Go project scaffold CLI for the charmbracelet v2 ecosystem*
-*Researched: 2026-06-02*
+- Should `spin registry remove` also delete the on-disk `~/.config/spin/registries/<alias>/`
+  clone? Default to YES (mirror `Purge` for pinned templates), but offer
+  `--keep-files` for users who want to manually inspect before deleting.
+- Should `TemplateMeta` and `Entry` collapse into one type, or stay as two
+  (one for storage, one for CLI output)? Recommend collapse -- the JSON
+  tags can do double duty and we avoid mapping code.
+- Should `spin registry update <alias>` accept a new `<source>` to migrate
+  a registry to a new URL, or refuse and require `remove` + `add`? Recommend
+  refuse (simpler audit trail; matches `pinned.json` behaviour).
+- Should `Manager.ReadIndex` cache the result in memory across one CLI
+  invocation (one ReadIndex per command), or re-walk on every call? Recommend
+  call once per command -- matches `ListPinned` behaviour, avoids stale
+  state in long-running commands (we don't have any today).

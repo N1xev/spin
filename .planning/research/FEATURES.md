@@ -1,251 +1,175 @@
-# Feature Research: spin (charmbracelet v2 Go scaffold CLI)
+# Feature Research: spin v2.x Local-Registry Milestone
 
-**Domain:** CLI tooling -- Go project scaffolder
-**Researched:** 2026-06-02
-**Confidence:** HIGH (v2 import paths verified via Context7; feature landscape triangulated against cobra-cli, spring initializr, cargo, cookiecutter, yeoman; charmbracelet-app-template structure verified)
+**Domain:** CLI tooling -- local-registry layer for a language-agnostic scaffolder
+**Researched:** 2026-07-03
+**Confidence:** HIGH (spec in spin-registry.md is concrete; current internal/registry and internal/template packages read directly; only Context7 unverified, but no new library decisions are needed -- the spec reuses github.com/BurntSushi/toml already in tree)
 
 ---
 
 ## Executive Summary
 
-`spin` sits in a well-defined category -- language/ecosystem scaffolders -- where the table stakes are clear and the differentiators are mostly *aesthetic* and *opinionated*. Every competitor (`cargo new`, `npm init`, `cobra-cli init`, `cookiecutter`, `spring initializr`, `yeoman`) does the same job: take a name + flags, emit a directory tree, write a `go.mod`-equivalent, and exit cleanly. The reason `spin` can win a small niche is not feature breadth but *vertical integration with the charmbracelet v2 stack* -- the scaffolder itself uses fang + gum + lipgloss + huh so the tool *demonstrates* the experience it scaffolds. That is the differentiator; everything else is execution quality.
+The v2.x local-registry milestone replaces `internal/registry`'s HTTP `Client` (the `.invalid` stub) with a **git/local-index layer**. Registries are first-class entities on disk (`~/.config/spin/registries.json` + `~/.config/spin/registries/<alias>/`), `spin search` reads them locally, and `<alias>/<id>` becomes a fourth template spec kind alongside local path / git URL / pinned name. The scope is bounded: four new `spin registry` subcommands, two new resolver paths (`<alias>/<id>` in `add` and `new`), one rewire of `search`, and one validation layer that runs during `registry update`.
 
-The anti-feature list is short but firm: no template marketplace, no plugin system, no TUI mode for the scaffolder itself, no CI generation, no GUI. All are tempting and all break the "small, sharp, opinionated" thesis.
+The spec (`spin-registry.md`) is **opinionated and complete** -- it dictates the layout, the validation rules, the storage locations, and the source-resolver behaviour. The features below are what the spec calls for, **plus** a small set of differentiators the spec leaves implicit but are required to ship a coherent user experience (e.g. alias collision check on `registry add`, JSON output for `spin registry list`, `--quiet` for `registry update`, stable alphabetical sort in `search`, error reporting UX during `registry update`).
 
-Charmbracelet v2 has matured substantially (v2 import paths use `charm.land/<lib>/v2`). The `bubbletea-app-template` repo already ships a reference structure (lint config, goreleaser, dependabot, GH Actions) that `spin` should embed as a starting point, but `spin` should *improve* on it by (a) consolidating `Makefile`+`Taskfile` into one, (b) wiring `air` and `prism` by default, (c) using fang, and (d) generating `AGENTS.md` for AI assistants -- none of which the reference template does.
+Two categories are explicitly NOT features: server-side anything (the whole pitch is "zero backend"), and cross-device sync (registries are local clones; if a user wants sync they put the registry in a git repo they already share). Both are documented as anti-features to lock the scope.
 
----
-
-## Charmbracelet v2 Library Inventory
-
-All import paths verified via Context7 UPGRADE_GUIDE_V2.md docs. v2 uses the `charm.land/<lib>/v2` vanity domain (replaces `github.com/charmbracelet/<lib>`).
-
-### TUI Framework & Components (for `--tui` projects)
-
-| Library | v2 Import Path | Purpose | Flag |
-|---------|----------------|---------|------|
-| bubbletea | `charm.land/bubbletea/v2` | Elm-architecture TUI framework (Model-View-Update) | `--bubbletea` |
-| bubbles | `charm.land/bubbles/v2` | TUI components (spinner, textinput, list, table, viewport, paginator, progress, timer, help, key, cursor, textarea, filepicker) | `--bubbles` (implies `--bubbletea`) |
-| huh | `charm.land/huh/v2` | Interactive forms/prompts (input, select, confirm, file picker) | `--huh` |
-| harmonica | `charm.land/harmonica/v2` | Spring-based animation toolkit | `--harmonica` |
-
-### CLI Framework (for `--cli` projects)
-
-| Library | v2 Import Path | Purpose | Flag |
-|---------|----------------|---------|------|
-| cobra | `github.com/spf13/cobra` (no v2 path; spf13 maintains it) | Subcommand + POSIX flag parser | `--cobra` (default on for CLI) |
-| fang | `charm.land/fang/v2` | Styled help, errors, version, manpages, completions, theming for cobra | `--fang` (default on for CLI) |
-| viper | `github.com/spf13/viper` (no v2 path) | Config/env/flag merging | `--viper` (opt-in) |
-
-### Styling & Rendering (cross-cutting; useful in any project)
-
-| Library | v2 Import Path | Purpose | Flag |
-|---------|----------------|---------|------|
-| lipgloss | `charm.land/lipgloss/v2` | Terminal style/layout (CSS-like API, color profiles) | `--lipgloss` |
-| ansi | `charm.land/x/ansi` (under `charmbracelet/x`) | Low-level ANSI/VT100 escape sequence generation & parser | `--ansi` |
-| runewidth | `charm.land/x/runewidth` (or `github.com/mattn/go-runewidth` upstream) | Display-width calculation (CJK, emoji) | `--runewidth` |
-| modifiers | `charm.land/x/modifiers` (under `charmbracelet/x`) | Input/entering-style event modifiers | `--modifiers` |
-| glamour | `charm.land/glamour/v2` | Stylesheet-driven markdown renderer | `--glamour` |
-| glow | `github.com/charmbracelet/glow` (CLI binary, embeds glamour) | Markdown reader CLI | `--glow` (binary dep, not import) |
-
-### SSH (for `--ssh` projects)
-
-| Library | v2 Import Path | Purpose | Flag |
-|---------|----------------|---------|------|
-| wish | `charm.land/wish/v2` | SSH server framework with middlewares | `--wish` |
-| wish/bubbletea | `charm.land/wish/v2/bubbletea` | Middleware to serve Bubble Tea apps over SSH | (auto with `--wish --bubbletea`) |
-| wish/logging | `charm.land/wish/v2/logging` | Middleware that pipes wish logs through charm log | (auto with `--wish`) |
-| wish/activeterm | `charm.land/wish/v2/activeterm` | Tracks active terminal sessions for broadcast | (opt-in, `--activeterm`) |
-
-### Utility (cross-cutting)
-
-| Library | v2 Import Path | Purpose | Flag |
-|---------|----------------|---------|------|
-| log | `charm.land/log/v2` | Leveled, colorful, structured logger | `--log` |
-| crush | `github.com/charmbracelet/crush` (binary, not import -- AI agent) | AI coding assistant in the terminal | `--crush` (binary, opt-in `AGENTS.md` integration) |
-
-### Scaffolder itself (dogfooding)
-
-| Library | Path | Why |
-|---------|------|-----|
-| cobra | `github.com/spf13/cobra` | Standard subcommand structure |
-| fang | `charm.land/fang/v2` | Styled help output (showcase) |
-| gum | (binary `charm.land/gum`) | Interactive prompts when flags are missing -- invoked as a binary; no Go import needed |
-
-**Flag design note:** Flags follow the user-role grouping above. `--tui` (umbrella for bubbletea + bubbles + lipgloss) and `--cli` (umbrella for cobra + fang) are top-level; per-library subflags give fine control. `--wish` is orthogonal to `--tui`/`--cli` (an SSH project can be `--tui` or `--cli` over SSH). `--all` is a convenience that pulls every charm v2 lib.
+No new dependencies are required. `github.com/BurntSushi/toml` (already in `go.mod` for spin.toml parsing) handles registry.toml and templates/*.toml. The git clone / pull paths already exist in `internal/registry/client.go` and are reused for registries.
 
 ---
 
 ## Feature Landscape
 
-### Table Stakes (Users Expect These)
+### Table Stakes (Per spin-registry.md -- Users Expect These)
 
-Features users assume exist. Missing = product feels incomplete, broken, or untrustworthy.
+These are the must-haves called out in the spec. Missing any one of them means the rewire is incomplete and existing v2.0 workflows break or feel broken.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| `spin new <name>` scaffolds a project in `./<name>` | Mirrors `cargo new`, `npm init`, `cobra-cli init`, `spring init`, `django-admin startproject`. The single most basic scaffolder contract. | LOW | Default; required positional arg. |
-| Project name validation (kebab-case, lowercase, no spaces) | All Go tooling (modules, package paths, binary names) assumes this; `go mod init` rejects invalid names. | LOW | Use cobra's `Args` validator. |
-| Generates `go.mod` with correct module path (`github.com/<user>/<name>`) | Non-negotiable. Every Go project needs it. | LOW | Default module = `github.com/<user-or-org>/<name>`; override with `--module`. |
-| Generates `main.go` (or `cmd/<name>.go`) that compiles and runs | The "builds on first try" promise is the core value. | LOW | Two templates: bubbletea `main.go` and cobra `cmd/root.go`+`main.go`. |
-| Sensible default `.gitignore` (covers `bin/`, IDE files, OS junk) | Every reference template includes one. Users will add it anyway if you don't. | LOW | Embed via `go:embed`. |
-| Sensible default `README.md` with project name + commands | The first file the user opens. Empty or missing = looks broken. | LOW | Template: title, install, run, structure. |
-| License file generation (or `--no-license`) | Every scaffolder asks. Missing = users complain. | LOW | Default `MIT`; `--license apache2/gpl/...`; `--no-license` to skip. |
-| `--help` that is readable and accurate | Cobra gives this for free; fang styles it. | LOW | fang gives styled help -- table-stakes-quality. |
-| Runs offline by default (embedded templates) | `cargo new`, `go mod init`, `cobra-cli init` all work offline. Network-on-first-run surprises users. | MEDIUM | `go:embed` the templates directory. |
-| Non-zero exit on error with clear message | Standard CLI hygiene. | LOW | `os.Exit(1)` + `fmt.Fprintln(os.Stderr, ...)` style; or let cobra/fang handle. |
-| Generated project builds with `go build` on first try | The single most common "did it work?" test. | LOW | Verified by CI in spin itself (test fixture → build → run). |
-| Flag-only mode (no interactive prompts when all flags set) | Power users will scream if forced through prompts. | LOW | `--no-interactive` and detect completeness automatically. |
+| `spin registry add <alias> <source>` | The single command that makes the whole layer exist. Spec example: `spin registry add official https://github.com/spin-org/registry`. Without it, no discovery. | LOW-MEDIUM | Source resolution: local path (`/`, `.`, `~` prefix) -> symlink under `~/.config/spin/registries/<alias>/`; git URL -> shallow clone same path. Reject `<alias>` that collides with an existing alias unless `--force`. Validate that the source actually looks like a registry (has `registry.toml`) before persisting. |
+| `spin registry list` | Discovery mirror of `spin list`. Spec: `spin registry list`. Users must be able to see what registries are registered, where they live on disk, and which are git vs local. | LOW | Show alias, source, kind (git/local), cache path, last-updated timestamp if available. `--json` flag for scripting (matches `spin list --json` UX). Reuse `pinnedRow` table pattern. |
+| `spin registry update [alias]` | Git registries need to be pullable; otherwise they go stale. Spec: `spin registry update` (all) and `spin registry update official` (one). | MEDIUM | For each git registry: `git pull --ff-only` in the cache dir (timeout, no prompts). For local: no-op (print a notice). Report per-registry status. Collect warnings into a single end-of-run summary (see "Validation reporting" below). |
+| `spin registry remove <alias>` | Symmetric counterpart of `add`. Spec example: `spin registry remove official`. Without it, registries.json grows unbounded. | LOW | Drop the row from `registries.json`; delete the cache dir under `~/.config/spin/registries/<alias>/`. Refuse to remove a registry that currently has a pinned template sourced from it (matches `spin remove --purge` behaviour). |
+| `spin search <query>` reads local TOML | The rewire's centrepiece. Spec flowchart: read `~/.config/spin/registries/*/templates/*.toml`, validate, build index, filter, display. Replace `Client.SearchWithLimit` HTTP call. | MEDIUM-HIGH | Each entry has `alias/id`, `name`, `description`, `source`, `tags`, `language`, `type`, `version`, `updated_at`, `downloads` (downloads always 0 in v2.x; placeholder for parity). Sort by `alias/id` asc (no popularity metric yet) or by relevance to query (spec is silent -- see Differentiation note below). Format: lipgloss table, default + `--json` (now meaningful, not a skeleton). |
+| `<alias>/<id>` shorthand accepted by `spin add` and `spin new` | Spec's resolution contract: "Find Template Metadata -> Resolve Source". A user typing `spin add official/go-api` or `spin new myapp official/go-api` must work. | MEDIUM | Add to `internal/template/Loader.Load` spec detection (after `isLocalPath`, `isGitURL`, `loadPinned`). Pattern: exactly one `/`, both sides non-empty, neither side contains `/`. On match: scan registered registries for one containing `templates/<id>.toml`; read the `source` field; pass that source to the existing `addGit` / `addLocal` paths. If `source` is itself an alias/id, recurse once (max depth 2; reject cycles). |
+| Registry metadata validation (`registry.toml` + `templates/*.toml`) | Spec section "Registry Validation": required fields present, ids unique within a registry, sources resolvable. "Invalid metadata files are ignored and reported during `spin registry update`." | MEDIUM | Three validation buckets: (a) registry-level: `registry.toml` parses, required fields (`id`, `name`) present, `templates/` dir exists; (b) template-level: TOML parses, required fields (`id`, `name`, `source`) present, `source` is one of local/git/alias-id; (c) cross-cutting: no two templates in same registry share the same `id`. Invalid files are skipped from the search index but counted and surfaced. |
+| Invalid-metadata reporting during `spin registry update` | Spec: "Invalid template metadata files are ignored and reported during `spin registry update`." | MEDIUM | Aggregate count: "official: 12 templates indexed, 1 skipped (templates/foo.toml: missing 'source' field)." Format: registry-by-registry summary at end of `update` run; exit code 0 if at least one template was indexed, 1 if a registry had zero valid templates (debatable -- flag for phase decision). Never abort the whole update on one bad file. |
+| Pin-prompt on `spin new` (registry-resolved templates) | Spec scaffold flowchart K->M: "Pin Template? -> Save to Local Template Cache". The existing `promptPinAfterSuccess` covers this for git-URL and local-path specs. Extend it to fire when the template was loaded via the registry path. | LOW | The `promptPinAfterSuccess` hook in `cmd/new.go:251` already checks `tpl.Repo != ""`. After registry-resolution, `tpl.Repo` is the registry template's `source` field, so the existing hook fires automatically. Verification: ensure the registry-resolved path sets `tpl.Repo` from the metadata's `source` (not the cache path) -- otherwise the pin would pin the local registry-cache copy, not the upstream template. |
+| Drop HTTP client + `SPIN_REGISTRY_URL` / `SPIN_REGISTRY` env vars + `ErrNotDeployed` | Project.md constraint: "Drop `SPIN_REGISTRY_URL` / `SPIN_REGISTRY` env vars; drop `ErrNotDeployed` / `DefaultIndexURL`". | LOW | Phase 8 cleanup: delete `internal/registry/client.go` HTTP path (or keep client.go just for Add/Refresh/Pin/Purge), delete `internal/registry/search.go` (HTTP formatter), delete `DefaultIndexURL` const. `spin search` becomes a pure local read. |
 
-### Differentiators (Competitive Advantage -- the charm-flavored features)
+### Differentiators (Per spin-registry.md -- Ship-Worthy Polish)
+
+These are not in the spec but are required to ship a coherent UX. Each has a one-line rationale; none bloat scope.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| **Interactive gum prompts when flags are missing** | Onboarding path for new users who don't know the flag surface. Reinforces the "this is a charm tool" identity. | MEDIUM | Use gum as binary (`exec.LookPath("gum")`); if missing, fall back to flag-only. Default behavior: prompt when interactive TTY and flags incomplete. |
-| **Fang-styled `--help` and error output** | Makes `spin --help` *feel* like a charm product. Visually distinct from `cobra-cli --help`. | LOW | Already in fang; just `fang.Execute(ctx, rootCmd)`. |
-| **Lipgloss-styled progress output during scaffold** ("creating go.mod...", "embedding bubbles...") | Sets the tone: this is a *crafted* CLI, not `mkdir`-in-a-trench-coat. | MEDIUM | Use lipgloss for status lines; gate behind `--no-style` for piping. |
-| **`--ai` / `--agents` flag generates `AGENTS.md`** | A growing number of users want AI assistants (Claude/Crush) to understand their new project immediately. Not done by any competitor scaffolder. | LOW-MEDIUM | Templated from project type + chosen libs; describes module path, lib list, common commands. |
-| **Per-library subflags (`--bubbletea`, `--lipgloss`, ...)** | `cobra-cli` and `cargo new` give you a skeleton; `spin` lets you pre-wire *exactly* the libraries you want without post-scaffold edit. | LOW | Simple boolean flags; the flag set is the user-role grouping above. |
-| **Top-level umbrella flags (`--tui`, `--cli`, `--all`)** | Single-flag on-ramp: `spin new myapp --tui` does the obvious thing. Reduces flag memorization. | LOW | Convenience over `cobra-cli`-style granularity. |
-| **External template override via `--template-repo <url>`** | Power users want their own templates; companies want branded scaffolds. Already planned in PROJECT.md. | MEDIUM | `git clone --depth 1` into temp dir, copy; cache or ignore per `--no-cache`. |
-| **Bundled `--template <name>` variants** (e.g. `tui-minimal`, `tui-full`, `cli-minimal`, `ssh-bubbletea`, `crush-agent`) | Lets users pick a curated, opinionated starting point without writing one. | MEDIUM | Each is a directory under `templates/`. |
-| **`spin run` wraps `go run` (or `air` if `.air.toml` present)** | One tool to learn: scaffolded projects use the same `spin` verbs as the scaffolder. | LOW | Detect `.air.toml` and exec `air`; else `go run .`. |
-| **`spin build` wraps `go build` → `bin/<name>`** | Consistent path; matches Go convention. | LOW | `go build -o bin/$(name) ./...`. |
-| **`spin test` wraps `prism` (not `go test`)** | `prism` is the de facto parallel test runner with better output; this is a deliberate DX choice. | LOW | `prism` if installed, else `go test ./...`. |
-| **`spin vet` wraps `go vet ./...`** | Convenience; consistent surface. | LOW | One-liner. |
-| **`spin fmt` runs `gofumpt` then `goimports`** (falls back to `gofmt`) | Stricter formatting is the modern Go default; one command for the whole pipeline. | LOW | Detect gofumpt/goimports; fall back gracefully. |
-| **Generated `.air.toml` with sensible defaults** | Hot-reload is the modern Go dev loop; users shouldn't have to write this file. | LOW | Embed a small `.air.toml`; detect in `spin run`. |
-| **Generated `Taskfile.yml` (or `Makefile` as fallback)** | Task runners are standard; one canonical choice reduces cognitive load. | LOW | Default `Taskfile.yml`; `--makefile` for legacy. |
-| **`go.mod` pins specific charm v2 versions** (not `@latest`) | Reproducible builds. `@latest` in a fresh template = surprise later. | LOW | Embed the version matrix in `spin` itself. |
-| **No-CGO guarantee** (`CGO_ENABLED=0` builds) | Cross-compile, minimal container images. Already in PROJECT.md constraints. | LOW | All charm v2 libs are pure Go; no CGO needed. |
-| **Showcase via dogfooding** (the scaffolder is built with fang + gum) | Walking the talk. Users `go install spin` and immediately see the charm aesthetic. | MEDIUM | The cost of building `spin` is the cost of demonstrating. |
+| Alias collision check + alias format validation | A typo or duplicate alias corrupts the index silently. | LOW | Reject `<alias>` containing `/`, whitespace, or path separators at `registry add`. Reject `--force`-less collision. Required for `Load(spec)`'s `<alias>/<id>` pattern to work -- if `alias` is ambiguous, the resolver can't pick one. |
+| `spin registry list --json` | Same DX story as `spin list --json`. Users expect a machine-readable path; the table is for humans. | LOW | JSON object per registry: `alias`, `source`, `kind` (git/local), `cache_path`, `templates_count`, `last_updated`. |
+| `spin registry update --quiet` | Long-running refresh across many registries shouldn't print per-registry output in CI logs. | LOW | Suppress per-registry success lines; print only the summary line. Mirror the pattern from `update_test.go` and the existing `spin update` summary. |
+| `spin search --json` with full entries populated | v2.0's `--json` is a skeleton (search.md line 21). v2.x should make it real so CI pipelines can grep `entries` directly. | LOW | Same shape as the existing `SearchResult` (`query`, `total`, `entries[]`), with each entry carrying the resolved `source` and the registry `alias` it came from. |
+| `spin search` relevance scoring (vs alphabetical) | Spec is silent on sort order. Naive alphabetical is fine but `--query "go"` matching `go-api`, `gin-rest`, `go-tui`, `cli-go-starter` should rank by token overlap, not alphabetically. | LOW-MEDIUM | Simple substring + token-match scoring: exact id match > name match > description match > tag match; tie-break by id. No external dep, no Lucene-style index. Document the ranking rule in the manpage so it's not magical. |
+| `spin registry remove` refuses if pinned-templates depend on the registry | A user who `spin add official/go-api` and then `spin registry remove official` would leave a dangling pin. | LOW | Walk pinned.json: any pin whose `Source` is inside the registry's `source` URL? -- error with the names of the dependent pins; suggest `spin remove <pin> --purge` first. Same UX as `git branch -d` refusing to delete the checked-out branch. |
+| Atomic `registries.json` writes | Mirror the existing `writePinned` (atomic temp + rename) for the registry config file. A crash mid-write should not leave the file unparseable. | LOW | Same pattern as `writePinned` in `internal/registry/client.go:561`. Reuse the helper or copy. |
+| Last-updated timestamp in `registries.json` | Lets `spin registry list` show "updated 2h ago" without re-stat'ing every cache dir every call. | LOW | Per-registry: `last_updated` set by `spin registry update` (successful pull -> now RFC3339; local registry -> set on `add`, never updated). Cheap, additive. |
+| `spin registry add` validates the source is a registry before persisting | A user typing `spin registry add foo https://github.com/me/my-random-repo` would silently get a useless entry. | LOW | After clone/symlink, stat for `registry.toml`. Missing -> error, roll back the clone. Spec says "Required registry metadata fields are present" -- this is the runtime enforcement. |
 
 ### Anti-Features (Commonly Requested, Often Problematic)
 
+These are deliberately NOT shipped. Documented to lock scope.
+
 | Feature | Why Requested | Why Problematic | Alternative |
 |---------|---------------|-----------------|-------------|
-| **Online template marketplace / registry** | Sounds like a community play. | Hosting + curation + moderation burden; spin would need a backend, accounts, ratings. PROJECT.md explicitly defers. | Local `--template-repo <url>` is enough for v1. |
-| **Plugin system for custom scaffolders** | Lets users extend `spin` with their own generators. | Plugin ABI stability becomes a tax on every release. Premature. | External `--template-repo` is the de facto plugin story. |
-| **TUI/GUI mode for the scaffolder itself** | "Use huh to build the scaffolder!" is the obvious charm-flavored move. | Scaffolders are invoked by humans *and* scripts (CI, agents, copy-paste docs). A TUI breaks non-TTY flows. The generated app is the TUI; the scaffolder is a CLI. PROJECT.md says this explicitly. | Use `gum` (binary) for prompts -- works in TTY, gracefully no-ops in non-TTY. |
-| **CI/CD pipeline generation** (GitHub Actions, etc.) | "Just one click to set up CI!" | CI is opinionated; users have strong preferences (GitHub vs GitLab vs Drone vs Buildkite). Forcing one is hostile. | Ship a reference `.github/workflows/` in templates; users copy/edit. PROJECT.md defers. |
-| **Dockerfile / docker-compose generation** | Same reasoning as CI. | Same problem: opinionated, user-specific, often wrong. | Defer. |
-| **Auto-updating generated projects after scaffold** | "If spin releases v0.2, can it update my old project?" | Template drift vs user edits = data loss waiting to happen. | Document that users re-scaffold or hand-merge. PROJECT.md defers. |
-| **Non-charmbracelet UI frameworks** (tview, ratatui, urfave/cli) | Some users already know these. | `spin` is opinionated; PROJECT.md says no. v1 is the moment to nail the thesis. | Document that `spin` is charm-only; use the other scaffolders for those frameworks. |
-| **Non-Go language scaffolds** (Rust, TS, Python) | "While you're at it..." | Each language has its own scaffolder ecosystem (`cargo new`, `npm init`, `poetry new`). Spin would be a worse version of all of them. | Stay sharp. PROJECT.md says no. |
-| **Remote/cloud execution of scaffolds** | "Spin a project on a remote box!" | Adds auth, network, sandboxing. PROJECT.md defers to local-only. | Keep it local. |
-| **Bespoke configuration file (e.g. `~/.spin.yaml`)** | Scaffolders often grow a config file (`cobra-cli` has `~/.cobra.yaml`). | Premature; v1 should be flag-driven. Re-introduce if multiple-flag invocations become painful. | Pure flags. Add config in v2 if needed. |
-| **Built-in Git init / first commit** | "Just `git init` and commit for me!" | Git history is sacred; auto-committing on behalf of users is a footgun. | Print the suggested commands; let the user run them. |
+| **Centralised registry server / HTTP API** | "Single source of truth!" | Defeats the whole pitch. PROJECT.md and spin-registry.md both mandate zero-backend. Server means hosting, moderation, downtime. The whole ecosystem is git repos. | Registries ARE git repos. If you want a single canonical index, publish a git repo and `spin registry add official https://github.com/you/registry`. |
+| **Auto-publish on `spin init` / first run** | "Make the discovery frictionless!" | Users who never asked for discovery would get auto-registered registries. Silent network on startup. Breaks the "no surprises" thesis. | Document `spin registry add official ...` as a one-liner onboarding step. (Optionally, an `init` subcommand that prints the recommended `add` -- but does NOT execute it.) |
+| **Cross-device sync of registries.json** | "I want my registries on every machine!" | Out of scope for the tool; dotfiles managers (chezmoi, stow, git bare repos) already solve this. | User can symlink `~/.config/spin/registries.json` into their dotfiles repo. |
+| **Registry health checks / registry ratings / stars** | "Let me know if a registry is unreliable!" | Requires a server (central metrics) or N registry pings (privacy problem). Adds noise to the local-first UX. | Trust the URL you added. Remove + re-add if a registry goes bad. |
+| **`<alias>/<sub-alias>/<id>` deeply nested ids** | "Namespacing!" | The spec is one-slash deep. Adding more levels means every resolver and the template metadata schema change. | Flat model. If users want namespacing, they name their templates accordingly: `backend-go-api`, `frontend-react-app`. |
+| **Auto-update registries on every `spin search` call** | "Always fresh!" | Network on every search is hostile to offline users and slow. Surprise. | `spin registry update` is explicit. Document it as the refresh verb. |
+| **Caching search results across runs** | "Performance!" | Adds an invalidation problem (when does the cache re-read?). The local TOML read is already fast. | No cache. Reading 100 toml files is sub-millisecond on any modern disk. |
+| **Built-in default registry** | "Just include one so `spin search` works out of the box!" | Couples spin to a specific org's registry. Governance / branding risk. | Empty by default. Onboarding docs list popular registries the user can `add`. |
+| **`spin registry login` / authenticated registries** | "Support private registries!" | The git URL is the auth surface; private repos work today via `GIT_TERMINAL_PROMPT=0` + SSH key, no extra protocol needed. Adding login duplicates git auth. | Document SSH key setup. If a user adds `https://github.com/org/private-registry`, git's existing credential helper handles auth. |
+| **Schema-versioning / migration system for registry.toml** | "Future-proof the format!" | Premature. Add when a breaking change is actually proposed. | Keep the v1 format minimal. Document field semantics so additions don't break parsers (TOML ignores unknown fields). |
+| **Lockfiles (`spin.lock`) pinning the resolved registry commit SHAs** | "Reproducible installs!" | Adds significant complexity. The pin record already stores a `version` SHA from `gitHeadSHA`; the registry layer's commit SHA is recoverable from `git -C ~/.config/spin/registries/<alias> rev-parse HEAD` at need. | Defer until reproducible-builds becomes a real complaint. |
+| **Web UI / TUI for browsing registries** | "Visual discovery!" | Anti-feature per PROJECT.md ("GUI/TUI mode for the scaffolder itself -- out of scope"). | `spin search` with filtering is the UX. |
+| **Registry -> auto-add templates on `registry add`** | "One-step onboarding!" | Couples `add` to a network fetch + write to pinned.json. Surprising side effect. | User runs `spin add <alias>/<id>` explicitly after `spin registry add`. |
 
 ---
 
 ## Feature Dependencies
 
 ```
-spin new <name>
-    └──requires──> templates/ embedded (go:embed)
-                       └──requires──> go:embed wiring
-                       └──requires──> template variant selection (cli | tui | ssh | custom)
+Phase 6 (A): manager + `spin registry` CLI + `registries.json`
+    └──requires──> `internal/registry/manager.go` (new) -- CRUD on registries.json
+                       └──requires──> atomic write helper (reuse writePinned)
+    └──requires──> alias validation (no `/`, no whitespace)
+    └──requires──> `cmd/registry.go` -- new cobra subcommand tree
+                       └──requires──> `spin registry add|list|update|remove`
+    └──requires──> `internal/registry/source.go` (new) -- detect local-vs-git
+                       └──requires──> reuse isLocalPath / isGitURL from client.go
+    └──requires──> home-dir resolution (reuses expandHome)
+    └──independent──> search rewire (Phase 7)
+    └──independent──> <alias>/<id> resolver (Phase 7)
 
-flag parsing
-    └──requires──> cobra + fang (already chosen)
-    └──enhances──> gum prompts (when interactive TTY and flags incomplete)
+Phase 7 (B): index reader + resolver + rewire
+    └──requires──> Phase 6 manager (can read registries.json)
+    └──requires──> `internal/registry/index.go` (new) -- scan, validate, build
+                       └──requires──> github.com/BurntSushi/toml (already in go.mod)
+                       └──requires──> registry metadata struct (registry-level)
+                       └──requires──> template metadata struct (per-templates/*.toml)
+                       └──requires──> validation rules (required fields, unique ids)
+    └──requires──> `internal/template/loader.go` -- add 4th spec kind
+                       └──requires──> spec detection (exactly one `/`)
+                       └──requires──> index lookup by alias/id
+                       └──requires──> source extraction from metadata
+    └──requires──> rewire `cmd/search.go` to call index.Search (was HTTP)
+    └──requires──> rewire `cmd/add.go` to accept <alias>/<id>
+    └──requires──> rewire `cmd/new.go` to accept <alias>/<id>
+                       └──requires──> registry-resolved path sets tpl.Repo correctly
+                       └──requires──> promptPinAfterSuccess already covers this
+    └──enhances──> invalid-metadata reporting (uses index.Validate)
 
-gum prompts
-    └──requires──> gum binary on PATH (fall back gracefully)
-    └──conflicts──> non-TTY (stdin pipe, CI) -- must auto-disable
-
-per-library flags (--bubbletea, --lipgloss, --wish, ...)
-    └──requires──> template variant exists in templates/
-    └──enhances──> umbrella flags (--tui, --cli, --all)
-
---ai / --agents → AGENTS.md
-    └──requires──> project type known (--tui or --cli chosen first)
-    └──requires──> library list (for "uses bubbletea v2, lipgloss v2" etc.)
-    └──independent──> template (works with any template)
-
---template-repo
-    └──requires──> external git available OR tarball download
-    └──conflicts──> network access (must fail gracefully offline)
-
-spin run
-    └──requires──> in scaffolded project (subcommand, not used in scaffolder dir)
-    └──enhances──> .air.toml (auto-detect; use air when present)
-
-spin build
-    └──requires──> CGO_ENABLED=0 policy (no CGO deps in templates)
-
-spin test
-    └──requires──> prism OR fall back to go test
-
-spin fmt
-    └──requires──> gofumpt (fall back to gofmt)
-    └──requires──> goimports (fall back to nothing if missing)
-
-templates
-    └──requires──> pinned charm v2 versions (version matrix in spin source)
-    └──requires──> no CGO deps
-    └──requires──> builds cleanly with `go build` (CI-verified)
+Phase 8 (C): delete HTTP code + docs
+    └──requires──> Phase 7 fully landed (search no longer needs HTTP)
+    └──requires──> remove `DefaultIndexURL`, `ErrNotDeployed`, `ErrNotImplemented`
+    └──requires──> remove `Client.Search`, `Client.SearchWithLimit`, HTTP timeout, isNetworkError
+    └──requires──> remove `internal/registry/search.go` (HTTP formatter)
+    └──enhances──> `spin search --json` becomes real (entries populated)
+    └──independent──> test fixtures for valid + invalid registry TOML
 ```
 
 ### Dependency Notes
 
-- **`spin new` requires embedded templates:** No network on first run; no surprises; works in air-gapped environments.
-- **Gum prompts enhance flag parsing, not replace it:** Flags always win; gum is the "what's missing?" fallback. Critical: gum must be a graceful no-op in non-TTY.
-- **`--ai` requires project type:** AGENTS.md content depends on whether it's a TUI app or CLI tool. Order of prompting must be: type → libs → ai.
-- **`--template-repo` conflicts with embedded:** When external repo is provided, embedded templates are ignored for that invocation. Two different code paths in the scaffolder.
-- **Templates require pinned versions:** The scaffolder owns a version matrix (e.g. `bubbletea@v2.0.0`, `lipgloss@v2.0.0`) that is updated at spin release time. No `@latest` floats.
+- **Phase 6 first:** The manager must exist before anything else can read registries.json. The CLI subcommand tree is the user-visible artifact that proves the manager works end-to-end. <alias>/<id> resolution is impossible without a manager.
+- **Phase 7 second:** The index reader needs the manager. The loader's fourth spec kind needs the index reader. `search` and `add` rewires are trivial once both exist.
+- **Phase 8 last:** Removing the HTTP path is a "clean up what we replaced" task. Doing it earlier would block on a half-finished search rewire.
+- **Pin-prompt inheritance:** The existing `promptPinAfterSuccess` (cmd/new.go:251) is wired off `tpl.Repo`. As long as the registry-resolved loader sets `tpl.Repo` from the metadata `source` field (NOT the local registry cache path), the prompt fires automatically. This means the prompt is NOT a new feature -- it's a verification that the existing hook continues to work for the new spec kind.
+- **Reuse of existing helpers:** `expandHome`, `copyDir`, `os.Symlink`, `gitHeadSHA`, `SanitiseRepoName`, `writePinned` -- all reusable. The git clone path for registries is identical to the existing `addGit` minus the `templates/` subdirectory destination. Strong DRY case for a small helper in `internal/registry/source.go`.
+- **No new deps:** TOML via `github.com/BurntSushi/toml` (already in go.mod for `internal/template/spin_toml.go`). Git operations via `os/exec`. No external registry clients (the whole pitch).
 
 ---
 
 ## MVP Definition
 
-### Launch With (v1) -- everything in PROJECT.md Active
+### Launch With (v2.x)
 
-These are non-negotiable. `spin new myapp --tui --bubbletea --ai` must work, end-to-end, on first try.
+These are non-negotiable. The milestone is incomplete without every one.
 
-- [ ] `spin new <name>` with project-name validation
-- [ ] Top-level umbrella flags: `--tui`, `--cli`, `--all` (plus `--ssh` orthogonal)
-- [ ] Per-library subflags for charm v2 libs (bubbletea, bubbles, huh, lipgloss, ansi, runewidth, modifiers, glamour, wish, log, harmonica, glamour)
-- [ ] `--cobra` (default on) and `--fang` (default on) for CLI projects; `--viper` opt-in
-- [ ] `--template <name>` (bundled variants: `tui-minimal`, `tui-bubbletea`, `cli-cobra-fang`, `ssh-bubbletea`, `crush-agent`)
-- [ ] `--template-repo <url>` external override
-- [ ] `--ai` / `--agents` generates `AGENTS.md`
-- [ ] `spin run` (auto-detect air)
-- [ ] `spin build` (→ `bin/`)
-- [ ] `spin test` (prism with go test fallback)
-- [ ] `spin vet` (wraps `go vet`)
-- [ ] `spin fmt` (gofumpt + goimports, with fallbacks)
-- [ ] Interactive gum prompts (TTY only, flag-driven otherwise)
-- [ ] Generated project: `.air.toml`, `Taskfile.yml`, `go.mod` with pinned v2 deps, working example
-- [ ] Fang-styled `--help` and error output (dogfooded)
-- [ ] Embedded templates via `go:embed` (offline default)
-- [ ] No-CGO guarantee (`CGO_ENABLED=0` builds clean)
-- [ ] `--license` and `--module` (so users can self-identify the project)
-- [ ] `--no-interactive` to force flag-only
+- [ ] `spin registry add <alias> <source>` -- works for local path AND git URL
+- [ ] `spin registry list` -- shows alias, source, kind, cache path, template count
+- [ ] `spin registry update [alias]` -- git pull per registry, no-op for local
+- [ ] `spin registry remove <alias>` -- deletes entry + cache
+- [ ] `spin search <query>` reads local TOML only (HTTP path deleted in Phase 8)
+- [ ] `<alias>/<id>` accepted by `spin add` and `spin new` (4th spec kind)
+- [ ] Registry metadata validation (registry.toml + templates/*.toml)
+- [ ] Invalid-metadata reporting during `spin registry update`
+- [ ] `pin.json` format unchanged (backward compat with existing v2.0 pins)
+- [ ] Pin-prompt fires on registry-resolved `spin new` (regression test for promptPinAfterSuccess)
+- [ ] Alias collision + format check on `registry add`
+- [ ] `registries.json` atomic writes
+- [ ] `spin registry remove` refuses if pinned templates depend on the registry
+- [ ] Drop HTTP client + env vars + `ErrNotDeployed` + `DefaultIndexURL`
+- [ ] `spin search --json` populates `entries` (no longer a skeleton)
+- [ ] `spin registry list --json` for scripting
 
-### Add After Validation (v1.x)
+### Add After Validation (v2.x+)
 
-Add once the core scaffold is trusted and the first wave of users has run it.
+- [ ] `spin registry update --quiet` for CI friendliness
+- [ ] `last_updated` timestamp per registry (cheap; nice UX)
+- [ ] `--registry <alias>` flag on `spin search` to scope results
+- [ ] `spin registry info <alias>` (debug aid: show resolved paths, last error, etc.)
+- [ ] `spin registry doctor` (walk every registry, report health)
 
-- [ ] `--update` re-applies non-conflicting changes from a template to an existing project (after settling on a merge strategy)
-- [ ] `~/.spin.yaml` config (if flag fatigue is real)
-- [ ] `spin add <lib>` adds a library to an existing project (post-scaffold dependency injection)
-- [ ] `spin doctor` checks generated project for common issues (outdated deps, missing .air.toml, etc.)
-- [ ] VHS tape for the README demo (since `vhs` is a charm product)
-- [ ] GitHub Action to run `spin` in CI (use `spin` itself to verify the templates compile)
+### Future Consideration (v3+)
 
-### Future Consideration (v2+)
-
-Defer until spin has product-market fit.
-
-- [ ] Template marketplace / registry (hosted or self-hosted)
-- [ ] Plugin system (custom scaffolder types)
-- [ ] CI generation as opt-in
-- [ ] Dockerfile generation as opt-in
-- [ ] Multi-language support (Rust, TS, Python) -- likely never; spin is the *charm* scaffolder
-- [ ] Cloud execution / `spin deploy`
-- [ ] Auto-update mechanism (use Go's `go install`; consider `charm.land`-style)
-- [ ] TUI mode for the scaffolder itself (anti-feature in v1; revisit only if gum prompts prove insufficient)
+- [ ] Cross-device sync of registries (out of scope; user's dotfiles)
+- [ ] Registry server / HTTP API (anti-feature; defer indefinitely)
+- [ ] Authenticated registry login (covered by git credentials today)
+- [ ] Registry schema versioning + migration tooling (premature)
+- [ ] `spin.lock` pinning registry commit SHAs (premature)
+- [ ] Web UI for browsing registries (anti-feature per PROJECT.md)
+- [ ] Built-in default registry (couples spin to specific org)
+- [ ] Auto-update on `spin search` (hostile to offline users)
+- [ ] Cache layer for search results (unnecessary; reads are fast)
 
 ---
 
@@ -253,86 +177,134 @@ Defer until spin has product-market fit.
 
 | Feature | User Value | Implementation Cost | Priority |
 |---------|------------|---------------------|----------|
-| `spin new <name>` with go.mod | HIGH | LOW | P1 |
-| Per-library subflags + umbrella flags | HIGH | LOW | P1 |
-| Cobra + fang + gum in scaffolder itself | HIGH | MEDIUM | P1 |
-| Bundled templates (tui, cli, ssh, crush) | HIGH | MEDIUM | P1 |
-| Embedded templates (offline) | HIGH | LOW | P1 |
-| Working example per template (compiles, runs) | HIGH | MEDIUM | P1 |
-| `.air.toml` + `Taskfile.yml` generated | HIGH | LOW | P1 |
-| `spin run` / `build` / `test` / `vet` / `fmt` | HIGH | LOW | P1 |
-| Interactive gum prompts (TTY-aware) | MEDIUM | MEDIUM | P1 |
-| `--ai` / `AGENTS.md` | MEDIUM | LOW | P1 |
-| `--template-repo <url>` | MEDIUM | MEDIUM | P1 |
-| Fang-styled help/error | MEDIUM | LOW | P1 |
-| License + module override | MEDIUM | LOW | P1 |
-| `--no-interactive` | MEDIUM | LOW | P1 |
-| `~/.spin.yaml` config | LOW | LOW | P3 |
-| `spin add <lib>` post-scaffold | MEDIUM | HIGH | P2 |
-| VHS demo tape | LOW | LOW | P2 |
-| `spin doctor` | MEDIUM | MEDIUM | P2 |
-| Template marketplace | LOW (until v2) | HIGH | P3 |
-| Plugin system | LOW (until v2) | HIGH | P3 |
-| CI/Dockerfile generation | LOW | MEDIUM | P3 (anti-feature for v1) |
-| TUI mode for scaffolder | LOW | MEDIUM | Anti (out of scope) |
-| Multi-language scaffolds | LOW | HIGH | Anti (out of scope) |
+| `spin registry add` (local + git) | HIGH | LOW | P1 |
+| `spin registry list` | HIGH | LOW | P1 |
+| `spin registry update` | HIGH | MEDIUM | P1 |
+| `spin registry remove` | HIGH | LOW | P1 |
+| `spin search` rewire to local TOML | HIGH | MEDIUM | P1 |
+| `<alias>/<id>` in `add` and `new` | HIGH | MEDIUM | P1 |
+| Registry metadata validation | HIGH | MEDIUM | P1 |
+| Invalid-metadata reporting | HIGH | LOW | P1 |
+| Pin-prompt on registry-resolved `new` | HIGH | LOW | P1 (regression test) |
+| Drop HTTP code (Phase 8) | HIGH | LOW | P1 |
+| Alias collision + format check | MEDIUM | LOW | P1 |
+| `registries.json` atomic writes | MEDIUM | LOW | P1 |
+| `registry remove` refuses dependent pins | MEDIUM | LOW | P1 |
+| `spin search --json` populated entries | MEDIUM | LOW | P1 |
+| `spin registry list --json` | MEDIUM | LOW | P1 |
+| `spin registry update --quiet` | MEDIUM | LOW | P2 |
+| `last_updated` per registry | LOW | LOW | P2 |
+| `--registry <alias>` filter on search | MEDIUM | LOW | P2 |
+| `spin registry info <alias>` | LOW | LOW | P2 |
+| `spin registry doctor` | LOW | MEDIUM | P3 |
+| Centralised registry server | LOW (until needed) | HIGH | Anti (defer) |
+| Cross-device sync | LOW | HIGH | Anti (out of scope) |
+| Registry login / auth | LOW | MEDIUM | Anti (git covers it) |
+| Built-in default registry | LOW | LOW | Anti (couples spin to org) |
+| Web UI for registries | LOW | HIGH | Anti (out of scope per PROJECT.md) |
+| Auto-update on search | LOW | MEDIUM | Anti (hostile to offline) |
+| Search results cache | LOW | MEDIUM | Anti (premature) |
+| Registry schema versioning | LOW | MEDIUM | Anti (premature) |
+| `spin.lock` registry SHAs | LOW | MEDIUM | Anti (premature) |
 
 **Priority key:**
-- P1: Must have for v1 launch
-- P2: Should have, add in v1.x after validation
+- P1: Must have for v2.x milestone launch
+- P2: Should have, add when budget allows
 - P3: Nice to have, future consideration (or never)
 
 ---
 
-## Competitor Feature Analysis
+## Validation Rules Summary
 
-| Feature | `cargo new` | `npm init` | `cobra-cli init` | `cookiecutter` | `spring initializr` | `spin` (planned) |
-|---------|-------------|------------|------------------|----------------|---------------------|------------------|
-| Generates a runnable project | yes | yes | yes (cobra only) | yes (templated) | yes | yes (templated, opinionated) |
-| Flag-only mode | yes | yes | yes | yes | yes (URL-encoded flags) | yes |
-| Interactive prompts | no (uses defaults) | yes (wizard) | no | no (uses prompts.json) | yes (web UI / CLI flag builder) | yes (gum, TTY-aware) |
-| Multiple templates / variants | no | no | no | yes (any) | yes (Spring Starters) | yes (bundled + `--template-repo`) |
-| Per-library flags (add libs at scaffold time) | no | no | no | no | yes (Spring Starters) | yes (the differentiator) |
-| Wraps `go build` / `go test` etc. | no | no | no | no | no | yes (`spin run`/`build`/`test`/`vet`/`fmt`) |
-| AI-assistant context (`AGENTS.md`) | no | no | no | no | no | yes (opt-in `--ai`) |
-| External template override | no | no | no | yes (point at any repo) | no | yes (`--template-repo`) |
-| Offline by default | yes | yes | yes | yes | no (requires server) | yes (embedded) |
-| Hot-reload (air / similar) wired | no | no | no | no | yes (spring-boot-devtools) | yes (`.air.toml` + `spin run` detects it) |
-| Formatter wraps stricter-than-default tool | no | no | no | no | no | yes (`gofumpt` via `spin fmt`) |
-| Colored/styled output (charm-flavored) | n/a | n/a | no | no | no | yes (fang + lipgloss) |
-| **Friction to first `go run` success** | 1 cmd | 1 cmd + install | 1 cmd | 1 cmd + prompts.json | 1 cmd (or web) | 1 cmd (`spin new myapp --tui --bubbletea`) |
+Centralised here so phase planning can split these between index reader and update reporter.
 
-**Positioning:** `spin` is to Go what `spring initializr` is to Java -- opinionated, library-aware, gives you a runnable starting point. But unlike Spring Initializr, `spin` is local-first, has zero server cost, and dogfoods the same stack it scaffolds. The closest direct competitor is `cobra-cli init`, but that one is CLI-only and one-shape-fits-all; `spin` is multi-shape (TUI/CLI/SSH) and library-aware.
+### Registry-level (`registry.toml`)
+
+- File exists at `<cache>/registry.toml`. Missing -> registry is invalid; refuse to register at `add` time, report at `update` time.
+- TOML parses. Parse error -> invalid; same reporting.
+- Required fields present: `id`, `name`. Optional: `description`, `homepage`, `maintainer`, `license`.
+- `templates/` directory exists. Missing -> invalid.
+
+### Template-level (`<cache>/templates/*.toml`)
+
+- File exists and TOML parses. Parse error -> skip file, increment counter, collect error.
+- Required fields present: `id`, `name`, `source`. Optional: `description`, `tags`, `authors`, `license`, `homepage`, `language`, `type`, `version`, `updated_at`, `downloads`.
+- `source` is non-empty and matches one of: local path (`/`, `.`, `~` prefix), git URL (scheme prefix), or `<alias>/<id>` shorthand. Anything else -> skip with "unresolvable source" error.
+- `id` is unique within the registry. Duplicate -> skip the SECOND occurrence, report both.
+
+### Cross-cutting
+
+- Alias uniqueness across `registries.json`. Enforced at `registry add` (refuse collision without `--force`).
+- Alias format: no `/`, no whitespace, no `..`, no path separator. Enforced at `registry add`.
+- Alias length: 1-64 chars. Reasonable upper bound.
+
+### Error Reporting UX (during `spin registry update`)
+
+For each registry, after update completes, print ONE line:
+
+```
+<alias>: updated <n> templates, skipped <m> (registry)
+<alias>: updated <n> templates, skipped <m> (local)         # local is always "updated 0, skipped 0"
+<alias>: failed to update: <error>                         # git pull failed
+<alias>: invalid registry: <reason>                        # registry.toml missing/malformed
+```
+
+Followed by per-file errors (capped at 5 per registry to avoid log spam):
+
+```
+  templates/foo.toml: missing required field 'source'
+  templates/bar.toml: duplicate id 'go-api' (also in templates/baz.toml)
+  templates/baz.toml: TOML parse error: ...
+```
+
+Exit code: 0 if at least one registry updated successfully and no fatal errors; 1 if ALL registries failed (debatable -- phase decision). Per-registry warnings never abort the run.
+
+---
+
+## Migration & Compatibility Notes
+
+These are not features per se but are constraints the implementation MUST honour.
+
+- **`pinned.json` format unchanged.** Existing v2.0 pins (Name, Source, PinnedAt, Version, LocalPath, Removed) keep working. Phase 7's <alias>/<id> resolver returns the same `Pinned` shape that `addGit` / `addLocal` return today.
+- **No `SPIN_REGISTRY_URL` or `SPIN_REGISTRY` env var.** Drop them in Phase 8. If a user has either set, ignore it silently (don't break their shell env). Document in changelog.
+- **First-run UX.** A user with no registries registered who runs `spin search foo` should get a helpful hint, not just "0 results". Print: "no registries registered; run `spin registry add <alias> <git-or-path>` to add one" then exit 0.
+- **Tests must not regress.** `internal/registry/client_test.go` and `internal/template/loader_test.go` cover the v2.0 surface. Phase 8 removes HTTP tests; all other tests must keep passing unchanged. The new <alias>/<id> path needs fresh fixtures under `internal/registry/testdata/registry-{valid,invalid,duplicate-id}/`.
+
+---
+
+## Open Questions for Phase Decisions
+
+These are spec-ambiguous. Flag for the requirements doc or first-phase discussion.
+
+1. **Sort order in `spin search`:** alphabetical by id, or relevance scoring? Spec silent. Recommend relevance scoring with id tie-break; document the rule.
+2. **`spin registry update` exit code on partial failure:** 0 if any succeeded, 1 if all failed, or always 0 (warning-only)? Recommend: 0 if any registry updated successfully OR any registry had at least one valid template; 1 only if EVERY registry is invalid/missing.
+3. **Duplicate-id behaviour:** Skip second occurrence (recommended for safety), or refuse to register the registry at all? Recommend: skip + report, never block.
+4. **Private git registry URLs:** Just works via existing git credential helpers? Or warn on `https://` without a credential helper? Recommend: works as-is; spec is silent on auth, and the existing `GIT_TERMINAL_PROMPT=0` is preserved.
+5. **`spin registry add` of a registry that is the parent dir of an existing template:** Allowed? The user's mental model might say "my repo has a subdir that is also a registry". Recommend: allow; the resolver sees `registry.toml` at root and registers as registry.
+6. **`downloads` field on indexed entries:** Always 0 in v2.x, or omit entirely? Spec lists it in `Entry` but no metric to populate it. Recommend: omit from display; include field in JSON as 0 for forward compatibility.
 
 ---
 
 ## Sources
 
-**Verified via Context7 (HIGH confidence):**
-- [charmbracelet/bubbletea -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/bubbletea/v2`
-- [charmbracelet/lipgloss -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/lipgloss/v2`
-- [charmbracelet/bubbles -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/bubbles/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import paths for all 14 component subpackages
-- [charmbracelet/huh -- README.md](https://github.com/charmbracelet/huh/blob/main/README.md) -- confirmed v2 import path `charm.land/huh/v2`
-- [charmbracelet/wish -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/wish/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/wish/v2` and middleware subpaths
-- [charmbracelet/log -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/log/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/log/v2`
-- [charmbracelet/glamour -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/glamour/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/glamour/v2`
-- [charmbracelet/fang -- UPGRADE_GUIDE_V2.md](https://github.com/charmbracelet/fang/blob/main/UPGRADE_GUIDE_V2.md) -- confirmed v2 import path `charm.land/fang/v2` and `fang.Execute(ctx, cmd)` usage
-- [charmbracelet/bubbletea-app-template -- README & llms.txt](https://github.com/charmbracelet/bubbletea-app-template) -- confirmed reference project structure: `.github/workflows/build.yml`, `.github/workflows/release.yml` (GoReleaser), `.golangci.yml` (thelper, gofumpt, tparallel, unconvert, unparam, wastedassign), `.goreleaser.yaml` (CGO_ENABLED=0, `go_first_class` targets, changelog groups), `.github/dependabot.yml` (gomod + github-actions weekly groups)
-- [charmbracelet/gum -- README.md](https://github.com/charmbracelet/gum/blob/main/README.md) -- confirmed `gum input`, `gum confirm`, `gum choose` for interactive prompts
-- [charmbracelet/x -- llms.txt](https://context7.com/charmbracelet/x/llms.txt) -- confirmed `ansi`, `modifiers`, `runewidth` packages under `github.com/charmbracelet/x`
-- [spf13/cobra -- README.md & user_guide.md](https://github.com/spf13/cobra) -- confirmed `cobra-cli` scaffolder structure (`init`, `add`, `--author`, `--license`, `--viper`); no v2 path for cobra itself
-
-**Other (MEDIUM confidence):**
-- [charm.land/](https://charm.land/) -- official charmbracelet landing; lists all major libraries (Bubble Tea, Lip Gloss, Bubbles, Huh, Wish, Log, Glamour, Harmonica, Glow, gum, Crush, Mods, Skate)
-- [github.com/charmbracelet](https://github.com/charmbracelet) -- confirmed 54 repos in org; pinned repos include bubbletea (42.8k), lipgloss (11.4k), bubbles (8.4k), huh (6.9k), wish (5.2k), freeze (4.6k), vhs (19.8k), glow (25.6k), gum (23.8k), crush (24.9k), catwalk (725), fantasy (786)
-- [start.spring.io](https://start.spring.io/) -- Spring Initializr, the closest analog to `spin`'s per-library flag concept (Spring Starters)
-- [github.com/spf13/cobra-cli](https://github.com/spf13/cobra-cli) -- competitor analysis: subcommand scaffolder for cobra projects
-
-**Inferred from PROJECT.md (authoritative for scope):**
-- All Out of Scope items in PROJECT.md (online registry, plugin system, auto-update, CI generation, Dockerfile, remote execution, TUI mode for scaffolder, non-charm frameworks, non-Go languages) confirmed as anti-features.
-- All Active requirements in PROJECT.md mapped to P1 features in MVP.
+- `spin-registry.md` (project root, 2026-07-03) -- the spec under research; HIGH confidence, single source of truth
+- `.planning/PROJECT.md` (Current Milestone: v2.x local-registry, Constraints) -- scope and constraints; HIGH confidence
+- `.planning/PROJECT.md` (v2.x Pivot 2026-06-10) -- rationale for templates-as-only-extension-surface; HIGH confidence
+- `internal/registry/client.go` -- existing pin/unpin/list/refresh paths to reuse; HIGH confidence (direct read)
+- `internal/registry/types.go` -- existing Pinned, Entry, SearchResult shapes; HIGH confidence (direct read)
+- `internal/registry/search.go` -- existing HTTP-only formatter to delete in Phase 8; HIGH confidence (direct read)
+- `internal/template/loader.go` -- existing spec detection (local / git / pinned); site of the 4th spec kind; HIGH confidence (direct read)
+- `internal/template/template.go` -- Detect + Render + post-hook; what registry-resolved templates must satisfy; HIGH confidence (direct read)
+- `cmd/search.go` -- current HTTP-using search, to be rewired; HIGH confidence (direct read)
+- `cmd/add.go` -- current Add path, to accept `<alias>/<id>`; HIGH confidence (direct read)
+- `cmd/new.go` (runNew, promptPinAfterSuccess at line 251) -- pin-prompt logic the registry path must preserve; HIGH confidence (direct read)
+- `cmd/list.go` -- table + `--json` UX pattern for `spin registry list`; HIGH confidence (direct read)
+- `cmd/update.go` -- rollback + summary + warn-on-fail pattern for `spin registry update`; HIGH confidence (direct read)
+- `cmd/remove.go` -- soft-delete + `--purge` pattern; matches the "remove refuses if dependent pins" anti-feature resolution; HIGH confidence (direct read)
+- `docs/commands/search.md` -- current search semantics being replaced (v2.0 HTTP stub); HIGH confidence (direct read)
+- `.planning/research/FEATURES.md` (2026-06-02) -- prior research, including the anti-feature precedents ("online template marketplace / registry" listed as anti-feature in v1); HIGH confidence (direct read)
 
 ---
 
-*Feature research for: spin -- charmbracelet v2 Go scaffold CLI*
-*Researched: 2026-06-02*
+*Feature research for: spin v2.x local-registry milestone*
+*Researched: 2026-07-03*

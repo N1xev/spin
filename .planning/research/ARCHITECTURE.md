@@ -1,484 +1,534 @@
-# Architecture Research
+# Architecture Research: spin v2.x local-registry
 
-**Domain:** Go project scaffold CLI (charmbracelet v2 flavor)
-**Researched:** 2026-06-02
-**Confidence:** HIGH
+**Domain:** CLI scaffolder, zero-backend template registry
+**Researched:** 2026-07-03
+**Confidence:** HIGH (architecture is already constrained by `spin-registry.md`; integration points are derived from existing code paths)
 
-## Standard Architecture
+## Scope
 
-### System Overview
+This file answers how the new registry **Manager**, **Index**, and **Resolve** layers integrate with the existing `internal/template/loader.go` and `internal/registry/client.go`, per the spec at `spin-registry.md`. The HTTP-based registry stub is replaced by a local index built from cloned/symlinked registry directories.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                       CLI Layer (cobra + fang)                       │
-│   rootCmd  ─┬─ new    (scaffold pipeline)                            │
-│             ├─ run    (wraps air / go run)                           │
-│             ├─ build  (wraps go build)                               │
-│             ├─ test   (wraps prism / go test)                        │
-│             ├─ vet    (wraps go vet)                                 │
-│             └─ fmt    (wraps gofumpt + goimports)                    │
-├─────────────────────────────────────────────────────────────────────┤
-│                       Flag & State Layer                             │
-│   Project struct  ←── flags ──→ interactive layer (gum)              │
-│   (validated, resolved: libs, type, template, ai)                    │
-├─────────────────────────────────────────────────────────────────────┤
-│   Interactive Layer        │   Template Engine                       │
-│   gum subprocess wrapper   │   go:embed.FS  +  text/template         │
-│   (auto-detected; falls    │   (base + variant + library overlays)   │
-│    back to flags or stdin) │                                          │
-├─────────────────────────────────────────────────────────────────────┤
-│   Wrapper Layer              │   AI / AGENTS Layer                   │
-│   run/build/test/vet/fmt     │   internal/agents  →  AGENTS.md       │
-│   (thin shims; detect tool   │   (template + project metadata)       │
-│    on PATH, fail soft)       │                                          │
-├─────────────────────────────────────────────────────────────────────┤
-│                       Filesystem Sink                                │
-│   ./<name>/  ── go.mod, main.go, .air.toml, Taskfile, AGENTS.md     │
-└─────────────────────────────────────────────────────────────────────┘
-```
+The existing v2.0 split is:
+- `internal/registry/client.go` -- **two responsibilities glued together**: HTTP client (`Search`, `IndexURL`, `HTTP`, `ErrNotDeployed`) and local pin state (`Add`/`Pin`/`Unpin`/`Purge`/`Refresh`/`ListPinned`/`PinnedPath`).
+- `internal/template/loader.go` -- resolves a spec (local path / git URL / pinned name) into a `*Template`.
 
-### Component Responsibilities
+The v2.x split is:
+- `internal/registry/manager.go` -- **new**. CRUD over `registries.json` + the on-disk registries tree (`~/.config/spin/registries/<alias>/`).
+- `internal/registry/index.go` -- **new**. Reads `templates/*.toml` from each registered registry, validates, builds an in-memory `Index`.
+- `internal/registry/resolve.go` -- **new**. Parses `<alias>/<id>` and produces a resolved source spec (URL or local path) ready for `template.Loader.Load`.
+- `internal/registry/pin.go` -- **renamed from `client.go`** (HTTP pieces deleted). Holds `Pin`, `Unpin`, `Purge`, `Refresh`, `ListPinned`, `ListAllPinned`, `PinnedPath`, `writePinned`, `addLocal`, `addGit`, `SanitiseRepoName`, `isLocalPath`, `isGitURL`, `expandHome`, `copyDir`, `gitHeadSHA`. No HTTP, no `IndexURL`, no `Search`, no `ErrNotDeployed`.
+- `internal/registry/search.go` -- **deleted** (replaced by index-driven local search).
+- `internal/registry/types.go` -- **modified**: drop `Entry`, `SearchResult`, `DefaultIndexURL`, `ErrNotDeployed`, `ErrNotImplemented`. Add `Registry`, `RegistriesConfig`, `TemplateMetadata`, `Resolved`.
 
-| Component | Responsibility | Implementation |
-|-----------|----------------|----------------|
-| `cmd/root.go` | Cobra root, version, fang wiring | `fang.Execute(ctx, rootCmd)` |
-| `cmd/new.go` | `spin new` subcommand -- calls scaffold pipeline | cobra `RunE` → `scaffold.New(opts)` |
-| `cmd/run.go` | `spin run` -- detects `.air.toml`, falls back to `go run` | exec.CommandContext |
-| `cmd/build.go` | `spin build` -- `go build -o bin/<name>` | exec.CommandContext |
-| `cmd/test.go` | `spin test` -- `prism` if on PATH, else `go test` | exec.LookPath + exec.Command |
-| `cmd/vet.go` | `spin vet` -- `go vet ./...` | exec.CommandContext |
-| `cmd/fmt.go` | `spin fmt` -- `gofumpt` → `goimports` → `go fmt` fallback chain | exec.LookPath chain |
-| `internal/scaffold` | Template loading, rendering, file emission | `embed.FS` + `text/template` |
-| `internal/scaffold.Project` | Strongly-typed resolved scaffold config (libs, type, template name, ai on/off) | struct passed to `template.Execute` |
-| `internal/interactive` | gum subprocess wrapper; collects missing flags | `os/exec` against `gum` binary |
-| `internal/agents` | Render `AGENTS.md` from project metadata | template, gated by `--ai` |
-| `templates/` | Embedded template tree (base + variants + per-library files) | `//go:embed all:templates` |
-| `internal/version` | Version metadata (fang's `--version` requires it) | `var` populated via `-ldflags` |
+## Storage Layout
 
-## Recommended Project Structure
+```text
+~/.config/spin/                     (XDG_CONFIG_HOME-aware; os.UserConfigDir)
++-- pinned.json                     # unchanged: pin records consumed by Pin/Unpin/Refresh
++-- templates/                      # unchanged: pinned template clones (LocalPath root)
+|   +-- go-cli/                     # pinned template (was a git URL)
+|   +-- foo/                        # pinned template (was a local path symlink)
++-- registries/                     # NEW: per-registry local clones / symlinks
+    +-- official/                   # git clone of the registry repo
+    |   +-- registry.toml
+    |   +-- templates/
+    |       +-- go-api.toml         # id = "spin/go-api"
+    |       +-- rust-cli.toml
+    +-- company/                    # symlink to a local path the user passed to `spin registry add`
+        +-- registry.toml
+        +-- templates/
+            +-- billing-api.toml
 
-```
-spin/
-├── main.go                       # entrypoint: fang.Execute(ctx, rootCmd)
-├── go.mod                        # module charm.land/spin/v2
-├── go.sum
-├── README.md
-├── LICENSE
-├── Taskfile.yml                  # self-dogfooding -- uses spin-like tasks
-├── Makefile                      # alt entry, mirrors Taskfile
-├── .air.toml                     # for `spin run` in spin's own dev
-├── .gitignore
-│
-├── cmd/
-│   ├── root.go                   # cobra root + fang + version
-│   ├── new.go                    # spin new (scaffold entrypoint)
-│   ├── run.go                    # spin run
-│   ├── build.go                  # spin build
-│   ├── test.go                   # spin test
-│   ├── vet.go                    # spin vet
-│   └── fmt.go                    # spin fmt
-│
-├── internal/
-│   ├── scaffold/
-│   │   ├── scaffold.go           # pipeline: New(opts) → Project.Render() → emit
-│   │   ├── project.go            # Project struct (resolved config)
-│   │   ├── template.go           # embed.FS walk, template parsing
-│   │   ├── renderer.go           # text/template execution + funcMap
-│   │   ├── emit.go               # write files, set perms, mkdir -p
-│   │   ├── hooks.go              # post-scaffold hooks (go mod tidy, etc.)
-│   │   └── git.go                # `git init` the new project
-│   ├── interactive/
-│   │   ├── gum.go                # gum binary detection + exec helpers
-│   │   ├── prompts.go            # askProjectType, askLibs, askTemplate, askAI
-│   │   └── fallback.go           # stdin/flag fallback if gum absent
-│   ├── wrappers/
-│   │   ├── run.go                # air? → go run
-│   │   ├── build.go              # go build -o bin/<name>
-│   │   ├── test.go               # prism? → go test
-│   │   ├── vet.go                # go vet ./...
-│   │   ├── fmt.go                # gofumpt → goimports → go fmt chain
-│   │   └── tool.go               # exec.LookPath helper
-│   ├── agents/
-│   │   ├── agents.go             # render AGENTS.md from Project
-│   │   └── detect.go             # detect libs → populate context for AI
-│   └── version/
-│       └── version.go            # Version, Commit, Date (ldflags-injected)
-│
-├── templates/                    # go:embed source
-│   ├── _base/                    # always rendered
-│   │   ├── go.mod.tmpl
-│   │   ├── README.md.tmpl
-│   │   ├── .air.toml.tmpl
-│   │   ├── .gitignore.tmpl
-│   │   ├── Taskfile.yml.tmpl
-│   │   ├── Makefile.tmpl
-│   │   ├── AGENTS.md.tmpl        # consumed by internal/agents
-│   │   └── main.go.tmpl          # bare-bones entry; replaced by variant
-│   ├── variant_tui/              # --tui
-│   │   └── main.go.tmpl
-│   ├── variant_cli/              # --cli (cobra + fang)
-│   │   ├── main.go.tmpl
-│   │   └── cmd/root.go.tmpl
-│   ├── variant_all/              # --all (TUI + CLI combo)
-│   │   └── main.go.tmpl
-│   └── lib/                      # per-charm-library overlays
-│       ├── bubbletea.go.tmpl     # wired into main.go via #include-style
-│       ├── lipgloss.go.tmpl
-│       ├── huh.go.tmpl
-│       ├── glamour.go.tmpl
-│       ├── glow.go.tmpl
-│       ├── wish.go.tmpl
-│       ├── log.go.tmpl
-│       ├── crush.go.tmpl
-│       ├── modifiers.go.tmpl
-│       ├── ansi.go.tmpl
-│       ├── runewidth.go.tmpl
-│       ├── cobra.go.tmpl
-│       ├── fang.go.tmpl
-│       └── viper.go.tmpl
-│
-└── .planning/                    # gsd metadata, not shipped
+~/.config/spin/registries.json      # NEW: config + bookkeeping
+# {
+#   "registries": [
+#     {"alias": "official", "source": "https://github.com/spin-org/registry", "kind": "git",  "path": "~/.config/spin/registries/official", "added_at": "..."},
+#     {"alias": "company",  "source": "/opt/company-registry",            "kind": "local","path": "~/.config/spin/registries/company",  "added_at": "..."}
+#   ]
+# }
 ```
 
-### Structure Rationale
+Key constraint: `pinned.json` format is unchanged so every existing pin keeps working (`PROJECT.md` validated requirement).
 
-- **`cmd/`** -- thin cobra subcommand files. Each subcommand is one file. Flag declarations live with the subcommand; the resolver/validator is in `internal/scaffold`. Keeps cobra idiomatic and matches `cobra-cli init` convention.
-- **`internal/scaffold/`** -- owns the entire pipeline: parse → render → emit → init git. Single importable surface. `Project` struct is the contract between flag parsing and template rendering -- avoids passing 30 args through.
-- **`internal/interactive/`** -- gum lives behind an interface. The scaffold pipeline never knows whether flags came from CLI or gum. If gum is missing, fallback to `os.Stdin` reads or fail with a clear message. Easy to swap to `huh` later (see Patterns).
-- **`internal/wrappers/`** -- one file per wrapped command. Each is a pure function `(projectRoot, args) error`. The `cmd/<x>.go` file just calls into the wrapper. Trivial to test in isolation.
-- **`internal/agents/`** -- separated so AGENTS.md rendering can evolve independently (e.g., one day support Cursor's `.cursorrules` or Copilot's `.github/copilot-instructions.md`) without touching the scaffold pipeline.
-- **`templates/_base/`** -- files rendered for every project. `_base/main.go.tmpl` is the placeholder overwritten by the selected variant.
-- **`templates/variant_*/`** -- one per top-level project type. Only `main.go.tmpl` differs; everything else is inherited from `_base`.
-- **`templates/lib/`** -- per-library overlays. Each lib template is a snippet (struct/import/wiring) merged into `main.go` via a template `{{define}}` block, not a standalone file. This avoids 200-line `if/else` trees inside `main.go.tmpl`.
+## Component Responsibilities
 
-## Architectural Patterns
+| Component | Responsibility | Communicates With |
+|-----------|----------------|-------------------|
+| `cmd/registry.go` (new) | Cobra subcommands: `registry add/list/update/remove` | `registry.Manager` |
+| `cmd/search.go` (modified) | Iterate every registry's `templates/*.toml` via `registry.Index`, filter, format | `registry.Index`, `registry.Manager` |
+| `cmd/add.go` (modified) | Accept `<alias>/<id>` shorthand, resolve via `registry.Resolve`, then delegate to existing `Client.Pin`/`Add` flow | `registry.Resolve`, `registry.Manager` (for index lookup), `pin.go` |
+| `cmd/new.go` (modified) | Accept `<alias>/<id>` shorthand in `--template` / positional, resolve to a local path or git URL, hand off to `template.Loader.Load` | `registry.Resolve`, `template.Loader` |
+| `cmd/list.go` (modified) | List pinned (existing) + optionally list registered registries via `registry.Manager.List` | `pin.go`, `registry.Manager` |
+| `cmd/update.go` (modified) | Re-clone/symlink registries (new) in addition to refreshing pinned templates (existing) | `registry.Manager.Refresh`, `pin.go` |
+| `cmd/remove.go` (unchanged) | Remove pinned templates (existing behaviour) | `pin.go` |
+| `registry.Manager` (new) | CRUD over `registries.json`. Clone (git) or symlink (local) into `registries/<alias>/`. Refresh / remove a registry. Resolve an alias to its on-disk path. | filesystem |
+| `registry.Index` (new) | Build an in-memory snapshot of every `templates/*.toml` under every registry dir. Validate; drop invalid. Filter by query string. | `registry.Manager` (to enumerate registries) |
+| `registry.Resolve` (new) | Parse `<alias>/<id>`. Return the source spec (URL or path) + `LocalPath` (registry dir, not the template itself). | `registry.Manager`, `registry.Index` |
+| `pin.go` (renamed `client.go`) | Pin state + clone/copy logic only. Exposes `Add`, `Pin`, `Unpin`, `Purge`, `Refresh`, `ListPinned`, `ListAllPinned`, `PinnedPath`. | filesystem, git |
+| `template.Loader` (modified) | `Load(spec)` now accepts an additional source kind: a resolved `SourceSpec` from `registry.Resolve`. Keep `isLocalPath` / `isGitURL` / `loadPinned` / `cloneGit`. | `pin.go` (read pinned), git, filesystem |
 
-### Pattern 1: Embed-First Template Engine with Variant + Overlay Composition
+## Integration Points (per CLI command)
 
-**What:** A `go:embed` rooted at `templates/` exposes a virtual filesystem. At scaffold time, walk the tree: copy `_base/*` first, then overwrite with `variant_<chosen>/*`, then `lib/<each>/*` (last-write-wins). Text rendering happens via `text/template` against the `Project` struct.
-
-**When to use:** Always for spin -- this is the core mechanism. The variant+overlay split keeps templates small and combinable; adding a new library is one file in `templates/lib/`.
-
-**Trade-offs:**
-- Pro: zero template-engine dependency, composable, testable in isolation.
-- Pro: variant + overlay matches how charm libs combine (any subset, any combo).
-- Con: file name collisions in overlays need explicit precedence rules. Mitigation: keep overlay files in `lib/` named after the Go file they wire into (`bubbletea.go.tmpl` → renders to `bubbletea.go` and is wired via blank import or init in `main.go`).
-- Con: complex `{{if}}` trees in `main.go.tmpl` for many libs. Mitigation: split per-lib wiring into a separate `_lib_<name>.go` file emitted from `lib/<name>.go.tmpl` and called from `main.go.tmpl` via `lib_<name>.Init(model)`.
-
-**Example (rendering skeleton):**
-```go
-// internal/scaffold/scaffold.go
-type Project struct {
-    Name      string
-    Module    string
-    Type      string // "tui" | "cli" | "all"
-    Libs      []string
-    Template  string
-    AI        bool
-    Viper     bool
-    CharmMajor int
-}
-
-func (p *Project) Render(fsys embed.FS) error {
-    parts := []string{"_base", "variant_" + p.Type}
-    for _, lib := range p.Libs {
-        parts = append(parts, "lib/"+lib)
-    }
-    return fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
-        // overlay: later parts win
-        // run text/template with p as data
-    })
-}
-```
-
-### Pattern 2: gum Subprocess Wrapper with Interface Boundary
-
-**What:** A `prompter` interface in `internal/interactive` with one method per prompt (`Choose`, `Input`, `Confirm`). The default implementation shells out to `gum`; an alternative implementation reads from `os.Stdin` or returns flag-supplied values. The scaffold pipeline depends only on the interface.
-
-**When to use:** Always, because the requirement is gum-driven interactive *and* `--no-interactive` flag-only mode. The interface keeps both paths identical from the caller's perspective.
-
-**Trade-offs:**
-- Pro: gum subprocess is dead-simple, no in-process TUI state to manage.
-- Pro: swapping to `huh` later (in-process, charm-native) is a one-file change.
-- Con: gum must be on PATH for interactive mode. Mitigation: `exec.LookPath("gum")` up front; if absent, print a clear message + offer to install via `go install`.
-- Con: subprocess startup latency per prompt (~50–100 ms). Acceptable for a scaffolder (cold path, user is waiting for prompts anyway).
-
-**Example:**
-```go
-// internal/interactive/gum.go
-type Prompter interface {
-    Choose(title string, options []string, def string) (string, error)
-    Input(title, placeholder, def string) (string, error)
-    Confirm(title string, def bool) (bool, error)
-}
-
-type Gum struct{ Bin string }
-
-func (g *Gum) Choose(title string, opts []string, def string) (string, error) {
-    args := []string{"choose", "--header", title}
-    if def != "" { args = append(args, "--selected", def) }
-    args = append(args, opts...)
-    cmd := exec.Command(g.Bin, args...)
-    out, err := cmd.Output()
-    return strings.TrimSpace(string(out)), err
-}
-```
-
-### Pattern 3: Tool-Wrapper Layer with LookPath Fallback Chain
-
-**What:** Each wrapper (`run`, `build`, `test`, `vet`, `fmt`) is a pure function that takes `(projectRoot string, extraArgs []string) error`. The wrapper does `exec.LookPath` for the preferred tool (e.g., `air`, `prism`, `gofumpt`) and falls back to the standard tool (`go run`, `go test`, `gofmt`) with a one-time warning.
-
-**When to use:** Always -- every wrapper command in PROJECT.md. Keeps `cmd/<x>.go` files minimal (cobra flag binding + one call).
-
-**Trade-offs:**
-- Pro: works on a fresh machine with only Go installed.
-- Pro: degrades gracefully -- the user gets a useful scaffold even if they haven't installed `air`/`prism`/`gofumpt` yet.
-- Con: silent fallback could confuse power users. Mitigation: print a one-line "using `go test` (install prism for parallel workers: `go install ...`)" message.
-- Con: tool detection at every invocation is slightly wasteful. Mitigation: detect once per process, cache in a `var`.
-
-**Example:**
-```go
-// internal/wrappers/test.go
-func Test(projectRoot string, args []string) error {
-    bin, err := exec.LookPath("prism")
-    if err != nil {
-        fmt.Fprintln(os.Stderr, "note: prism not found, falling back to go test (install: go install github.com/DaltonSW/prism@latest)")
-        bin, _ = exec.LookPath("go")
-        return runBin(bin, projectRoot, append([]string{"test"}, args...))
-    }
-    return runBin(bin, projectRoot, append([]string{"go", "test", "./..."}, args...))
-}
-```
-
-### Pattern 4: Single-Entry Subcommand File (cobra convention)
-
-**What:** Each `cmd/<subcommand>.go` defines exactly one cobra `*cobra.Command` value and one `init()` that attaches it to the root. No business logic -- only flag binding and a single call into `internal/`.
-
-**When to use:** Always. Matches the `cobra-cli add` convention and keeps each subcommand a 30-line file that's easy to scan.
-
-**Trade-offs:**
-- Pro: conventional, every Go developer recognizes it.
-- Pro: trivial to remove a subcommand -- delete one file.
-- Con: flag definitions are scattered. Mitigation: keep flag struct + binding in the subcommand file, but the *resolution/validation* in `internal/scaffold`.
-
-**Example:**
-```go
-// cmd/new.go
-func init() {
-    rootCmd.AddCommand(newCmd)
-}
-
-var newCmd = &cobra.Command{
-    Use:   "new <name>",
-    Short: "Scaffold a new charmbracelet project",
-    Args:  cobra.ExactArgs(1),
-    RunE: func(cmd *cobra.Command, args []string) error {
-        opts, err := scaffold.ResolveFlags(cmd, args)
-        if err != nil { return err }
-        if !opts.NoInteractive {
-            opts, err = interactive.PromptMissing(opts)
-            if err != nil { return err }
-        }
-        return scaffold.New(opts)
-    },
-}
-```
-
-## Data Flow
-
-### Scaffold Flow (`spin new <name>`)
+### (a) `spin registry add <alias> <source>`
 
 ```
-User: spin new myapp --tui --bubbletea --lipgloss --ai
-              │
-              ▼
-┌──────────────────────────────────────────────────────────┐
-│ cobra + fang                                             │
-│   parse positional: name="myapp"                        │
-│   parse flags:    tui=true, libs=[bubbletea,lipgloss],  │
-│                   ai=true                               │
-└──────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────┐
-│ scaffold.ResolveFlags(cmd, args)                         │
-│   validate: name is valid Go package, no path conflicts  │
-│   build Project{ Name:"myapp", Type:"tui", Libs:[...],  │
-│                   AI:true, Module:"myapp" }              │
-│   if any required field missing:                        │
-│       → call interactive.PromptMissing(opts)            │
-│       → gum subprocess (or stdin fallback)              │
-└──────────────────────────────────────────────────────────┘
-              │
-              ▼
-┌──────────────────────────────────────────────────────────┐
-│ scaffold.New(project)                                    │
-│   1. mkdir ./<name>/                                     │
-│   2. for path in fs.WalkDir(embedFS, "templates"):      │
-│        resolve overlay (base → variant → libs)          │
-│        parse text/template with project as data         │
-│        emit to ./<name>/<path>                          │
-│   3. if --ai: emit AGENTS.md from agents template       │
-│   4. hooks.PostScaffold(project):                        │
-│        - git init                                        │
-│        - go mod tidy  (best-effort, may need network)   │
-│   5. print success banner (lipgloss) + next-steps       │
-└──────────────────────────────────────────────────────────┘
-              │
-              ▼
-./myapp/    (ready to `go run`)
+cmd/registry.go -> registry.Manager.Add(alias, source)
+   +-- detect source kind (isLocalPath | isGitURL | file://)
+   +-- resolve CacheDir/registries.json path
+   +-- loadRegistries() -> append Registry{Alias, Source, Kind, Path, AddedAt}
+   +-- writeRegistries() (atomic, like writePinned)
+   +-- mkdir CacheDir/registries/<alias>/
+   +-- kind=git  : git clone --depth=1 <source> <dest>
+   +-- kind=local: symlink <source> <dest>  (fallback: copy)
 ```
 
-### Wrapper Flow (`spin test`)
+- **New file:** `cmd/registry.go`.
+- **New API:** `Manager.Add(alias, source string) error`.
+- **No HTTP code involved.** Drop-in for what `Client.Search` would have done; this command path was never wired in v2.0.
+
+### (b) `spin registry update [alias]`
 
 ```
-User: spin test ./internal/...
-              │
-              ▼
-cobra: parse args = ["./internal/..."]
-              │
-              ▼
-wrappers.Test(projectRoot, args)
-              │
-              ├─ exec.LookPath("prism")
-              │     ├─ found  → exec.Command("prism", "go", "test", "./...", args...)
-              │     └─ not    → warn + exec.Command("go", "test", args...)
-              │
-              ▼
-stream stdout/stderr to user's terminal; propagate exit code
+cmd/registry.go -> registry.Manager.Refresh(alias? string)
+   +-- loadRegistries() -> list
+   +-- for each target Registry:
+   |     +-- rm -rf <dest>
+   |     +-- git clone --depth=1 <source> <dest>     (kind=git)
+   |     +-- re-symlink <source> <dest>               (kind=local)
+   +-- report per-registry outcome (ok / failed)
 ```
 
-### Key Data Flows
+- **New API:** `Manager.Refresh(alias string) error` and `Manager.RefreshAll() error`.
+- **Independent of `Client.Refresh` (pin refresh).** The existing `cmd/update.go` keeps refreshing pinned templates; `cmd/registry.go` is a sibling, not a replacement. (See "Two pipelines share one Template type and one filesystem layout" constraint.)
 
-1. **Flag → Project struct → Template data:** The `Project` struct is the single source of truth after `ResolveFlags`. Templates reference fields directly: `{{ .Name }}`, `{{ if .AI }}...{{ end }}`, `{{ range .Libs }}...{{ end }}`. No magic globals.
-2. **Overlay resolution:** Deterministic -- base files load first, variant files overwrite on filename match, lib files overwrite on filename match. Last write wins, by design.
-3. **Interactive fallback chain:** If `gum` is missing AND `--no-interactive` is set AND flags are incomplete → fail with actionable error. If `gum` is missing AND interactive is on → fall back to `os.Stdin` reads (using `bufio.Scanner` + a small set of `fmt.Println` prompts).
-4. **Tool detection (wrappers):** `exec.LookPath` at command-invocation time, not at startup. Lets a user `go install prism` mid-session and have the next `spin test` use it.
-
-## Build Order
-
-The dependency graph between components drives the suggested phase structure:
+### (c) `spin search <query>`
 
 ```
-[1] Minimal scaffold (one flag)              ← proves pipeline end-to-end
-      │
-      ▼
-[2] All flags + Project struct validation     ← completes CLI surface
-      │
-      ▼
-[3] Interactive layer (gum)                   ← needs Project to know what's missing
-      │
-      ▼
-[4] Template variants (--template)            ← needs scaffold engine + Project fields
-      │
-      ▼
-[5] Wrappers (run/build/test/vet/fmt)         ← independent of scaffold; build in parallel
-      │
-      ▼
-[6] AI / AGENTS.md (--ai)                     ← needs Project metadata populated
+cmd/search.go -> registry.Index.Build() -> registry.Index.Search(query, limit)
+   Index.Build():
+     +-- Manager.List() -> []Registry
+     +-- for each registry, walk <Path>/templates/*.toml:
+           +-- decode TemplateMetadata (BurntSushi/toml)
+           +-- validate required fields (id, source)
+           +-- drop invalid + collect warning
+           +-- append to in-memory slice
+   Index.Search(query, limit):
+     +-- filter by case-insensitive substring on id/name/tags/description
+     +-- return []Entry (local; new struct, replaces registry.Entry)
+     +-- honour --limit, --json
 ```
 
-**Why this order:**
-- **Phase 1 must produce a runnable project** -- even if it's just `spin new foo --tui` and writes a hardcoded `main.go`. Validates the embed + render + emit pipeline.
-- **Phase 2 can be done without interactive** -- all flags are just CLI args. Project struct validation lives here. Tests can be written against flag combinations.
-- **Phase 3 layers on top** -- the `Prompter` interface (Pattern 2) means `ResolveFlags` can stay the same; only the missing-field branch changes.
-- **Phase 4 is template authoring** -- by this point the engine is stable, so templates are pure content work.
-- **Phase 5 is fully independent** of the scaffold pipeline; can ship in any phase after the root cmd exists. Best deferred so scaffold isn't blocked.
-- **Phase 6 is a leaf** -- depends only on the `Project` struct, which is finalized by Phase 2. Cheap to add later.
+- **Modified file:** `cmd/search.go`.
+- **Replaces:** `Client.SearchWithLimit` (HTTP).
+- **ErrNotDeployed is gone** -- the local index either has results or it doesn't. Empty result still prints "No templates matched X."
 
-## Scaling Considerations
+### (d) `spin add <alias>/<id>`
 
-| Scale | Architecture Adjustments |
-|-------|---------------------------|
-| 1 template (now) | Single `templates/` tree, embedded as one `embed.FS` |
-| 5–10 templates | Add `templates/<name>/` directories; `--template` already routes to them. Engine unchanged. |
-| 10+ templates | Consider splitting embed.FS per template for binary-size savings; ship a `spin-template` subcommand to add new template directories. |
-| Plugin/template-repo support | `--template-repo <url>` (already in PROJECT.md) → `git clone` to a temp dir, point `embed.FS` (now `os.DirFS`) at the cloned path. Engine unchanged if templates are loaded from an `fs.FS` interface. |
+```
+cmd/add.go -> registry.Resolve.Parse("<alias>/<id>")
+   Resolve.Parse:
+     +-- Manager.List() -> registries
+     +-- find alias -> Registry
+     +-- read <Registry.Path>/templates/<id>.toml
+     +-- return Resolved{ Source, Kind, TemplateName }
+     +-- (or NotFound error naming the alias)
 
-### Scaling Priorities
+cmd/add.go -> pin.go (renamed Client) Add(Resolved.Source)
+   +-- addLocal / addGit (unchanged)
+   +-- Pin(*pinned) (unchanged; pinned.json format preserved)
+```
 
-1. **First bottleneck:** `go:embed` makes the binary size = size of all embedded templates. If templates grow large (images, big assets), allow opt-in `--no-embed` builds.
-2. **Second bottleneck:** Walking + parsing templates on every `spin new` is O(files). Fine for <100 templates; cache the parsed template tree in a `sync.Once` if it ever matters.
+- **Modified file:** `cmd/add.go` -- first branch: if arg contains `/`, route through `Resolve`. Otherwise existing behaviour (local path / git URL / user/repo shorthand).
+- **Unchanged:** `pinned.json` write path.
 
-## Anti-Patterns
+### (e) `spin new <alias>/<id>` (no prior pin)
 
-### Anti-Pattern 1: God-Object `*Scaffolder` with all flags as methods
+```
+cmd/new.go -> resolveNameAndTemplate (existing) -> tplSpec = "<alias>/<id>"
 
-**What people do:** `scaffolder.SetName().SetLibs().SetType().SetAI().Execute()` -- fluent builder sprawl.
-**Why it's wrong:** Hard to validate, hard to test, hides which fields are required. The cobra flag bindings become stringly-typed.
-**Do this instead:** Single `Project` struct populated by `ResolveFlags`, then passed to `scaffold.New(project)`. All required-field validation is in one place.
+cmd/new.go -> registry.Resolve.Parse(tplSpec) -> Resolved{ Source: "https://github.com/spin-org/go-api", Kind: "git" }
 
-### Anti-Pattern 2: Embedding templates as Go strings (`const tmpl = "..."`)
+cmd/new.go -> template.Loader.Load(Resolved.Source)
+   +-- isGitURL("https://...") -> cloneGit
+   +-- git clone --depth=1 <Source> <CacheDir/templates/<SanitiseRepoName(Source)>>
+   +-- Detect(dest) -> *Template
+```
 
-**What people do:** Put template content inside Go source for "type safety".
-**Why it's wrong:** Defeats `go:embed` (no syntax highlighting in editor, no diff-friendly format, mixes content with code).
-**Do this instead:** `//go:embed all:templates` in `internal/scaffold/embed.go`, walk the resulting `embed.FS`. Keep `.tmpl` files in their own directory tree.
+- **Modified file:** `cmd/new.go` -- one new branch in `resolveNameAndTemplate` / before `loader.Load`: if spec contains a `/` AND does NOT look like a git URL or local path, treat as `<alias>/<id>`.
+- **The existing `Loader.Load` is unchanged.** Resolve returns a git URL; Loader handles git URLs as it does today. **This is the key design property** that keeps the Loader's diff small.
 
-### Anti-Pattern 3: One Mega-`main.go.tmpl` with 500 lines of `{{if}}` blocks
+### (f) `spin new <name> <alias>/<id>` (cached pin hit)
 
-**What people do:** Every library's wiring is a giant conditional in one file.
-**Why it's wrong:** Unmaintainable; adding a new lib means editing one massive file; template errors are hard to localize.
-**Do this instead:** Per-library snippet templates in `templates/lib/<name>.go.tmpl`, each rendering a separate Go file in the output project. `main.go.tmpl` calls into them via standard Go imports (e.g., `import _ "myapp/libbubbletea"`).
+```
+cmd/new.go -> registry.Resolve.Parse("<alias>/<id>")
+   Resolve returns Resolved{ Source, Kind, TemplateName, LocalPath }
 
-### Anti-Pattern 4: Hardcoding charm v2 import paths in templates
+cmd/new.go -> check pin cache:
+   +-- pin.go.ListPinned() -> find entry where Source == Resolved.Source
+   +-- if hit: use pinned.LocalPath (skip re-clone)
 
-**What people do:** Write `import tea "github.com/charmbracelet/bubbletea"` in a `main.go.tmpl` somewhere, then ship a v2 binary that breaks.
-**Why it's wrong:** Charm v2 uses vanity imports (`charm.land/bubbletea/v2`). v1 paths are deprecated. Templates must use the v2 paths exclusively.
-**Do this instead:** Centralize all charm imports in `templates/lib/*.go.tmpl` and have a single test that greps generated projects for `github.com/charmbracelet/` to catch regressions.
+cmd/new.go -> template.Loader.Load(<pinned name>)
+   +-- loadPinned(name) -> Detect(pinned.LocalPath) -> *Template
+   +-- (zero network if cache is warm)
+```
 
-### Anti-Pattern 5: Wrapping `go test` with shell scripts
+- **Optimization layer added to `cmd/new.go`**, not the Loader. The Loader's `loadPinned` already does the right thing when handed a pinned name; the new code in `cmd/new.go` is "if we resolved `<alias>/<id>`, see if Source is already pinned and use that name."
+- **Alternative design considered:** add a 4th source kind to `Loader.Load` (a `Resolved` struct). Rejected for v2.x because it changes the public `Loader.Load(spec string)` signature. The pin-hit optimisation belongs in `cmd/new.go` where the Resolved already exists.
 
-**What people do:** `exec.Command("bash", "-c", "go test ./...")` -- easy one-liner, but breaks on Windows and won't propagate signals cleanly.
-**Why it's wrong:** Spin is `CGO_ENABLED=0` portable; bash assumptions violate that.
-**Do this instead:** `exec.CommandContext(ctx, "go", "test", args...)` with explicit arg slices. Always `cmd.Stdout = os.Stdout; cmd.Stderr = os.Stderr` for streaming.
+## Data Flow Diagrams
 
-## Integration Points
+### `spin registry add official https://github.com/spin-org/registry`
 
-### External Services
+```
+caller
+  |  registry add <alias> <source>
+  v
+cmd/registry.go
+  |  Manager.Add("official", "https://github.com/spin-org/registry")
+  v
+registry.Manager
+  +-- detectKind() -> "git"
+  +-- append Registry{Alias,Source,Kind,Path,AddedAt} -> registries.json
+  |     +-- writePinned-style atomic write
+  +-- git clone --depth=1 <source> CacheDir/registries/official/
+```
 
-| Service | Integration Pattern | Notes |
-|---------|---------------------|-------|
-| `gum` (subprocess) | `exec.LookPath` + `exec.Command`, fall back to stdin if missing | If absent, print install hint; never silently degrade |
-| `air` (subprocess, for `spin run`) | `exec.LookPath`; fall back to `go run` | Detect `.air.toml` to decide which to use |
-| `prism` (subprocess, for `spin test`) | `exec.LookPath`; fall back to `go test` | Same as above |
-| `gofumpt` / `goimports` (subprocess, for `spin fmt`) | Lookup chain: `gofumpt` → `goimports` → `gofmt` | Apply in order; only run the next if previous is missing |
-| `go` toolchain | `exec.Command` for all build/test/vet | Detect via `runtime.GOROOT()` or just trust `$PATH` |
-| `git` (for `git init` in new project) | `exec.Command`; non-fatal if missing | User can `git init` later |
-| External template repo (`--template-repo`) | `git clone --depth 1` to temp dir, then `os.DirFS` | Clean up temp dir in `defer` |
+### `spin registry update [alias]`
 
-### Internal Boundaries
+```
+cmd/registry.go
+  |  Manager.Refresh(alias) or Manager.RefreshAll()
+  v
+registry.Manager
+  +-- loadRegistries() -> filter
+  +-- rm -rf <dest>
+  +-- re-acquire:
+        git  -> git clone --depth=1
+        local -> symlink (or copy on Windows)
+```
 
-| Boundary | Communication | Notes |
-|----------|---------------|-------|
-| `cmd/*` ↔ `internal/*` | Direct function calls; no globals | Each `cmd/<sub>.go` calls exactly one `internal/<pkg>.X(...)` function |
-| `internal/scaffold` ↔ `internal/interactive` | `Prompter` interface | `scaffold` never imports `interactive`; `interactive` returns values that fill `scaffold.Project` |
-| `internal/scaffold` ↔ `internal/agents` | `Project` struct (read-only) | `agents` takes a `*Project` and returns rendered `[]byte` |
-| `internal/wrappers` ↔ `cmd/wrappers` | Function calls | `cmd/test.go` calls `wrappers.Test(root, args)`; nothing more |
-| `templates/` ↔ `internal/scaffold` | `embed.FS` injected at scaffold time | Scaffold package is the only one that knows the embed path |
-| Root cmd ↔ subcommands | `rootCmd.AddCommand(...)` in `init()` files | Standard cobra; no custom registry |
+### `spin search go`
 
-## Dogfooding Notes
+```
+cmd/search.go
+  |  Index.Build(); Index.Search("go", limit)
+  v
+registry.Index
+  +-- Manager.List() -> []Registry
+  +-- for each r: walk r.Path/templates/*.toml
+  |     +-- Parse -> TemplateMetadata
+  |     +-- validate required fields
+  +-- filter results where id/name/tags/description contains "go"
+  |
+  v
+cmd/search.go  -> print table / JSON
+```
 
-Spin uses the charm stack to build itself. This is both a constraint and a showcase.
+### `spin add example/go-api`
 
-- **Help output:** `fang.Execute(ctx, rootCmd)` wraps the root cmd. `spin --help` looks like a charm product from day one.
-- **Version flag:** fang requires a `version` package (`internal/version`) populated via `-ldflags="-X .../version.Version=..."` in the Taskfile.
-- **Banner / success messages:** `internal/scaffold` uses `charm.land/lipgloss/v2` to style the "Created ./myapp" output. Matches the fang aesthetic.
-- **Self-template:** `templates/_base/` includes a `Taskfile.yml.tmpl` and `.air.toml.tmpl` -- the same files spin itself ships. Developers who scaffold with spin can run `spin run` / `spin test` in their new project immediately.
-- **Readme preview (future):** Could pipe the generated `README.md` through `charm.land/glamour/v2` for a one-shot preview at scaffold time. Out of scope for v1; noted as a future enhancement.
-- **AGENTS.md content:** When `--ai` is set, the generated `AGENTS.md` describes the *new* project's stack -- including the fact that `spin` is a charm-flavored scaffolder. Self-referential and useful for AI assistants picking up the new project.
+```
+cmd/add.go
+  |  spec = "example/go-api"
+  +-- detectKind(spec): not local path, not git URL, contains "/"
+  +-- Resolve.Parse(spec)
+  |     +-- Manager.List() -> find alias "example"
+  |     +-- read Registry.Path/templates/go-api.toml
+  |     +-- return Resolved{ Source = "https://...", Kind = "git" }
+  |
+  |  Resolved.Source -> pin.go.Add
+  |     +-- addGit (clone, hash, write LocalPath)
+  |     +-- Pin(*pinned) -> atomic pinned.json write
+```
+
+### `spin new example/go-api` (no prior pin)
+
+```
+cmd/new.go
+  |  tplSpec = "example/go-api"
+  +-- resolveNameAndTemplate (existing path)
+  |
+  |  spec contains "/" and isn't a path or git URL
+  +-- Resolve.Parse(tplSpec)
+  |     +-- returns Source = "https://github.com/example/go-api"
+  |
+  |  pin-hit check: ListPinned().find by Source  -> none
+  |
+  |  Loader.Load(Resolved.Source)
+  |     +-- isGitURL -> true
+  |     +-- cloneGit(Source) -> Detect(dest) -> *Template
+  |
+  |  Render + post-hook + delete spin.toml
+  |
+  |  promptPinAfterSuccess (existing) -- pin Source for offline use
+```
+
+### `spin new myapp example/go-api` (cached pin hit)
+
+```
+cmd/new.go
+  |  spec = "example/go-api"
+  +-- Resolve.Parse -> Resolved{ Source = "https://..." }
+  |
+  |  pin-hit check: ListPinned().find by Source  -> HIT
+  |     +-- pinned.LocalPath is the warm clone
+  |     +-- treat as if user passed pinned name
+  |
+  |  Loader.Load(<pinned.Name>)
+  |     +-- loadPinned(name) -> Detect(LocalPath)
+  |     +-- *Template (no network)
+  |
+  v  render + post-hook + delete spin.toml
+```
+
+## Recommended Project Structure (after v2.x)
+
+```
+internal/registry/
++-- doc.go              # package doc; updated to reflect local-only model
++-- types.go            # Registry, RegistriesConfig, TemplateMetadata, Resolved, Pinned
++-- manager.go          # NEW: CRUD over registries.json + on-disk registries tree
++-- index.go            # NEW: read templates/*.toml across registries, validate, filter
++-- resolve.go          # NEW: parse <alias>/<id>, look up metadata, return Resolved
++-- pin.go              # RENAMED from client.go (HTTP bits deleted)
++-- pin_test.go         # unchanged; tests stay valid
++-- manager_test.go     # NEW
++-- index_test.go       # NEW
++-- resolve_test.go     # NEW
+
+cmd/
++-- registry.go         # NEW: registry add|list|update|remove
++-- registry_test.go    # NEW
++-- search.go           # MODIFIED: drop HTTP, drive registry.Index
++-- add.go              # MODIFIED: <alias>/<id> branch via registry.Resolve
++-- new.go              # MODIFIED: <alias>/<id> branch via registry.Resolve + pin-hit short-circuit
++-- update.go           # UNCHANGED in shape (still refreshes pinned templates)
++-- list.go             # UNCHANGED
++-- remove.go           # UNCHANGED
++-- help_test.go, init_test.go, etc.  # UNCHANGED
+```
+
+## Patterns
+
+### Pattern 1: Registry as a cloned metadata source
+
+**What:** Each registry is a directory containing `registry.toml` + `templates/*.toml`. Spin treats it as opaque metadata; the registry dir is not a template itself.
+
+**When:** Always -- every registry follows this layout.
+
+**Trade-offs:** Pros: zero backend, idempotent (re-clone = re-index), offline-friendly. Cons: requires the user to register a registry before searching (`spin search` over zero registries = empty result).
+
+### Pattern 2: Two-pipeline state model (pin vs registry)
+
+**What:** Pin state and registry state live in different files (`pinned.json` vs `registries.json`) and different directories (`templates/` vs `registries/`). The Manager and the (renamed) pin code never write to each other's files.
+
+**When:** Always.
+
+**Trade-offs:** Pros: clean separation, pin records survive a registry remove, backward compat preserved. Cons: two config files for the user to be aware of (rare; never an issue in practice).
+
+### Pattern 3: Resolver returns a SourceSpec, not a Template
+
+**What:** `registry.Resolve.Parse(<alias>/<id>)` returns `Resolved{ Source, Kind, LocalPath, ... }` -- a spec compatible with the existing `template.Loader.Load(spec)` API. The Loader never knows it came from a registry.
+
+**When:** Every `<alias>/<id>` shorthand in `add` and `new`.
+
+**Trade-offs:** Pros: zero changes to the Loader's signature; the resolve is a thin adapter. Cons: pin-hit optimisation must be re-implemented in `cmd/new.go` (the loader doesn't know to check the pin cache for a Source it was handed).
+
+### Pattern 4: Atomic writes everywhere
+
+**What:** `writePinned` already exists in `client.go`. `writeRegistries` follows the same pattern: marshal JSON, write to sibling `.tmp`, fsync, rename.
+
+**When:** Every write to `registries.json` and `pinned.json`.
+
+**Why:** Partial writes corrupt state. The existing `writePinned` is the template; reuse the pattern, don't invent a new one.
+
+## Anti-Patterns to Avoid
+
+### Anti-Pattern 1: Adding a 4th source kind to `Loader.Load`
+
+**What people do:** Change `Loader.Load(spec string)` to `Loader.Load(spec any)` and add a `Resolved` arm.
+
+**Why it's wrong:** Changes the public API; every test that calls `Loader.Load(string)` needs updating; breaks the "templates are the only extension surface" invariant.
+
+**Do this instead:** Resolve returns a `Source` string (git URL or path) that flows through the existing `isGitURL`/`isLocalPath` branches. Pin-hit optimisation is a thin pre-check in `cmd/new.go`.
+
+### Anti-Pattern 2: Storing the registry source URL in `pinned.json`
+
+**What people do:** When pinning from `<alias>/<id>`, add a `RegistryAlias` field to `Pinned` so the user can later `spin remove --from-registry`.
+
+**Why it's wrong:** Pin records are independent of registry metadata. A pin survives a registry being removed; the reverse should also be true.
+
+**Do this instead:** Pin records keep their existing schema. Registry metadata is its own concern in `registries.json`.
+
+### Anti-Pattern 3: HTTP fallback for `spin search`
+
+**What people do:** Keep `DefaultIndexURL` / `ErrNotDeployed` as a fallback in case the local index is empty.
+
+**Why it's wrong:** The spec explicitly says "Drop `SPIN_REGISTRY_URL` / `SPIN_REGISTRY` env vars; drop `ErrNotDeployed` / `DefaultIndexURL`" (PROJECT.md, v2.x Active). Also: the local index is THE registry in v2.x -- there's no separate HTTP registry.
+
+**Do this instead:** Empty result -> "no templates matched" message. User adds a registry first if they have none.
+
+### Anti-Pattern 4: Globbing `<alias>/<id>` from `pinned.json`
+
+**What people do:** When the user types `<alias>/<id>`, fall back to looking up `<alias>/<id>` as a pinned name in case the registry resolution fails.
+
+**Why it's wrong:** The two namespaces are deliberately distinct. `<alias>/<id>` is a registry coordinate; a pinned name is a bare string. Conflating them means a stale pin could mask a missing registry entry, or vice versa.
+
+**Do this instead:** Resolve returns `ErrUnknownAlias` or `ErrUnknownID` (sentinel errors). The CLI surfaces the precise failure ("registry alias 'example' not found -- run `spin registry add`").
+
+## New vs Modified Components
+
+### New files
+
+| Path | Purpose |
+|------|---------|
+| `internal/registry/manager.go` | CRUD over `registries.json` + clone/symlink per alias |
+| `internal/registry/index.go` | Walk + parse `templates/*.toml`, validate, filter |
+| `internal/registry/resolve.go` | `<alias>/<id>` -> Resolved{source, kind, ...} |
+| `internal/registry/manager_test.go` | CRUD + clone/symlink tests |
+| `internal/registry/index_test.go` | Walk + validate + filter tests |
+| `internal/registry/resolve_test.go` | Parse + lookup tests |
+| `cmd/registry.go` | Cobra: `registry add/list/update/remove` |
+| `cmd/registry_test.go` | CLI-level tests for the above |
+
+### Modified files
+
+| Path | Change |
+|------|--------|
+| `internal/registry/client.go` | **Renamed to `pin.go`** + delete HTTP-only code |
+| `internal/registry/types.go` | Drop `Entry`, `SearchResult`, `DefaultIndexURL`, `ErrNotDeployed`, `ErrNotImplemented`; add `Registry`, `RegistriesConfig`, `TemplateMetadata`, `Resolved` |
+| `internal/registry/doc.go` | Update package doc to reflect local-only model |
+| `internal/registry/search.go` | **Deleted** |
+| `internal/template/loader.go` | **Likely no change** -- Resolved hands back a Source string that flows through existing `isGitURL`/`isLocalPath` branches. If pin-hit opt needs to live in the Loader, add a `Loader.LoadResolved(Resolved)` helper. Otherwise `Loader` stays as-is. |
+| `cmd/search.go` | Replace `Client.SearchWithLimit` with `Index.Build()` + `Index.Search()`; drop HTTP-error handling, `ErrNotDeployed`, `--json` payload struct |
+| `cmd/add.go` | One branch up front: if arg contains `/` and is not a local path / git URL, route through `registry.Resolve`. Otherwise unchanged. |
+| `cmd/new.go` | Same branch in `resolveNameAndTemplate`; pin-hit short-circuit before `Loader.Load` |
+| `cmd/update.go` | **Unchanged in shape.** `spin update` still refreshes pinned templates. `spin registry update` (different command) refreshes registries. They share `Refresh`-style rollback semantics but live in different files. |
+| `cmd/list.go` | Unchanged for `spin list` (pinned). Add `--registries` mode? Optional; defer. |
+| `cmd/remove.go` | Unchanged. |
+| `cmd/init.go` | Unchanged. |
+
+### Unchanged files
+
+| Path | Why |
+|------|-----|
+| `internal/template/template.go` | `Template.Render` / `Detect` don't know about registries |
+| `internal/params/`, `internal/version/` | No registry involvement |
+| `cmd/root.go`, `cmd/version.go`, `cmd/doc.go`, `cmd/print.go` | No changes |
+| All `*_test.go` files for unchanged commands | Tests stay valid |
+
+### Deleted code
+
+| Symbol | File | Why |
+|--------|------|-----|
+| `Client.IndexURL`, `Client.HTTP` | `client.go` | No HTTP client anymore |
+| `Client.Search`, `Client.SearchWithLimit` | `client.go` | Replaced by `Index.Search` |
+| `isNetworkError` | `client.go` | Only the HTTP client cared |
+| `DefaultIndexURL`, `ErrNotDeployed`, `ErrNotImplemented` | `types.go` | v2.x spec drops these |
+| `Entry`, `SearchResult` | `types.go` | Replaced by `TemplateMetadata` + the table row type used by `Index.Search` |
+| `internal/registry/search.go` | entire file | FormatSearch moves into `cmd/search.go`; SortByPopularity is dropped (no downloads field in local metadata) |
+| `SPIN_REGISTRY_URL`, `SPIN_REGISTRY` env reads | `client.go` (`New`) | No HTTP to point at |
+
+## Storage migration / backward compatibility
+
+**No migration step is required for `pinned.json`.** Pin records keep the same fields (`Name`, `Source`, `PinnedAt`, `Version`, `LocalPath`, `Removed`) and the same file path. The Loader's `loadPinned` reads them unchanged.
+
+`registries.json` is a new file; first run with no registries means `spin search` returns "no templates matched." This is the documented v2.x behaviour (PROJECT.md: "Replace the HTTP-based registry stub").
+
+`templates/` directory is unchanged. Existing clones continue to be served by `Loader.loadPinned`.
+
+## Suggested Build Order (3 phases)
+
+The user pre-specified phases A/B/C in `PROJECT.md`. This file recommends the implementation order within those phases to keep the diff reviewable.
+
+### Phase A (PROJECT.md: "manager + `spin registry` CLI + `registries.json`")
+
+Self-contained -- touches registry internals only. No calls into Loader. No calls from cmd except the new `cmd/registry.go`.
+
+1. Add `Registry`, `RegistriesConfig`, `TemplateMetadata` to `internal/registry/types.go`. Drop `Entry`, `SearchResult`, `DefaultIndexURL`, `ErrNotDeployed`, `ErrNotImplemented`. **Don't delete yet** -- call sites still reference them.
+2. Create `internal/registry/manager.go`:
+   - `Manager.Add(alias, source string) error`
+   - `Manager.List() ([]Registry, error)`
+   - `Manager.Refresh(alias string) error` / `Manager.RefreshAll() error`
+   - `Manager.Remove(alias string) error`
+   - `Manager.Get(alias string) (*Registry, error)`
+   - `writeRegistries([]Registry)` -- clones `writePinned` pattern.
+3. Create `internal/registry/manager_test.go` (CRUD on a `t.TempDir()` rooted manager).
+4. Create `cmd/registry.go` with `registry add/list/update/remove` calling the Manager. Test with `cmd/registry_test.go`.
+5. Keep `Client.Search` etc. compiling -- `cmd/search.go` still uses them; do not touch `cmd/search.go` until Phase B.
+
+**Phase A exit criterion:** `spin registry add official <url>` creates `registries.json` + clones the dir; `spin registry list` shows it; `spin registry remove official` cleans both up. No regressions in `spin search` / `spin add` / `spin new` / `spin update` / `spin list`.
+
+### Phase B (PROJECT.md: "index reader + `<alias>/<id>` resolver + rewire `search`/`add`/`new`/`loader`")
+
+Depends on Phase A. This is where the resolver + index land and the CLI gets rewired.
+
+1. Create `internal/registry/index.go`:
+   - `Index.Build(manager *Manager) (*Index, error)`
+   - `(*Index).Search(query string, limit int) []TemplateMetadata`
+   - `(*Index).Get(alias, id string) (*TemplateMetadata, error)`
+2. Create `internal/registry/resolve.go`:
+   - `Resolved{ Source, Kind, LocalPath, ... }`
+   - `Resolve.Parse(spec string, manager *Manager, index *Index) (Resolved, error)` -- sentinel errors: `ErrUnknownAlias`, `ErrUnknownID`.
+3. Modify `cmd/search.go`:
+   - Replace `Client.SearchWithLimit` with `Index.Build(manager).Search(...)`.
+   - Drop `ErrNotDeployed` branch + friendly-message block.
+   - `--json` payload shape changes from `SearchResult` to a local struct (`{query, total, entries: [{id, name, tags, source, ...}]}`).
+   - Move `FormatSearch` body into this file (delete `internal/registry/search.go`).
+4. Modify `cmd/add.go`:
+   - Detect `<alias>/<id>` shape (contains `/`, not a path, not a git URL, not a `user/repo` shorthand that already worked).
+   - Resolve -> `Resolved.Source` -> existing `pin.go.Add` flow. Pin record written unchanged.
+5. Modify `cmd/new.go`:
+   - Same `<alias>/<id>` detection in `resolveNameAndTemplate`.
+   - Resolve -> `Resolved.Source` -> `Loader.Load(Source)`.
+   - Pin-hit short-circuit: if `pin.go.ListPinned()` already has a row with this Source, use the pinned name instead.
+6. Decide on the Loader diff:
+   - **Default:** no change to `internal/template/loader.go`. Resolved hands a string; existing branches handle it.
+   - **Optional:** add `Loader.LoadResolved(Resolved)` if the pin-hit short-circuit is awkward to express at the call site. Keep the original `Load(string)` for backward compat with v2.0 tests.
+
+**Phase B exit criterion:** `spin add <alias>/<id>` and `spin new <alias>/<id>` both work end-to-end; `spin search <query>` reads from local index; nothing references `Client.Search` or `ErrNotDeployed` anymore. `pinned.json` is unchanged in shape.
+
+### Phase C (PROJECT.md: "delete HTTP client code + docs pass")
+
+Cleanup -- safe only after Phase B has zero remaining references.
+
+1. Delete `internal/registry/search.go`.
+2. Rename `internal/registry/client.go` -> `internal/registry/pin.go` (or `pin_state.go` to avoid the verb confusion with `Manager.Pin`-if-it-ever-existed). Update package-internal references (`registry.New()` call in `loader.go`, in `cmd/*.go`).
+3. Delete from `pin.go` (the renamed file):
+   - `IndexURL`, `HTTP` fields and constructor reads
+   - `Search`, `SearchWithLimit`, `isNetworkError`
+   - `New()` env-var logic (`SPIN_REGISTRY_URL`, `SPIN_REGISTRY`)
+4. Delete from `types.go`: `DefaultIndexURL`, `ErrNotDeployed`, `ErrNotImplemented`, `Entry`, `SearchResult`.
+5. Update `internal/registry/doc.go` to reflect the local-only model.
+6. Update tests:
+   - `client_test.go` -> split into `pin_test.go` (HTTP bits removed) and the new `manager_test.go` / `index_test.go` / `resolve_test.go`.
+   - Any test that sets `SPIN_REGISTRY_URL` becomes a no-op or is deleted.
+7. Docs pass: README, PROJECT.md "Validated" section, `spin-registry.md` revision note.
+
+**Phase C exit criterion:** `go build` and `go test ./...` pass with zero references to `Client.Search`, `ErrNotDeployed`, `DefaultIndexURL`, `SPIN_REGISTRY_URL`, or the `Entry` / `SearchResult` types.
+
+## Risks Specific to This Architecture
+
+| Risk | Likelihood | Mitigation |
+|------|------------|------------|
+| `<alias>/<id>` collides with existing `user/repo` shorthand in `cmd/add.go` (existing code accepts `me/repo` and treats it as a git URL shorthand) | Medium | The existing shorthand only accepts exactly one slash, no scheme, not a path/git URL -- same predicate. Reuse `isShorthand(spec)` to route: if the alias resolves in the local index, prefer that; else fall back to the existing shorthand. |
+| `registries.json` is corrupted mid-write | Low | Atomic write pattern (write `.tmp`, fsync, rename) -- same as `writePinned`. |
+| User has an old `pinned.json` that includes `Source` URLs the new resolver can't reach (registry removed, repo deleted) | Low | Existing `Loader.cloneGit` already surfaces "git clone failed" cleanly. Pin-hit short-circuit in `cmd/new.go` falls through to the loader on failure. |
+| Multiple registries define the same `<id>` | Low | Resolver errors with "ambiguous id 'go-api' in registries: official, community" -- first match wins if user passes just `/go-api` (no alias). |
+| User runs `spin search` before `spin registry add` | Medium | Print "no registries registered -- run `spin registry add <alias> <url-or-path>`" instead of empty result. |
+| Loader.Load is called with a Source that is a registry dir, not a template dir | Low | Loader's `Detect` requires `spin.toml` + `_base/`; registry dirs have `registry.toml` + `templates/` and will fail Detect cleanly. |
 
 ## Sources
 
-- [Fang docs (Context7)](https://context7.com/charmbracelet/fang/llms.txt) -- `fang.Execute(ctx, rootCmd)` pattern, version flag requirements
-- [Fang README](https://github.com/charmbracelet/fang/blob/main/README.md) -- styled help, manpages, completions
-- [Bubble Tea v2 Upgrade Guide](https://github.com/charmbracelet/bubbletea/blob/main/UPGRADE_GUIDE_V2.md) -- `charm.land/bubbletea/v2` import path, model pattern
-- [Lipgloss v2 Upgrade Guide](https://github.com/charmbracelet/lipgloss/blob/main/UPGRADE_GUIDE_V2.md) -- `lipgloss.NewStyle()` is pure value; no Renderer
-- [Huh v2 docs (Context7)](https://context7.com/charmbracelet/huh/llms.txt) -- `huh.NewForm`, `huh.NewInput().Run()` for standalone fields
-- [Gum README](https://github.com/charmbracelet/gum/blob/main/README.md) -- `gum choose` / `gum input` / `gum confirm` / `gum write` invocation
-- [Cobra Generator docs (Context7)](https://context7.com/spf13/cobra-cli/llms.txt) -- `cmd/root.go` + `main.go` layout, `cobra-cli init` convention
-- [.planning/PROJECT.md](file:///home/samouly/Projects/Golang/loom/.planning/PROJECT.md) -- requirements, constraints, key decisions
+- `spin-registry.md` (repo root) -- the v2.x spec; defines registry layout, commands, validation rules
+- `.planning/PROJECT.md` -- v2.x Active section: phases 6/7/8, the constraint to drop `SPIN_REGISTRY_URL` / `ErrNotDeployed` / `DefaultIndexURL`, the constraint to keep `pinned.json` unchanged
+- `internal/template/loader.go` -- `Load` / `loadPinned` / `cloneGit` / `isLocalPath` / `isGitURL`; the existing three-source spec
+- `internal/registry/client.go` -- the two-responsibility file being split; HTTP pieces identified for deletion, pin-state pieces for retention under new name
+- `internal/registry/types.go` -- current shape; types being deleted vs added
+- `internal/template/template.go` -- `Detect` / `Render` / `RenderToWithPost`; unchanged
+- `cmd/add.go`, `cmd/new.go`, `cmd/search.go`, `cmd/list.go`, `cmd/update.go`, `cmd/remove.go` -- the CLI surfaces being modified
+- `cmd/update_test.go`, `cmd/new_test.go` -- existing test shape; ensure phase rewrites don't break these
 
 ---
-*Architecture research for: spin (Go scaffold CLI, charmbracelet v2 flavor)*
-*Researched: 2026-06-02*
+
+*Architecture research for: spin v2.x local-registry milestone (phases 6/7/8)*
+*Researched: 2026-07-03*
