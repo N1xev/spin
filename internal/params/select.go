@@ -2,6 +2,7 @@ package params
 
 import (
 	"fmt"
+	"slices"
 
 	"charm.land/huh/v2"
 )
@@ -38,10 +39,8 @@ func (p *SelectParam) HuhField() huh.Field {
 		Value(&p.value)
 	if p.def != "" {
 		f = f.Validate(func(s string) error {
-			for _, o := range p.options {
-				if s == o {
-					return nil
-				}
+			if slices.Contains(p.options, s) {
+				return nil
 			}
 			return fmt.Errorf("not in options: %q", s)
 		})
