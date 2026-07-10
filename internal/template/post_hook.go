@@ -3,7 +3,6 @@ package template
 import (
 	"bytes"
 	"fmt"
-	"os/exec"
 	"text/template"
 
 	"github.com/N1xev/spin/internal/params"
@@ -24,31 +23,25 @@ import (
 // might have been included in _base/) but ensures the project that
 // the user sees has spin.toml deleted by the time the scaffolder
 // returns.
-func RunPostHook(t *Template, values map[string]any, dir string) error {
+func RunPostHook(t *Template, values map[string]any, dir string, opts HookOptions) error {
 	if t == nil || t.SpinToml == nil {
 		return nil
 	}
-	steps := t.SpinToml.Post
+	steps := make([]hookStep, 0, len(t.SpinToml.Post))
+	for _, s := range t.SpinToml.Post {
+		steps = append(steps, hookStep(s))
+	}
+	scripts, err := autoHookScripts(dir, "_post")
+	if err != nil {
+		return fmt.Errorf("post-hook: list scripts: %w", err)
+	}
+	for _, cmd := range scripts {
+		steps = append(steps, hookStep{Run: cmd})
+	}
 	if len(steps) == 0 {
 		return nil
 	}
-	resolved := unwrapValues(values)
-	for i, step := range steps {
-		if step.Run == "" {
-			continue
-		}
-		rendered, err := renderHook(step.Run, resolved)
-		if err != nil {
-			return fmt.Errorf("post-hook step %d: render: %w", i+1, err)
-		}
-		c := exec.Command("sh", "-c", rendered)
-		c.Dir = dir
-		out, err := c.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("post-hook step %d %q failed: %s: %w", i+1, rendered, string(out), err)
-		}
-	}
-	return nil
+	return runHooks("post", steps, values, dir, opts)
 }
 
 // unwrapValues walks the values map and replaces any params.Value

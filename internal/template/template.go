@@ -1,20 +1,24 @@
 package template
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"text/template"
 )
 
 // Template is a loaded external template, ready to render.
 type Template struct {
-	Name        string   // dir name, e.g. "rust-cli"
-	Source      string   // local path on disk (post-clone)
-	Repo        string   // git URL, if any
-	Spec        string   // original spec the user typed (may differ from Repo/Source when resolved via a registry shorthand)
+	Name        string    // dir name, e.g. "rust-cli"
+	Source      string    // local path on disk (post-clone)
+	Repo        string    // git URL, if any
+	Spec        string    // original spec the user typed (may differ from Repo/Source when resolved via a registry shorthand)
 	SpinToml    *SpinToml // parsed spin.toml
-	BaseDir     string   // _base/ inside Source
-	PostHookDir string   // _post/ inside Source (optional)
+	BaseDir     string    // _base/ inside Source
+	PreHookDir  string    // _pre/ inside Source (optional)
+	PostHookDir string    // _post/ inside Source (optional)
 }
 
 // Detect checks whether a directory contains a valid template.
@@ -37,6 +41,7 @@ func Detect(dir string) (*Template, error) {
 		Source:      dir,
 		SpinToml:    st,
 		BaseDir:     base,
+		PreHookDir:  filepath.Join(dir, "_pre"),
 		PostHookDir: filepath.Join(dir, "_post"),
 	}, nil
 }
@@ -49,23 +54,42 @@ func Detect(dir string) (*Template, error) {
 // scaffold package.
 //
 // Files whose path (relative to _base/, with the .tmpl extension
-// stripped) matches any glob in t.SpinToml.Exclude are skipped  - 
+// stripped) matches any glob in t.SpinToml.Exclude are skipped  -
 // they never reach the output tree. This is how templates opt out
 // of files (e.g. a CI badge, a contributor list) that should stay
 // out of the generated project.
+//
+// If t.SpinToml.Include rules exist, only files matching at least one
+// true rule are included. A rule with an empty If always includes.
 func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 	out := map[string][]byte{}
+	// Build the template helpers once and reuse them for every file
+	// and every [[include]] rule in this pass.
+	funcs := funcMap()
 	err := filepath.Walk(t.BaseDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
-		}
-		if info.IsDir() {
-			return nil
 		}
 		rel, _ := filepath.Rel(t.BaseDir, path)
 		rel = filepath.ToSlash(rel)
 		candidate := stripTmplExt(rel)
 		if isExcluded(candidate, t.SpinToml.Exclude) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		include, skipDir, err := t.shouldInclude(rel, candidate, values, funcs)
+		if err != nil {
+			return err
+		}
+		if skipDir {
+			return filepath.SkipDir
+		}
+		if !include {
+			return nil
+		}
+		if info.IsDir() {
 			return nil
 		}
 		if filepath.Ext(rel) != ".tmpl" {
@@ -77,7 +101,7 @@ func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 			out[candidate] = b
 			return nil
 		}
-		rendered, err := renderFile(path, values)
+		rendered, err := renderFile(path, values, funcs)
 		if err != nil {
 			return fmt.Errorf("%s: %w", rel, err)
 		}
@@ -85,6 +109,131 @@ func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 		return nil
 	})
 	return out, err
+}
+
+// shouldInclude evaluates the [[include]] rules for a path. If no
+// rules exist, the file is included. Otherwise the path must match
+// at least one rule whose If template renders truthy. Directories
+// with no matching true rule return skipDir=true so the walk can
+// prune the subtree.
+func (t *Template) shouldInclude(rel, candidate string, values map[string]any, funcs template.FuncMap) (include bool, skipDir bool, err error) {
+	if len(t.SpinToml.Include) == 0 {
+		return true, false, nil
+	}
+	info, statErr := os.Stat(filepath.Join(t.BaseDir, rel))
+	isDir := statErr == nil && info.IsDir()
+	matched := false
+	for _, rule := range t.SpinToml.Include {
+		ok, merr := matchIncludeRule(rule, rel, candidate)
+		if merr != nil {
+			return false, false, merr
+		}
+		if !ok {
+			continue
+		}
+		matched = true
+		if rule.If == "" {
+			return true, false, nil
+		}
+		truthy, terr := renderBool(rule.If, values, funcs)
+		if terr != nil {
+			return false, false, terr
+		}
+		if truthy {
+			return true, false, nil
+		}
+	}
+	if !matched {
+		return true, false, nil
+	}
+	if isDir {
+		return false, true, nil
+	}
+	return false, false, nil
+}
+
+// matchIncludeRule reports whether the rule's path glob matches rel
+// (with .tmpl extension) or candidate (without it).
+func matchIncludeRule(rule IncludeRule, rel, candidate string) (bool, error) {
+	for _, p := range []string{candidate, rel} {
+		if p == "" {
+			continue
+		}
+		if ok, err := matchGlob(rule.Path, p); err != nil {
+			return false, fmt.Errorf("include rule %q: invalid glob: %w", rule.Path, err)
+		} else if ok {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// matchGlob reports whether name matches pattern. It supports ** to
+// match any number of directories, plus single-segment * like
+// filepath.Match. Patterns without ** fall back to filepath.Match.
+func matchGlob(pattern, name string) (bool, error) {
+	if !strings.Contains(pattern, "**") {
+		return filepath.Match(pattern, name)
+	}
+	parts := strings.Split(pattern, "**")
+	// pattern starts with **
+	if parts[0] == "" {
+		rest := strings.TrimPrefix(strings.Join(parts[1:], "**"), "/")
+		if rest == "" {
+			return true, nil
+		}
+		return matchAnySuffix(name, rest), nil
+	}
+	// pattern ends with **
+	if parts[len(parts)-1] == "" {
+		prefix := strings.TrimSuffix(parts[0], "/")
+		return strings.HasPrefix(name, prefix), nil
+	}
+	// prefix/**/suffix
+	prefix := parts[0]
+	suffix := strings.Join(parts[1:], "**")
+	if !strings.HasPrefix(name, prefix) {
+		return false, nil
+	}
+	inner := strings.TrimPrefix(name, prefix)
+	inner = strings.TrimPrefix(inner, "/")
+	return matchAnySuffix(inner, strings.TrimPrefix(suffix, "/")), nil
+}
+
+func matchAnySuffix(name, suffixPattern string) bool {
+	if suffixPattern == "" {
+		return true
+	}
+	segments := strings.Split(suffixPattern, "/")
+	for i := 0; i <= len(strings.Split(name, "/"))-len(segments); i++ {
+		candidate := strings.Join(strings.Split(name, "/")[i:], "/")
+		if ok, _ := filepath.Match(suffixPattern, candidate); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// renderBool renders a Go template string against values and returns
+// whether the result is truthy. Non-bool results follow Go's
+// template truthiness rules.
+func renderBool(tpl string, values map[string]any, funcs template.FuncMap) (bool, error) {
+	t, err := template.New("include").Funcs(funcs).Parse(tpl)
+	if err != nil {
+		return false, fmt.Errorf("include rule %q: parse: %w", tpl, err)
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, values); err != nil {
+		return false, fmt.Errorf("include rule %q: render: %w", tpl, err)
+	}
+	s := bytes.TrimSpace(buf.Bytes())
+	if len(s) == 0 {
+		return false, nil
+	}
+	if s[0] == 't' || s[0] == 'T' || s[0] == '1' || s[0] == 'y' || s[0] == 'Y' {
+		return true, nil
+	}
+	return false, nil
 }
 
 // isExcluded reports whether path matches any of the exclude globs.
@@ -123,7 +272,16 @@ func (t *Template) RenderTo(dest string, values map[string]any) error {
 // Returns the first non-nil error encountered. The post-hook and
 // the spin.toml deletion are best-effort cleanup operations: if
 // the post-hook fails, the spin.toml deletion still runs.
-func (t *Template) RenderToWithPost(dest string, values map[string]any) error {
+func (t *Template) RenderToWithPost(dest string, values map[string]any, opts HookOptions) error {
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return fmt.Errorf("mkdir %q: %w", dest, err)
+	}
+	if err := t.copyPreDir(dest); err != nil {
+		return err
+	}
+	if err := RunPreHook(t, values, dest, opts); err != nil {
+		return err
+	}
 	files, err := t.Render(values)
 	if err != nil {
 		return err
@@ -131,9 +289,12 @@ func (t *Template) RenderToWithPost(dest string, values map[string]any) error {
 	if err := writeFiles(dest, files); err != nil {
 		return err
 	}
+	if err := t.copyPostDir(dest); err != nil {
+		return err
+	}
 	// Post-hook: best-effort. Even if it fails, we still attempt
 	// to delete spin.toml from the output (TPL-16).
-	hookErr := RunPostHook(t, values, dest)
+	hookErr := RunPostHook(t, values, dest, opts)
 	deleteErr := deleteSpinToml(dest)
 	if hookErr != nil {
 		return hookErr
@@ -158,6 +319,65 @@ func deleteSpinToml(dest string) error {
 			return os.Remove(path)
 		}
 		return nil
+	})
+}
+
+// copyPreDir copies the template's optional _pre/ directory into
+// dest/_pre/ so pre-hooks can reference scripts or assets before the
+// main _base/ files are written.
+func (t *Template) copyPreDir(dest string) error {
+	return copyHookAssets(t.PreHookDir, filepath.Join(dest, "_pre"))
+}
+
+// copyPostDir copies the template's optional _post/ directory into
+// dest/_post/ so post-hooks can reference scripts or assets stored
+// alongside the template.
+func (t *Template) copyPostDir(dest string) error {
+	return copyHookAssets(t.PostHookDir, filepath.Join(dest, "_post"))
+}
+
+// copyHookAssets copies a hook-asset directory verbatim (no .tmpl
+// rendering). The destination must stay inside destRoot. Missing src
+// is a no-op; any other error is returned.
+func copyHookAssets(src, destRoot string) error {
+	if src == "" {
+		return nil
+	}
+	info, err := os.Stat(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if !info.IsDir() {
+		return nil
+	}
+	cleanDestRoot := filepath.Clean(destRoot) + string(filepath.Separator)
+	return filepath.Walk(src, func(path string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destRoot, rel)
+		cleanTarget := filepath.Clean(target)
+		if !strings.HasPrefix(cleanTarget+string(filepath.Separator), cleanDestRoot) {
+			return fmt.Errorf("hook asset path traversal: %q resolves outside %q", rel, destRoot)
+		}
+		if info.IsDir() {
+			return os.MkdirAll(target, info.Mode().Perm())
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, info.Mode().Perm())
 	})
 }
 

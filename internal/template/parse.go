@@ -24,7 +24,9 @@ type rawSpinToml struct {
 	Repository     string         `toml:"repository"`
 	MinSpinVersion string         `toml:"min_spin_version"`
 	Exclude        []string       `toml:"exclude"`
+	Include        []IncludeRule  `toml:"include"`
 	Params         map[string]any `toml:"params"`
+	Pre            []PreStep      `toml:"pre"`
 	Post           []PostStep     `toml:"post"`
 	Tags           []string       `toml:"tags"`
 }
@@ -57,7 +59,9 @@ func parseTOML(b []byte, st *SpinToml) error {
 	st.Repository = raw.Repository
 	st.MinSpinVersion = raw.MinSpinVersion
 	st.Exclude = raw.Exclude
+	st.Include = raw.Include
 	st.Post = raw.Post
+	st.Pre = raw.Pre
 	st.Tags = raw.Tags
 
 	for k, v := range raw.Params {

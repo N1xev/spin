@@ -45,9 +45,27 @@ type SpinToml struct {
 	Repository     string                 `toml:"repository"`
 	MinSpinVersion string                 `toml:"min_spin_version"`
 	Exclude        []string               `toml:"exclude"`
+	Include        []IncludeRule          `toml:"include"`
 	Params         map[string]params.Spec `toml:"params"`
+	Pre            []PreStep              `toml:"pre"`
 	Post           []PostStep             `toml:"post"`
 	Tags           []string               `toml:"tags"`
+}
+
+// IncludeRule gates files or directories on a param-driven condition.
+// Path is a glob relative to _base/. If is non-empty it is rendered as a
+// Go template against the resolved values; the file/directory is included
+// only when the result is truthy. An empty If always includes.
+type IncludeRule struct {
+	Path string `toml:"path"`
+	If   string `toml:"if"`
+}
+
+// PreStep is one command in the pre-scaffold hook. It runs after params
+// are resolved but before files are rendered, via sh -c in the project
+// root. Steps execute in order; the hook stops on the first failure.
+type PreStep struct {
+	Run string `toml:"run"`
 }
 
 // Author identifies the template creator. All fields are optional;
@@ -80,20 +98,10 @@ func ParseSpinToml(path string) (*SpinToml, error) {
 	return ParseSpinTomlBytes(b)
 }
 
-// ParseSpinTomlBytes parses a spin.toml from raw bytes. Uses the
-// BurntSushi/toml-style lib via the standard library's encoding/toml?
-// No -- encoding/toml/v2 was promoted to stdlib in Go 1.23. We use it
-// here.
-//
-//	[Note: if encoding/toml is not available in the build's Go version,
-//	 fall back to pelletier/go-toml. The scaffolded go.mod pins Go 1.25.]
+// ParseSpinTomlBytes parses a spin.toml from raw bytes. Uses
+// github.com/BurntSushi/toml for full TOML support; there is no stdlib
+// encoding/toml package available in Go today.
 func ParseSpinTomlBytes(b []byte) (*SpinToml, error) {
-	// encoding/toml/v2 was promoted to stdlib; using it would require
-	// an import. To keep the v2 skeleton self-contained without an
-	// extra dep, we use a minimal hand-rolled parser sufficient for
-	// the schema. Full TOML features (multiline, inline tables beyond
-	// `{ type = "..." }`, datetime) are NOT supported in v2.0; the
-	// registry will validate manifests before publishing.
 	st := &SpinToml{Params: map[string]params.Spec{}}
 	if err := parseTOML(b, st); err != nil {
 		return nil, err

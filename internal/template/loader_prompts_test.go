@@ -21,15 +21,14 @@ func TestDefaultInvalidPinnedPrompt_AlwaysKeeps(t *testing.T) {
 
 // TestDefaultExistingDestPrompt_ReturnsWipe pins the contract: the
 // fallback for "dest already exists, what do you want to do?"
-// always returns destWipe. This matches the pre-hook behaviour so
-// piped invocations of `spin new` and CI runs do not suddenly
-// start prompting.
+// always returns DestWipe, so piped invocations of `spin new` and
+// CI runs do not suddenly start prompting.
 func TestDefaultExistingDestPrompt_ReturnsWipe(t *testing.T) {
 	got, err := defaultExistingDestPrompt("any-name", "/any/path")
 	if err != nil {
 		t.Fatalf("default fallback must not return err; got %v", err)
 	}
-	if got != destWipe {
+	if got != DestWipe {
 		t.Errorf("default fallback must wipe; got %v", got)
 	}
 }

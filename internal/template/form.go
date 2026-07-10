@@ -87,6 +87,14 @@ func toParamValue(v any) params.Value {
 		return params.Value{Bool: x}
 	case []string:
 		return params.Value{List: x}
+	case []any:
+		out := make([]string, 0, len(x))
+		for _, item := range x {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return params.Value{List: out}
 	}
 	return params.Value{}
 }
@@ -97,6 +105,8 @@ func toParamValue(v any) params.Value {
 // Exported because post_hook.go also needs it.
 func UnwrapValue(v params.Value) any {
 	switch {
+	case v.List != nil:
+		return v.List
 	case v.String != "":
 		return v.String
 	case v.Int != 0:
@@ -105,8 +115,6 @@ func UnwrapValue(v params.Value) any {
 		return true
 	case v.Path != "":
 		return v.Path
-	case len(v.List) > 0:
-		return v.List
 	}
 	return ""
 }

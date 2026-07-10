@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -14,13 +15,14 @@ import (
 	"golang.org/x/text/language"
 )
 
-// renderFile renders a single .tmpl file with the given values.
-func renderFile(path string, values map[string]any) ([]byte, error) {
+// renderFile renders a single .tmpl file with the given values and
+// funcs. Callers build funcs once per render pass and reuse it.
+func renderFile(path string, values map[string]any, funcs template.FuncMap) ([]byte, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	t, err := template.New(filepath.Base(path)).Funcs(funcMap()).Parse(string(b))
+	t, err := template.New(filepath.Base(path)).Funcs(funcs).Parse(string(b))
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +73,17 @@ func funcMap() template.FuncMap {
 		// contains: substring check. Useful in templates that want
 		// to gate on a value (e.g. `{{ if contains .tags "rust" }}`).
 		"contains": strings.Contains,
+		// has: report whether a []string contains a value. Used by
+		// [[include]] rules and conditional templates.
+		"has": slices.Contains[[]string, string],
+		// not_has: inverse of has.
+		"not_has": func(list []string, item string) bool {
+			return !slices.Contains(list, item)
+		},
+		// one_of: report whether a value equals any of the given strings.
+		"one_of": func(v string, items ...string) bool {
+			return slices.Contains(items, v)
+		},
 	}
 }
 

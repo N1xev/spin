@@ -1,56 +1,44 @@
 package template
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/N1xev/spin/internal/log"
 	"github.com/N1xev/spin/internal/registry"
+	srcspec "github.com/N1xev/spin/internal/spec"
 	"github.com/N1xev/spin/internal/version"
 )
 
-// Loader fetches a template from a remote source and returns it ready
-// to render. v2.0 supports three sources:
-//   - local path on disk
-//   - git URL (shallow-cloned)
-//   - a name from ~/.config/spin/pinned.json
+// Loader fetches a template from a local path, a git URL, or a name
+// in ~/.config/spin/pinned.json, and returns it ready to render.
 type Loader struct {
 	CacheDir string // where to store cloned templates; defaults to ~/.config/spin/templates
-	// PromptInvalidPinned is called when a template exists on disk
-	// (a pinned template OR a freshly-cloned git URL) but fails
-	// validation (missing spin.toml, no _base/). The hook receives
-	// the template's Name, LocalPath, and the underlying Detect
-	// error. It returns (true, nil) to KEEP the clone, (false, nil)
-	// to REMOVE it, or (_, err) to skip the prompt and surface the
-	// validation error directly. Nil means "no prompt" (use this in
-	// tests or non-interactive runs; the loader will fall back to
-	// defaultInvalidPinnedPrompt which always keeps).
+	// PromptInvalidPinned is called when a template exists on disk but
+	// fails validation. It returns true to keep the clone, false to
+	// remove it, or a non-nil error to surface directly. A nil hook
+	// keeps the clone (used by non-interactive runs and tests).
 	PromptInvalidPinned func(name, localPath string, detectErr error) (bool, error)
-	// PromptExistingDest is called when cloneGit finds that dest
-	// already exists. It receives the proposed name + localPath
-	// and returns one of: destReuse, destPin, destWipe, destCancel.
-	// nil falls back to destWipe (the previous behaviour). Wiring
-	// this from cmd/new.go lets the user choose to pin the existing
-	// clone or use it as-is instead of always re-cloning.
-	PromptExistingDest func(name, localPath string) (destAction, error)
+	// PromptExistingDest is called when cloneGit finds dest already
+	// exists. A nil hook wipes and re-clones, which suits scripts/CI.
+	PromptExistingDest func(name, localPath string) (DestAction, error)
 }
 
-// defaultInvalidPinnedPrompt is the no-TTY fallback for
-// PromptInvalidPinned. Always returns (true, nil) -- non-interactive
-// runs don't delete user data.
+// defaultInvalidPinnedPrompt keeps the clone; non-interactive runs
+// don't delete user data.
 func defaultInvalidPinnedPrompt(_, _ string, _ error) (bool, error) {
 	return true, nil
 }
 
-// defaultExistingDestPrompt is the no-TTY fallback for
-// PromptExistingDest. Wipes -- same behaviour as before this hook
-// existed, so scripts that piped to spin or run in CI get the
-// fast path.
-func defaultExistingDestPrompt(_, _ string) (destAction, error) {
-	return destWipe, nil
+// defaultExistingDestPrompt wipes and re-clones.
+func defaultExistingDestPrompt(_, _ string) (DestAction, error) {
+	return DestWipe, nil
 }
 
 func NewLoader(cacheDir string) *Loader {
@@ -60,30 +48,27 @@ func NewLoader(cacheDir string) *Loader {
 	return &Loader{CacheDir: cacheDir}
 }
 
-// Load fetches a template by source spec. The spec can be:
-//   - a local path:        "/path/to/template"
-//   - a git URL:           "https://github.com/foo/bar.git"
-//   - a `<alias>/<id>` shorthand resolved via a registered registry
-//   - a pinned name:       "my-template" (resolved from ~/.config/spin/pinned.json)
+// Load fetches a template by source spec using a background context.
+// Prefer LoadContext when a cancellable context is available.
 func (l *Loader) Load(spec string) (*Template, error) {
-	// Local path
-	if isLocalPath(spec) {
+	return l.LoadContext(context.Background(), spec)
+}
+
+// LoadContext fetches a template by source spec. The spec can be a
+// local path, a git URL, a `<alias>/<id>` registry shorthand, or a
+// pinned name from ~/.config/spin/pinned.json. ctx bounds any git
+// clone the loader performs.
+func (l *Loader) LoadContext(ctx context.Context, spec string) (*Template, error) {
+	if srcspec.IsLocalPath(spec) {
 		return Detect(spec)
 	}
-	// Git URL
-	if isGitURL(spec) {
-		return l.cloneGit(spec)
+	if srcspec.IsGitURL(spec) {
+		return l.cloneGit(ctx, spec)
 	}
-	// Registry shorthand `<alias>/<id>`: resolve to the template's
-	// upstream source, then route to the appropriate existing path
-	// (cloneGit or Detect). The original spec is preserved on the
-	// returned Template so `promptPinAfterSuccess` knows where the
-	// user started.
 	if registry.IsShorthand(spec) {
-		return l.loadShorthand(spec)
+		return l.loadShorthand(ctx, spec)
 	}
-	// Pinned name: look it up in pinned.json. The user's
-	// `spin new --template <name>` shorthand relies on this.
+	// Pinned name lookup backs `spin new --template <name>`.
 	if t, err := l.loadPinned(spec); err != nil {
 		return nil, err
 	} else if t != nil {
@@ -92,11 +77,11 @@ func (l *Loader) Load(spec string) (*Template, error) {
 	return nil, fmt.Errorf("%q is not a local path, git URL, or pinned name (run `spin add %s` first to pin a git URL or user/repo shorthand)", spec, spec)
 }
 
-// loadShorthand resolves `<alias>/<id>` against the registry
-// manager, then routes the resolved Source through the existing
-// git-URL or local-path path. tpl.Repo is set to the resolved
-// source so promptPinAfterSuccess fires correctly.
-func (l *Loader) loadShorthand(spec string) (*Template, error) {
+// loadShorthand resolves `<alias>/<id>` against the registry manager,
+// then routes the resolved source through the git-URL or local-path
+// path. The original spec is preserved on the returned Template so
+// the post-scaffold pin prompt offers to re-pin the shorthand.
+func (l *Loader) loadShorthand(ctx context.Context, spec string) (*Template, error) {
 	mgr := registry.NewManager()
 	resolved, err := mgr.ResolveShorthand(spec)
 	if err != nil {
@@ -104,19 +89,16 @@ func (l *Loader) loadShorthand(spec string) (*Template, error) {
 	}
 	var tpl *Template
 	switch {
-	case isLocalPath(resolved.Source):
+	case srcspec.IsLocalPath(resolved.Source):
 		tpl, err = Detect(resolved.Source)
-	case isGitURL(resolved.Source):
-		tpl, err = l.cloneGit(resolved.Source)
+	case srcspec.IsGitURL(resolved.Source):
+		tpl, err = l.cloneGit(ctx, resolved.Source)
 	default:
 		return nil, fmt.Errorf("registry: shorthand %q resolved to %q which is neither a local path nor a git URL", spec, resolved.Source)
 	}
 	if err != nil {
 		return nil, err
 	}
-	// Preserve the user's original spec so the post-scaffold pin
-	// prompt offers to re-pin the registry shorthand (not the
-	// upstream source URL).
 	if tpl != nil {
 		tpl.Spec = spec
 	}
@@ -149,7 +131,9 @@ func (l *Loader) loadPinned(spec string) (*Template, error) {
 				}
 				if keep, perr := prompt(p.Name, p.LocalPath, err); perr == nil && !keep {
 					if rerr := client.Unpin(p.Name); rerr == nil {
-						_ = os.RemoveAll(p.LocalPath)
+						if rmErr := os.RemoveAll(p.LocalPath); rmErr != nil {
+							log.Debug("failed to remove invalid pinned template", "path", p.LocalPath, "err", rmErr)
+						}
 					}
 					return nil, fmt.Errorf("pinned %q removed (was: %w)", p.Name, err)
 				}
@@ -171,89 +155,68 @@ func (l *Loader) warnMinSpinVersion(t *Template) {
 		return
 	}
 	if compareSemver(t.SpinToml.MinSpinVersion, version.Version) > 0 {
-		fmt.Fprintf(os.Stderr, "warning: template %q requires spin >= %s (running %s) -- some features may not work\n",
-			t.Name, t.SpinToml.MinSpinVersion, version.Version)
+		log.Warn("template requires a newer spin version; some features may not work",
+			"template", t.Name,
+			"required", t.SpinToml.MinSpinVersion,
+			"running", version.Version)
 	}
 }
 
-func (l *Loader) cloneGit(url string) (*Template, error) {
-	dest := filepath.Join(l.CacheDir, registry.SanitiseRepoName(url))
+func (l *Loader) cloneGit(ctx context.Context, url string) (*Template, error) {
+	name := registry.SanitiseRepoName(url)
+	dest := filepath.Join(l.CacheDir, name)
 
-	// If we already have something at dest, ask before we touch it.
-	// "Something" can mean: a previous successful clone, a previous
-	// broken clone, or just stale files. The user gets four choices:
-	//   - Reuse   : treat dest as-is and Detect it (no network)
-	//   - Pin     : same as Reuse, but also persist the source so
-	//               future `spin new --template <name>` works offline
-	//   - Wipe    : rm -rf dest and fall through to the fresh clone
-	//   - Cancel  : bail out without changes
-	// This is what the user is asking for: don't just nuking their
-	// existing clone, give them a say in what happens next.
+	// Something already at dest (a prior clone or stale files): ask
+	// before touching it instead of always wiping.
 	if l.destExists(dest) {
 		prompt := l.PromptExistingDest
 		if prompt == nil {
-			// No prompt wired: behave like the old code -- wipe and
-			// re-clone. This is the right default for scripts/CI.
 			prompt = defaultExistingDestPrompt
 		}
-		action, aerr := prompt(registry.SanitiseRepoName(url), dest)
+		action, aerr := prompt(name, dest)
 		if aerr != nil {
 			return nil, aerr
 		}
 		switch action {
-		case destReuse, destPin:
-			return l.detectOrPromptInvalid(registry.SanitiseRepoName(url), dest)
-		case destWipe:
+		case DestReuse, DestPin:
+			return l.detectOrPromptInvalid(name, dest)
+		case DestWipe:
 			if err := os.RemoveAll(dest); err != nil {
 				return nil, fmt.Errorf("clear cache for %s: %w", dest, err)
 			}
-		case destCancel:
-			return nil, fmt.Errorf("%q exists at %s; cancelled", registry.SanitiseRepoName(url), dest)
+		case DestCancel:
+			return nil, fmt.Errorf("%q exists at %s; cancelled", name, dest)
 		}
 	}
 
-	// Shallow clone with no terminal prompts. Preserve the parent
-	// environment and add GIT_TERMINAL_PROMPT=0 so a missing/expired
-	// credential never blocks the scaffolder with a password prompt.
-	cmd := exec.Command("git", "clone", "--depth=1", url, dest)
+	// Shallow clone, no terminal prompts. GIT_TERMINAL_PROMPT=0 keeps
+	// a missing credential from blocking on a password prompt; the
+	// context bounds a slow or hanging remote.
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", url, dest)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("git clone %s: %s: %w", url, string(out), err)
+		return nil, fmt.Errorf("git clone %s: %s: %w", url, strings.TrimSpace(string(out)), err)
 	}
-	// The clone succeeded; now check it's actually a template.
-	return l.detectOrPromptInvalid(registry.SanitiseRepoName(url), dest)
+	return l.detectOrPromptInvalid(name, dest)
 }
 
-// destExists reports whether path exists (file or dir). Used by
-// cloneGit to detect a pre-existing clone and offer the user a
-// choice other than the previous "wipe and re-clone" behaviour.
+// destExists reports whether path exists (file or dir).
 func (l *Loader) destExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
 
-// destAction is the user's choice when a pre-existing clone is
-// found at the destination. See cloneGit for the full list.
-type destAction int
-
-// DestAction is the exported alias so cmd/ can refer to the
-// constants without exposing the unexported int type.
-type DestAction = destAction
+// DestAction is the user's choice when a pre-existing clone is found
+// at the destination.
+type DestAction int
 
 const (
-	destReuse destAction = iota
-	destPin
-	destWipe
-	destCancel
-)
-
-// Exported names so cmd/ can use them in prompts without poking
-// at the unexported ints.
-const (
-	DestReuse  = destReuse
-	DestPin    = destPin
-	DestWipe   = destWipe
-	DestCancel = destCancel
+	DestReuse DestAction = iota // use the existing clone as-is
+	DestPin                     // reuse and persist the source for offline use
+	DestWipe                    // remove the clone and re-clone
+	DestCancel                  // abort without changes
 )
 
 // detectOrPromptInvalid runs Detect(dest). On failure it asks the
@@ -274,7 +237,9 @@ func (l *Loader) detectOrPromptInvalid(name, dest string) (*Template, error) {
 		return nil, perr
 	}
 	if !keep {
-		_ = os.RemoveAll(dest)
+		if rmErr := os.RemoveAll(dest); rmErr != nil {
+			log.Debug("failed to remove invalid template clone", "path", dest, "err", rmErr)
+		}
 		return nil, fmt.Errorf("%q at %s removed (was: %w)", name, dest, err)
 	}
 	return nil, fmt.Errorf("%q at %s: %w", name, dest, err)
@@ -310,19 +275,6 @@ func (l *Loader) Clear(ref string) error {
 		return err
 	}
 	return os.RemoveAll(dest)
-}
-
-func isLocalPath(s string) bool {
-	return len(s) > 0 && (s[0] == '/' || s[0] == '.' || s[0] == '~')
-}
-
-func isGitURL(s string) bool {
-	for _, prefix := range []string{"http://", "https://", "git@", "git://", "ssh://"} {
-		if len(s) > len(prefix) && s[:len(prefix)] == prefix {
-			return true
-		}
-	}
-	return false
 }
 
 // compareSemver returns -1, 0, 1 like strings.Compare but on

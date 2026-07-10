@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	srcspec "github.com/N1xev/spin/internal/spec"
 )
 
 // TestLoader_Load_LocalPath verifies Load with a local dir
@@ -91,8 +93,8 @@ func TestLoader_IsLocalPath(t *testing.T) {
 		{"foo/bar", false}, // ambiguous; treated as a registry shorthand, not a local path
 	}
 	for _, tc := range cases {
-		if got := isLocalPath(tc.in); got != tc.want {
-			t.Errorf("isLocalPath(%q) = %v, want %v", tc.in, got, tc.want)
+		if got := srcspec.IsLocalPath(tc.in); got != tc.want {
+			t.Errorf("IsLocalPath(%q) = %v, want %v", tc.in, got, tc.want)
 		}
 	}
 }
@@ -112,8 +114,8 @@ func TestLoader_IsGitURL(t *testing.T) {
 		{"./local", false},
 	}
 	for _, tc := range cases {
-		if got := isGitURL(tc.in); got != tc.want {
-			t.Errorf("isGitURL(%q) = %v, want %v", tc.in, got, tc.want)
+		if got := srcspec.IsGitURL(tc.in); got != tc.want {
+			t.Errorf("IsGitURL(%q) = %v, want %v", tc.in, got, tc.want)
 		}
 	}
 }
@@ -168,7 +170,7 @@ func TestRender_DeletesSpinToml(t *testing.T) {
 		t.Fatalf("Detect: %v", err)
 	}
 	dest := t.TempDir()
-	if err := tpl.RenderToWithPost(dest, map[string]any{}); err != nil {
+	if err := tpl.RenderToWithPost(dest, map[string]any{}, HookOptions{}); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	// spin.toml at top level was never rendered (it's not in
@@ -200,7 +202,7 @@ func TestRunPostHook_RunsShellCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
-	if err := RunPostHook(tpl, map[string]any{"name": "test-proj"}, dir); err != nil {
+	if err := RunPostHook(tpl, map[string]any{"name": "test-proj"}, dir, HookOptions{}); err != nil {
 		t.Fatalf("RunPostHook: %v", err)
 	}
 	// post-ran.txt is the touch side-effect; it must exist.
@@ -228,11 +230,11 @@ func TestRunPostHook_RunsShellCommand(t *testing.T) {
 // verification in the plan (it requires a real git server).
 func TestLoader_Load_GitURL_Mock(t *testing.T) {
 	spec := "https://github.com/foo/bar.git"
-	if isLocalPath(spec) {
-		t.Errorf("isLocalPath(%q) = true, want false (git URLs are not local)", spec)
+	if srcspec.IsLocalPath(spec) {
+		t.Errorf("IsLocalPath(%q) = true, want false (git URLs are not local)", spec)
 	}
-	if !isGitURL(spec) {
-		t.Errorf("isGitURL(%q) = false, want true", spec)
+	if !srcspec.IsGitURL(spec) {
+		t.Errorf("IsGitURL(%q) = false, want true", spec)
 	}
 }
 
@@ -256,7 +258,7 @@ run = "echo second > step2.txt"
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
-	if err := RunPostHook(tpl, map[string]any{}, dir); err != nil {
+	if err := RunPostHook(tpl, map[string]any{}, dir, HookOptions{}); err != nil {
 		t.Fatalf("RunPostHook: %v", err)
 	}
 	for name, want := range map[string]string{"step1.txt": "first", "step2.txt": "second"} {
@@ -293,7 +295,7 @@ run = "echo should-not-run > step3.txt"
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
-	err = RunPostHook(tpl, map[string]any{}, dir)
+	err = RunPostHook(tpl, map[string]any{}, dir, HookOptions{})
 	if err == nil {
 		t.Fatal("expected post-hook to fail, got nil")
 	}

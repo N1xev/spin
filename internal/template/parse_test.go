@@ -31,6 +31,13 @@ project_name = "myapp"
 edition      = { type = "select", options = ["2021", "2024"], default = "2021" }
 feature      = { type = "bool", prompt = "Enable async?", default = true }
 
+[[pre]]
+run = "mkdir -p {{.project_name}}/cmd"
+
+[[include]]
+path = "ci/**"
+if = "{{ .feature }}"
+
 [[post]]
 run = "cargo init --name {{.project_name}}"
 
@@ -67,6 +74,12 @@ run = "git init"
 	}
 	if len(st.Post) != 2 {
 		t.Errorf("len(Post) = %d, want 2", len(st.Post))
+	}
+	if len(st.Pre) != 1 || st.Pre[0].Run != "mkdir -p {{.project_name}}/cmd" {
+		t.Errorf("Pre = %v", st.Pre)
+	}
+	if len(st.Include) != 1 || st.Include[0].Path != "ci/**" || st.Include[0].If != "{{ .feature }}" {
+		t.Errorf("Include = %v", st.Include)
 	}
 
 	// Params: shorthand ("myapp") + inline-table forms.
