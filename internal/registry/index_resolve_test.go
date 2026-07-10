@@ -15,15 +15,15 @@ func TestIsShorthand(t *testing.T) {
 		{"official/go-api", true},
 		{"my/local", true},
 		{"a/b", true},
-		{"foo", false},                  // no slash
-		{"/abs/path", false},            // local path
-		{"./rel", false},                // local path
-		{"~/home", false},               // local path
+		{"foo", false},                       // no slash
+		{"/abs/path", false},                 // local path
+		{"./rel", false},                     // local path
+		{"~/home", false},                    // local path
 		{"https://example.com/x.git", false}, // git URL
-		{"git@host:foo/bar", false},     // git URL
-		{"a/b/c", false},                // more than one slash
-		{"/leading", false},             // local path
-		{"trailing/", false},            // empty id
+		{"git@host:foo/bar", false},          // git URL
+		{"a/b/c", false},                     // more than one slash
+		{"/leading", false},                  // local path
+		{"trailing/", false},                 // empty id
 		{"", false},
 	}
 	for _, c := range cases {

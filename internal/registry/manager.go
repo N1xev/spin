@@ -12,6 +12,9 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/N1xev/spin/internal/log"
+	srcspec "github.com/N1xev/spin/internal/spec"
 )
 
 // ErrAliasInvalid is returned when an alias fails ValidateAlias. The
@@ -146,7 +149,7 @@ func (m Manager) Add(alias, source string, force bool) (Registry, error) {
 		return Registry{}, err
 	}
 	if source == "" {
-		return Registry{}, fmt.Errorf("registry: add: empty source")
+		return Registry{}, fmt.Errorf("empty source")
 	}
 
 	cfg, err := m.Load()
@@ -165,14 +168,16 @@ func (m Manager) Add(alias, source string, force bool) (Registry, error) {
 	// half-state under registries/<alias>/.
 	dest := filepath.Join(m.RegistriesDir(), alias)
 	if err := os.MkdirAll(m.RegistriesDir(), 0o755); err != nil {
-		return Registry{}, fmt.Errorf("registry: add: mkdir cache: %w", err)
+		return Registry{}, fmt.Errorf("create cache directory: %w", err)
 	}
 
 	// Drop any existing entry first (--force). We do this AFTER
 	// validation passes but BEFORE the new clone so the cache slot
 	// is clean.
 	if force {
-		_ = os.RemoveAll(dest)
+		if err := os.RemoveAll(dest); err != nil {
+			log.Debug("failed to remove existing registry cache", "path", dest, "err", err)
+		}
 	}
 
 	kind, err := m.cloneOrLink(alias, source, dest)
@@ -183,12 +188,16 @@ func (m Manager) Add(alias, source string, force bool) (Registry, error) {
 	// Final sanity check: the destination must contain registry.toml.
 	// If not, the source wasn't a registry -- roll back and error.
 	if _, err := os.Stat(filepath.Join(dest, "registry.toml")); err != nil {
-		_ = os.RemoveAll(dest)
-		return Registry{}, fmt.Errorf("registry: add: %s is not a registry (missing registry.toml): %w", source, err)
+		if rmErr := os.RemoveAll(dest); rmErr != nil {
+			log.Debug("failed to clean up invalid registry cache", "path", dest, "err", rmErr)
+		}
+		return Registry{}, fmt.Errorf("source %s is not a registry: missing registry.toml", source)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "templates")); err != nil {
-		_ = os.RemoveAll(dest)
-		return Registry{}, fmt.Errorf("registry: add: %s is not a registry (missing templates/ directory): %w", source, err)
+		if rmErr := os.RemoveAll(dest); rmErr != nil {
+			log.Debug("failed to clean up invalid registry cache", "path", dest, "err", rmErr)
+		}
+		return Registry{}, fmt.Errorf("source %s is not a registry: missing templates/ directory", source)
 	}
 
 	reg := Registry{
@@ -199,7 +208,9 @@ func (m Manager) Add(alias, source string, force bool) (Registry, error) {
 		AddedAt: time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := m.upsert(reg); err != nil {
-		_ = os.RemoveAll(dest)
+		if rmErr := os.RemoveAll(dest); rmErr != nil {
+			log.Debug("failed to clean up registry cache after upsert failure", "path", dest, "err", rmErr)
+		}
 		return Registry{}, err
 	}
 	return reg, nil
@@ -210,21 +221,21 @@ func (m Manager) Add(alias, source string, force bool) (Registry, error) {
 // clone to a sibling temp dir then rename into dest so a failed
 // clone leaves no garbage under registries/<alias>/.
 func (m Manager) cloneOrLink(alias, source, dest string) (RegistryKind, error) {
-	if isLocalPath(source) {
+	if srcspec.IsLocalPath(source) {
 		src, err := expandHome(source)
 		if err != nil {
-			return "", fmt.Errorf("registry: add: resolve source: %w", err)
+			return "", fmt.Errorf("resolve source: %w", err)
 		}
 		info, err := os.Stat(src)
 		if err != nil {
-			return "", fmt.Errorf("registry: add: source: %w", err)
+			return "", fmt.Errorf("source not found: %s", src)
 		}
 		if !info.IsDir() {
-			return "", fmt.Errorf("registry: add: source %s is not a directory", src)
+			return "", fmt.Errorf("source %s is not a directory", src)
 		}
 		if err := os.Symlink(src, dest); err != nil {
 			if copyErr := copyDir(src, dest); copyErr != nil {
-				return "", fmt.Errorf("registry: add: symlink (%v) and copy (%w) both failed", err, copyErr)
+				return "", fmt.Errorf("link/copy source %s failed: symlink %v, copy %w", src, err, copyErr)
 			}
 		}
 		return KindLocal, nil
@@ -235,13 +246,15 @@ func (m Manager) cloneOrLink(alias, source, dest string) (RegistryKind, error) {
 	parent := filepath.Dir(dest)
 	tmp, err := os.MkdirTemp(parent, alias+".clone-")
 	if err != nil {
-		return "", fmt.Errorf("registry: add: tmpdir: %w", err)
+		return "", fmt.Errorf("create temp directory: %w", err)
 	}
 	defer func() {
 		// If we never renamed tmp into dest, clean it up. The
 		// rename below clears the tmp path so this is a no-op.
 		if _, err := os.Stat(tmp); err == nil {
-			_ = os.RemoveAll(tmp)
+			if rmErr := os.RemoveAll(tmp); rmErr != nil {
+				log.Debug("failed to clean up registry clone temp dir", "path", tmp, "err", rmErr)
+			}
 		}
 	}()
 
@@ -250,11 +263,11 @@ func (m Manager) cloneOrLink(alias, source, dest string) (RegistryKind, error) {
 	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", source, tmp)
 	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	if out, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git clone %s: %s: %w", source, strings.TrimSpace(string(out)), err)
+		return "", fmt.Errorf("cannot clone %s: %s", source, strings.TrimSpace(string(out)))
 	}
 
 	if err := os.Rename(tmp, dest); err != nil {
-		return "", fmt.Errorf("registry: add: rename %s -> %s: %w", tmp, dest, err)
+		return "", fmt.Errorf("install cloned registry: %w", err)
 	}
 	return KindGit, nil
 }
@@ -301,7 +314,7 @@ func (m Manager) Refresh(alias string) (Registry, error) {
 		cmd := exec.CommandContext(ctx, "git", "-C", r.Path, "fetch", "--depth=1", "origin")
 		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 		if out, err := cmd.CombinedOutput(); err != nil {
-			return r, fmt.Errorf("git fetch %s: %s: %w", r.Path, strings.TrimSpace(string(out)), err)
+			return r, fmt.Errorf("cannot fetch %s: %s", r.Path, strings.TrimSpace(string(out)))
 		}
 		reset := exec.CommandContext(ctx, "git", "-C", r.Path, "reset", "--hard", "origin/HEAD")
 		reset.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
@@ -310,7 +323,7 @@ func (m Manager) Refresh(alias string) (Registry, error) {
 			reset2 := exec.CommandContext(ctx, "git", "-C", r.Path, "reset", "--hard", "FETCH_HEAD")
 			reset2.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 			if out2, err2 := reset2.CombinedOutput(); err2 != nil {
-				return r, fmt.Errorf("git reset %s: %s: %w (also tried FETCH_HEAD: %s)", r.Path, strings.TrimSpace(string(out)), err, strings.TrimSpace(string(out2)))
+				return r, fmt.Errorf("cannot reset %s: %s (also tried FETCH_HEAD: %s)", r.Path, strings.TrimSpace(string(out)), strings.TrimSpace(string(out2)))
 			}
 		}
 		r.LastUpdated = time.Now().UTC().Format(time.RFC3339)
@@ -465,15 +478,21 @@ func (m Manager) writeRegistries(cfg RegistriesConfig) error {
 	cleanup := true
 	defer func() {
 		if cleanup {
-			_ = os.Remove(tmpName)
+			if rmErr := os.Remove(tmpName); rmErr != nil {
+				log.Debug("failed to remove temp registries file", "path", tmpName, "err", rmErr)
+			}
 		}
 	}()
 	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			log.Debug("failed to close temp registries file", "path", tmpName, "err", closeErr)
+		}
 		return err
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			log.Debug("failed to close temp registries file", "path", tmpName, "err", closeErr)
+		}
 		return err
 	}
 	if err := tmp.Close(); err != nil {

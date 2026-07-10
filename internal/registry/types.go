@@ -5,11 +5,11 @@ package registry
 // resolved at pin time. Older pin files (pre-v2.0) may have an empty
 // LocalPath; the consumer should fall back to CacheDir/templates/<name>.
 type Pinned struct {
-	Name      string `json:"name"`        // "vercel/nextjs-tailwind"
-	Source    string `json:"source"`      // git URL or local path
-	PinnedAt  string `json:"pinned_at"`   // ISO 8601
-	Version   string `json:"version"`     // last-seen registry version
-	LocalPath string `json:"local_path"`  // absolute path on disk (v2.0+)
+	Name      string `json:"name"`              // "vercel/nextjs-tailwind"
+	Source    string `json:"source"`            // git URL or local path
+	PinnedAt  string `json:"pinned_at"`         // ISO 8601
+	Version   string `json:"version"`           // last-seen registry version
+	LocalPath string `json:"local_path"`        // absolute path on disk (v2.0+)
 	Removed   bool   `json:"removed,omitempty"` // soft-deleted; cache still on disk until --purge
 }
 

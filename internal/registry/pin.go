@@ -9,6 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/N1xev/spin/internal/log"
+	srcspec "github.com/N1xev/spin/internal/spec"
 )
 
 // Client is the local pin store. It owns ~/.config/spin/pinned.json
@@ -30,45 +33,24 @@ func New() *Client {
 }
 
 // Add resolves a spec (local path, git URL, or GitHub user/repo
-// shorthand) into a Pinned template. The clone/copy is performed
-// before the Pinned record is returned, so the caller can write it
-// to pinned.json only on success.
-//
-// "user/repo" is transparently expanded to https://github.com/
-// user/repo.git -- that's the obvious thing a user will try, and
-// there is no useful reason to force them to type the full URL. The
-// shorthand is a thin convenience on top of addGit; it does NOT
-// require the registry server to be deployed.
+// shorthand) into a Pinned template. The clone/copy runs before the
+// Pinned record is returned, so the caller writes pinned.json only on
+// success. "user/repo" is expanded to its canonical GitHub URL.
 func (c *Client) Add(spec string) (*Pinned, error) {
 	if spec == "" {
 		return nil, fmt.Errorf("registry: add: empty spec")
 	}
-	if isShorthand(spec) {
+	if srcspec.IsShorthand(spec) {
 		spec = expandShorthand(spec)
 	}
 	switch {
-	case isLocalPath(spec):
+	case srcspec.IsLocalPath(spec):
 		return c.addLocal(spec)
-	case isGitURL(spec):
+	case srcspec.IsGitURL(spec):
 		return c.addGit(spec)
 	default:
 		return nil, fmt.Errorf("registry: cannot resolve spec %q; expected a local path, a git URL, or a user/repo shorthand", spec)
 	}
-}
-
-// isShorthand reports whether spec looks like "user/repo" -- exactly
-// one slash, no scheme, no leading dot/tilde, no second slash (so
-// paths like "foo/bar/baz" or URLs like "git@host:foo/bar" are not
-// mistaken for it). Both sides must be non-empty.
-func isShorthand(s string) bool {
-	if s == "" || isLocalPath(s) || isGitURL(s) {
-		return false
-	}
-	first := strings.IndexByte(s, '/')
-	if first <= 0 || first == len(s)-1 {
-		return false
-	}
-	return strings.IndexByte(s[first+1:], '/') < 0
 }
 
 // expandShorthand turns "user/repo" into the canonical GitHub URL.
@@ -129,9 +111,8 @@ func (c *Client) addGit(spec string) (*Pinned, error) {
 		return nil, fmt.Errorf("registry: add git: clear dest: %w", err)
 	}
 
-	// Shallow clone with no terminal prompts. Preserve the parent
-	// environment and add GIT_TERMINAL_PROMPT=0 so a missing/expired
-	// credential never blocks the scaffolder with a password prompt.
+	// Shallow clone, no terminal prompts. GIT_TERMINAL_PROMPT=0 keeps
+	// a missing credential from blocking on a password prompt.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", spec, dest)
@@ -233,19 +214,6 @@ func gitHeadSHA(dir string) (string, error) {
 // pinned LocalPath with a known-good initial copy. Production
 // code should call (c *Client).Refresh or (c *Client).Add.
 func CopyTreeForTest(src, dst string) error { return copyDir(src, dst) }
-
-func isLocalPath(s string) bool {
-	return len(s) > 0 && (s[0] == '/' || s[0] == '.' || s[0] == '~')
-}
-
-func isGitURL(s string) bool {
-	for _, prefix := range []string{"http://", "https://", "git@", "git://", "ssh://"} {
-		if len(s) > len(prefix) && s[:len(prefix)] == prefix {
-			return true
-		}
-	}
-	return false
-}
 
 // SanitiseRepoName extracts the repo basename from a git URL. E.g.
 //
@@ -420,10 +388,9 @@ func (c *Client) Refresh(pin Pinned) (Pinned, error) {
 	// moves it aside to a .bak snapshot for rollback; from Refresh's
 	// point of view a missing LocalPath is just a fresh clone.
 	switch {
-	case isLocalPath(pin.Source):
-		// Best-effort: blow away the cached copy and recopy from src.
-		// If the source is also missing, the user can re-pin; we
-		// don't want to silently keep a stale copy.
+	case srcspec.IsLocalPath(pin.Source):
+		// Re-copy from source. If the source is gone, fail so the
+		// user re-pins rather than keeping a stale copy.
 		if _, err := os.Stat(pin.Source); err != nil {
 			return Pinned{}, fmt.Errorf("registry: refresh: source %s is gone: %w", pin.Source, err)
 		}
@@ -434,7 +401,7 @@ func (c *Client) Refresh(pin Pinned) (Pinned, error) {
 			return Pinned{}, fmt.Errorf("registry: refresh: copy %s: %w", pin.Source, err)
 		}
 		pin.Version = "local"
-	case isGitURL(pin.Source):
+	case srcspec.IsGitURL(pin.Source):
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", pin.Source, pin.LocalPath)
@@ -471,15 +438,21 @@ func (c *Client) writePinned(all []Pinned) error {
 	cleanup := true
 	defer func() {
 		if cleanup {
-			_ = os.Remove(tmpName)
+			if rmErr := os.Remove(tmpName); rmErr != nil {
+				log.Debug("failed to remove temp pinned file", "path", tmpName, "err", rmErr)
+			}
 		}
 	}()
 	if _, err := tmp.Write(b); err != nil {
-		tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			log.Debug("failed to close temp pinned file", "path", tmpName, "err", closeErr)
+		}
 		return err
 	}
 	if err := tmp.Sync(); err != nil {
-		tmp.Close()
+		if closeErr := tmp.Close(); closeErr != nil {
+			log.Debug("failed to close temp pinned file", "path", tmpName, "err", closeErr)
+		}
 		return err
 	}
 	if err := tmp.Close(); err != nil {

@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+
+	srcspec "github.com/N1xev/spin/internal/spec"
 )
 
 // ErrUnresolved is returned when a `<alias>/<id>` shorthand cannot
@@ -25,22 +27,11 @@ type Resolved struct {
 	Kind   RegistryKind
 }
 
-// IsShorthand reports whether spec is a `<alias>/<id>` shorthand:
-// exactly one slash, both sides non-empty, no other slashes, and
-// does NOT look like a local path or git URL (so URLs and filesystem
-// paths fall through to the local/git paths in template.Loader).
+// IsShorthand reports whether spec is a `<alias>/<id>` shorthand.
+// URLs and filesystem paths fall through to the local/git paths in
+// template.Loader.
 func IsShorthand(spec string) bool {
-	if spec == "" || isLocalPath(spec) || isGitURL(spec) {
-		return false
-	}
-	first := strings.IndexByte(spec, '/')
-	if first <= 0 || first == len(spec)-1 {
-		return false
-	}
-	if strings.Contains(spec[first+1:], "/") {
-		return false
-	}
-	return true
+	return srcspec.IsShorthand(spec)
 }
 
 // ResolveShorthand looks up `<alias>/<id>` against the manager's

@@ -301,7 +301,7 @@ func TestManager_FindDependentPinsByPath(t *testing.T) {
 	mgr := newTestManager(t)
 	reg := Registry{Alias: "x", Path: "/cache/registries/x", Kind: KindLocal}
 	pins := []Pinned{
-		{Name: "ok", LocalPath: "/elsewhere/templates/ok"}, // outside
+		{Name: "ok", LocalPath: "/elsewhere/templates/ok"},              // outside
 		{Name: "gone", LocalPath: "/cache/registries/x/templates/gone"}, // inside
 	}
 	deps := mgr.findDependentPins(reg, pins)
@@ -339,8 +339,23 @@ func TestManager_AddEmptySourceIsError(t *testing.T) {
 
 func TestManager_AddNonExistentLocalSource(t *testing.T) {
 	mgr := newTestManager(t)
-	if _, err := mgr.Add("missing", "/no/such/path", false); err == nil {
-		t.Error("Add with non-existent local source should error")
+	_, err := mgr.Add("missing", "/no/such/path", false)
+	if err == nil {
+		t.Fatal("Add with non-existent local source should error")
+	}
+	if strings.Contains(err.Error(), "registry:") || strings.Contains(err.Error(), "add:") {
+		t.Errorf("error should be flat, without 'registry:' or 'add:' prefixes; got %v", err)
+	}
+}
+
+func TestManager_AddNonExistentGitSource(t *testing.T) {
+	mgr := newTestManager(t)
+	_, err := mgr.Add("missing", "https://github.com/spin-org/does-not-exist-12345.git", false)
+	if err == nil {
+		t.Fatal("Add with non-existent git source should error")
+	}
+	if strings.Contains(err.Error(), "exit status") {
+		t.Errorf("error should not include raw exit status; got %v", err)
 	}
 }
 
