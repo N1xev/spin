@@ -21,8 +21,9 @@ const (
 )
 
 // Value is the resolved value of a Param after the form has run.
-// Only one of the fields is populated, depending on Type.
+// Only one of the data fields is populated, depending on Kind.
 type Value struct {
+	Kind   Type
 	String string
 	Int    int
 	Bool   bool
@@ -76,6 +77,4 @@ func orPrompt(name, p string) string {
 	return name
 }
 
-// _ pins the huh import even when no other file in this package uses it
-// directly; some builds can tree-shake otherwise.
-var _ = huh.NewInput
+

@@ -22,7 +22,7 @@ func (p *TextareaParam) Type() Type     { return TypeTextarea }
 func (p *TextareaParam) Prompt() string { return p.prompt }
 func (p *TextareaParam) Default() any   { return p.def }
 func (p *TextareaParam) Apply(v Value)  { p.value = v.String }
-func (p *TextareaParam) Value() Value   { return Value{String: p.value} }
+func (p *TextareaParam) Value() Value   { return Value{Kind: TypeTextarea, String: p.value} }
 func (p *TextareaParam) Hmm() string    { return p.String() }
 
 func (p *TextareaParam) HuhField() huh.Field {

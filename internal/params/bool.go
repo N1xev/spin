@@ -22,7 +22,7 @@ func (p *BoolParam) Type() Type     { return TypeBool }
 func (p *BoolParam) Prompt() string { return p.prompt }
 func (p *BoolParam) Default() any   { return p.def }
 func (p *BoolParam) Apply(v Value)  { p.value = v.Bool }
-func (p *BoolParam) Value() Value   { return Value{Bool: p.value} }
+func (p *BoolParam) Value() Value   { return Value{Kind: TypeBool, Bool: p.value} }
 func (p *BoolParam) Hmm() string    { return p.String() }
 
 func (p *BoolParam) HuhField() huh.Field {

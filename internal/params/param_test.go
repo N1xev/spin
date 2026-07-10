@@ -15,14 +15,14 @@ func TestValue_RoundTrip(t *testing.T) {
 		p    Param
 		in   Value
 	}{
-		{"text", NewText("n", "p", "def"), Value{String: "hello"}},
-		{"textarea", NewTextarea("n", "p", "def"), Value{String: "line1\nline2"}},
-		{"number", NewNumber("n", "p", 0, nil, nil), Value{Int: 42}},
-		{"bool", NewBool("n", "p", false), Value{Bool: true}},
-		{"path", NewPath("n", "p", "def"), Value{Path: "/tmp"}},
-		{"secret", NewSecret("n", "p"), Value{String: "shh"}},
-		{"select", NewSelect("n", "p", []string{"a", "b"}, "a"), Value{String: "b"}},
-		{"multiselect", NewMultiSelect("n", "p", []string{"a", "b"}, nil), Value{List: []string{"a", "b"}}},
+		{"text", NewText("n", "p", "def"), Value{Kind: TypeText, String: "hello"}},
+		{"textarea", NewTextarea("n", "p", "def"), Value{Kind: TypeTextarea, String: "line1\nline2"}},
+		{"number", NewNumber("n", "p", 0, nil, nil), Value{Kind: TypeNumber, Int: 42}},
+		{"bool", NewBool("n", "p", false), Value{Kind: TypeBool, Bool: true}},
+		{"path", NewPath("n", "p", "def"), Value{Kind: TypePath, Path: "/tmp"}},
+		{"secret", NewSecret("n", "p"), Value{Kind: TypeSecret, String: "shh"}},
+		{"select", NewSelect("n", "p", []string{"a", "b"}, "a"), Value{Kind: TypeSelect, String: "b"}},
+		{"multiselect", NewMultiSelect("n", "p", []string{"a", "b"}, nil), Value{Kind: TypeMultiSelect, List: []string{"a", "b"}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

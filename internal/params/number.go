@@ -38,14 +38,12 @@ func (p *NumberParam) Prompt() string { return p.prompt }
 func (p *NumberParam) Default() any   { return p.def }
 func (p *NumberParam) Apply(v Value)  { p.value = v.Int; p.valueStr = fmt.Sprintf("%d", v.Int) }
 func (p *NumberParam) Value() Value {
-	// Reconcile: if Apply was never called but valueStr is non-empty
-	// (e.g. the form wrote to valueStr directly), parse it now.
-	if p.value == 0 && p.valueStr != "" && p.valueStr != "0" {
+	if p.valueStr != "" {
 		if n, err := strconv.Atoi(p.valueStr); err == nil {
 			p.value = n
 		}
 	}
-	return Value{Int: p.value}
+	return Value{Kind: TypeNumber, Int: p.value}
 }
 func (p *NumberParam) Hmm() string { return p.String() }
 

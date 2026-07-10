@@ -29,7 +29,7 @@ func (p *PathParam) Type() Type     { return TypePath }
 func (p *PathParam) Prompt() string { return p.prompt }
 func (p *PathParam) Default() any   { return p.def }
 func (p *PathParam) Apply(v Value)  { p.value = v.Path }
-func (p *PathParam) Value() Value   { return Value{Path: p.value} }
+func (p *PathParam) Value() Value   { return Value{Kind: TypePath, Path: p.value} }
 func (p *PathParam) Hmm() string    { return p.String() }
 
 func (p *PathParam) HuhField() huh.Field {

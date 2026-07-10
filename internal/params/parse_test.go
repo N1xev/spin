@@ -248,10 +248,10 @@ func TestSetDefaults(t *testing.T) {
 	SetDefaults(ps)
 
 	want := map[string]Value{
-		"name":  {String: "myapp"},
-		"port":  {Int: 8080},
-		"debug": {Bool: true},
-		"ed":    {String: "2021"},
+		"name":  {Kind: TypeText, String: "myapp"},
+		"port":  {Kind: TypeNumber, Int: 8080},
+		"debug": {Kind: TypeBool, Bool: true},
+		"ed":    {Kind: TypeSelect, String: "2021"},
 	}
 	for _, p := range ps {
 		w, ok := want[p.Name()]

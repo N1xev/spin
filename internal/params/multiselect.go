@@ -15,16 +15,22 @@ type MultiSelectParam struct {
 }
 
 func NewMultiSelect(name, prompt string, options, def []string) *MultiSelectParam {
-	return &MultiSelectParam{name: name, prompt: prompt, options: options, def: def}
+	return &MultiSelectParam{name: name, prompt: prompt, options: options, def: def, value: []string{}}
 }
 
 func (p *MultiSelectParam) Name() string   { return p.name }
 func (p *MultiSelectParam) Type() Type     { return TypeMultiSelect }
 func (p *MultiSelectParam) Prompt() string { return p.prompt }
 func (p *MultiSelectParam) Default() any   { return p.def }
-func (p *MultiSelectParam) Apply(v Value)  { p.value = v.List }
-func (p *MultiSelectParam) Value() Value   { return Value{List: p.value} }
-func (p *MultiSelectParam) Hmm() string    { return p.String() }
+func (p *MultiSelectParam) Apply(v Value) {
+	if v.List == nil {
+		p.value = []string{}
+	} else {
+		p.value = v.List
+	}
+}
+func (p *MultiSelectParam) Value() Value { return Value{Kind: TypeMultiSelect, List: p.value} }
+func (p *MultiSelectParam) Hmm() string  { return p.String() }
 
 func (p *MultiSelectParam) HuhField() huh.Field {
 	opts := make([]huh.Option[string], 0, len(p.options))

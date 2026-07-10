@@ -24,7 +24,7 @@ func (p *SelectParam) Type() Type     { return TypeSelect }
 func (p *SelectParam) Prompt() string { return p.prompt }
 func (p *SelectParam) Default() any   { return p.def }
 func (p *SelectParam) Apply(v Value)  { p.value = v.String }
-func (p *SelectParam) Value() Value   { return Value{String: p.value} }
+func (p *SelectParam) Value() Value   { return Value{Kind: TypeSelect, String: p.value} }
 func (p *SelectParam) Hmm() string    { return p.String() }
 
 func (p *SelectParam) HuhField() huh.Field {
@@ -44,7 +44,6 @@ func (p *SelectParam) HuhField() huh.Field {
 			}
 			return fmt.Errorf("not in options: %q", s)
 		})
-		_ = p.def
 	}
 	return f
 }
