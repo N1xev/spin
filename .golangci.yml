@@ -1,8 +1,7 @@
+version: "2"
+
 linters:
-  disable-all: true
   enable:
-    - gofmt
-    - goimports
     - govet
     - errcheck
     - staticcheck
@@ -10,6 +9,11 @@ linters:
     - ineffassign
     - misspell
     - gocritic
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
 
 linters-settings:
   gocritic:

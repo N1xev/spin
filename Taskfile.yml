@@ -47,6 +47,12 @@ tasks:
     cmds:
       - test -x "$(go env GOPATH)/bin/golangci-lint" && golangci-lint run ./... || echo "golangci-lint not installed; skipping"
 
+  fmt:
+    desc: Format Go source and run golangci-lint formatters
+    cmds:
+      - go fmt ./...
+      - test -x "$(go env GOPATH)/bin/golangci-lint" && golangci-lint fmt ./... || echo "golangci-lint not installed; skipping"
+
   clean:
     cmds:
       - rm -rf ./bin ./tmp ./dist ./.tmp

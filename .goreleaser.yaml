@@ -77,7 +77,7 @@ release:
     ## Install
 
     ```
-    go install github.com/N1xev/spin/cmd/spin@{{ .Tag }}
+    go install github.com/N1xev/spin@{{ .Tag }}
     ```
 
     Or download a binary below.
