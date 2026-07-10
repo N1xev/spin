@@ -3,11 +3,12 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+
+	"github.com/N1xev/spin/internal/log"
 )
 
 // Styles. Built once at package init; lipgloss v2 styles are safe
@@ -18,7 +19,6 @@ var (
 	styleSuccessMark = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
 	styleInfoMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
 	styleWarnMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
-	styleErrorMark   = lipgloss.NewStyle().Foreground(lipgloss.Color("160")).Bold(true)
 	styleDim         = lipgloss.NewStyle().Faint(true)
 	styleHeader      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
 	styleCell        = lipgloss.NewStyle()
@@ -27,34 +27,33 @@ var (
 // printSuccess writes "✓ <msg>" to stdout, fang-flag-green. Use
 // for actions the user just performed: "added", "created", "pinned".
 func printSuccess(format string, args ...any) {
-	fmt.Fprintf(os.Stdout, "%s %s\n",
+	log.Stdout.Print(fmt.Sprintf("%s %s",
 		styleSuccessMark.Render("✓"),
-		fmt.Sprintf(format, args...))
+		fmt.Sprintf(format, args...)))
 }
 
 // printInfo writes "ℹ <msg>" to stdout, fang-title-blue. Use for
 // neutral confirmations and "no items" messages.
 func printInfo(format string, args ...any) {
-	fmt.Fprintf(os.Stdout, "%s %s\n",
+	log.Stdout.Info(fmt.Sprintf("%s %s",
 		styleInfoMark.Render("ℹ"),
-		fmt.Sprintf(format, args...))
+		fmt.Sprintf(format, args...)))
 }
 
 // printWarn writes "⚠ <msg>" to stderr, amber. Use for conditions
 // the user should know about but which are not fatal (e.g. a
 // template that requires a newer spin).
 func printWarn(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "%s %s\n",
+	log.Warn(fmt.Sprintf("%s %s",
 		styleWarnMark.Render("⚠"),
-		fmt.Sprintf(format, args...))
+		fmt.Sprintf(format, args...)))
 }
 
 // printHint writes a dimmed hint to stderr. Used after an error or
 // an "info" line to suggest the next step (e.g. "Use `spin new
 // --template <user/repo>` to scaffold from a git repo.").
 func printHint(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "  %s\n",
-		styleDim.Render(fmt.Sprintf(format, args...)))
+	log.Debug(fmt.Sprintf("  %s", styleDim.Render(fmt.Sprintf(format, args...))))
 }
 
 // printTable renders a styled table to w. headers is the column
@@ -88,7 +87,7 @@ func printTable(w io.Writer, headers []string, rows [][]string) {
 			}
 			return cellStyle
 		})
-	fmt.Fprintln(w, t.Render())
+	_, _ = fmt.Fprintln(w, t.Render())
 }
 
 // truncate is a tiny string helper for table cells. We keep it

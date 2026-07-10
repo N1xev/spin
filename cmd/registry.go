@@ -66,9 +66,9 @@ var registryRemoveCmd = &cobra.Command{
 }
 
 var (
-	registryAddForce     bool
-	registryUpdateQuiet  bool
-	registryRemovePurge  bool
+	registryAddForce    bool
+	registryUpdateQuiet bool
+	registryRemovePurge bool
 )
 
 func init() {
@@ -84,7 +84,7 @@ func runRegistryAdd(cmd *cobra.Command, args []string) error {
 	mgr := registry.NewManager()
 	reg, err := mgr.Add(alias, source, registryAddForce)
 	if err != nil {
-		return err
+		return fmt.Errorf("spin registry add: %w", err)
 	}
 	kind := string(reg.Kind)
 	printSuccess("registered %q (%s, cached at %s)", reg.Alias, kind, reg.Path)
@@ -179,7 +179,7 @@ func runRegistryUpdate(cmd *cobra.Command, args []string) error {
 		}
 		reg, err := mgr.Refresh(alias)
 		if err != nil {
-			return err
+			return fmt.Errorf("spin registry update: %w", err)
 		}
 		if reg.Kind == registry.KindLocal {
 			printInfo("%s is local; nothing to update", alias)

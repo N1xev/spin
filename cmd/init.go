@@ -3,12 +3,14 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/N1xev/spin/internal/registry"
 )
 
 var initCmd = &cobra.Command{
@@ -61,11 +63,14 @@ spin new my-project --template .
 ## Files
 
 - ` + "`spin.toml`" + `: template manifest. Edit ` + "`name`" + `,
-  ` + "`description`" + `, ` + "`params`" + `, and ` + "`[[post]]`" + `
-  to taste.
+  ` + "`description`" + `, ` + "`params`" + `, ` + "`[[pre]]`" + `,
+  and ` + "`[[post]]`" + ` to taste.
 - ` + "`_base/`" + `: the file tree rendered into the user's
   project. Files ending in ` + "`.tmpl`" + ` are processed by
   Go text/template; everything else is copied verbatim.
+- ` + "`[[include]]`" + ` rules in spin.toml can gate files or
+  directories on param values (e.g. only include ` + "`.github/`" + `
+  when a ` + "`ci`" + ` param is true).
 
 ## Tips
 
@@ -73,8 +78,12 @@ spin new my-project --template .
   previews the resolved params as JSON without writing files.
 - ` + "`spin new my-app --template . --dry-run`" + ` lists
   the files that WOULD be written.
-- Add ` + "`[[post]]`" + ` steps in spin.toml to run shell
-  commands after the files are written (e.g. ` + "`go mod init`" + `).
+- ` + "`[[pre]]`" + ` steps run before files are rendered; use
+  them to prepare the destination directory.
+- ` + "`[[post]]`" + ` steps run after files are written (e.g.
+  ` + "`go mod init`" + `).
+- ` + "`spin new my-app --template . --no-hooks`" + ` skips
+  all hooks.
 `
 
 // runInit is the RunE for `spin init`. Creates <dir>/<name>/
@@ -114,9 +123,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	files := map[string]string{
-		"spin.toml":    initSpinToml(name),
+		"spin.toml":           initSpinToml(name),
 		"_base/file.txt.tmpl": initFileTemplate,
-		"README.md":    initReadme,
+		"README.md":           initReadme,
 	}
 	for rel, body := range files {
 		full := filepath.Join(dest, rel)
@@ -134,7 +143,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// And `spin add <dest>` so the user can use --template <name>
 	// immediately. We do this LAST so a partial init doesn't
 	// leave a broken pin.
-	_ = tryAutoPin(name, dest, cmd.OutOrStdout())
+	_ = tryAutoPin(name, dest)
 
 	printSuccess("created template %q at %s", name, dest)
 	printHint("edit spin.toml and _base/, then `spin new <project> --template %s`", name)
@@ -147,7 +156,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 // immediately renderable end-to-end.
 func initSpinToml(name string) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("name = %q\n", name))
+	fmt.Fprintf(&b, "name = %q\n", name)
 	b.WriteString("description = \"A new spin template -- edit me\"\n")
 	b.WriteString("version = \"0.1.0\"\n")
 	b.WriteString("type = \"cli\"\n")
@@ -159,21 +168,31 @@ func initSpinToml(name string) string {
 	b.WriteString("prompt = \"License\"\n")
 	b.WriteString("options = [\"MIT\", \"Apache-2.0\", \"BSD-3-Clause\", \"Proprietary\"]\n")
 	b.WriteString("default = \"MIT\"\n\n")
+	b.WriteString("# Optional: run commands before files are rendered.\n")
+	b.WriteString("# [[pre]]\n")
+	b.WriteString("# run = \"mkdir -p cmd\"\n\n")
 	b.WriteString("[[post]]\n")
 	b.WriteString("run = \"echo 'post hook ran for {{.name}}'\"\n")
 	return b.String()
 }
 
-// tryAutoPin runs `spin add <dest>` (silently) so the freshly
-// created template is immediately usable as `--template <name>`.
-// Errors are best-effort: the user can run `spin add` by hand.
-//
-// Currently a no-op placeholder; we deliberately do not auto-pin
-// because templates in development are usually just a directory,
-// and re-pinning on every `init` is annoying. The hint points
-// the user at `spin add` for the offline case.
-func tryAutoPin(_, dest string, out io.Writer) error {
-	fmt.Fprintf(out, "  (run `spin add %s` to pin for offline use later)\n", dest)
+// tryAutoPin runs `spin add <dest>` so the freshly created template
+// is immediately usable as `--template <name>`. Errors are best-effort:
+// if pinning fails we print the manual command instead of failing init.
+func tryAutoPin(name, dest string) error {
+	client := registry.New()
+	pinned, err := client.Add(dest)
+	if err != nil {
+		printHint("run `spin add %s` to pin for offline use later", dest)
+		return nil
+	}
+	pinned.Name = name
+	pinned.PinnedAt = time.Now().UTC().Format(time.RFC3339)
+	if err := client.Pin(*pinned); err != nil {
+		printHint("run `spin add %s` to pin for offline use later", dest)
+		return nil
+	}
+	printInfo("pinned as %q for offline use", name)
 	return nil
 }
 

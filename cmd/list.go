@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"path/filepath"
 	"strings"
@@ -64,8 +63,7 @@ func execList(cmd *cobra.Command, args []string) error {
 	}
 	if len(pinned) == 0 {
 		if listJSONFlag {
-			fmt.Fprintln(cmd.OutOrStdout(), "[]")
-			return nil
+			return json.NewEncoder(cmd.OutOrStdout()).Encode([]any{})
 		}
 		if listAllFlag {
 			printInfo("no pinned templates (active or removed)")
@@ -111,7 +109,6 @@ func execList(cmd *cobra.Command, args []string) error {
 		})
 	}
 	printTable(io.Writer(cmd.OutOrStdout()), headers, tableRows)
-	fmt.Fprintln(cmd.OutOrStdout())
 	printHint("use `spin new <project> --template <name>` to scaffold from a pinned template")
 	return nil
 }

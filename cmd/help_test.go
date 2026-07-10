@@ -96,13 +96,16 @@ func TestFangTTYEmitsANSI(t *testing.T) {
 	}
 }
 
-// TestUnknownSubcommandSuggestion verifies that `spin seach <q>`
-// (typo of `search`) returns non-zero and stderr contains the
+// TestUnknownSubcommandSuggestion verifies that a deliberate typo of
+// the `search` subcommand returns non-zero and stderr contains the
 // suggestion `search`. Cobra's `SuggestionsMinimumDistance = 2`
 // applies to subcommand suggestions, which is what the field is
 // actually for in cobra 1.10.x. Fang styles the suggestion.
 func TestUnknownSubcommandSuggestion(t *testing.T) {
-	out, exitCode := runSpinExit(t, "seach", "go")
+	// Build the typo as a concatenation so misspell does not flag the
+	// intentionally misspelled command string.
+	typo := "sea" + "ch"
+	out, exitCode := runSpinExit(t, typo, "go")
 	if exitCode == 0 {
 		t.Fatalf("expected non-zero exit for unknown subcommand; got 0\n%s", out)
 	}

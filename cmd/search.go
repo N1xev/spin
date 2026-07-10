@@ -97,7 +97,6 @@ func runSearch(cmd *cobra.Command, args []string) error {
 		})
 	}
 	printTable(os.Stdout, headers, rows)
-	fmt.Fprintln(os.Stdout)
 	printHint("add a template: spin add <alias>/<id>")
 	return nil
 }

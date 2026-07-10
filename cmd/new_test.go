@@ -76,7 +76,27 @@ func TestNew_TooManyArgsRejected(t *testing.T) {
 	}
 }
 
-// runSpinClosedStdin is like runSpinExit but feeds the subprocess
+// TestNew_SinglePositionalTemplateSpec covers `spin new <template>`
+// where the lone positional arg is a local path. It should be treated
+// as the template, not the project name, so non-interactive mode errors
+// on the missing name (not on a missing template picker).
+func TestNew_SinglePositionalTemplateSpec(t *testing.T) {
+	tplParent := t.TempDir()
+	initOut, initExit := runSpinWithDir(t, tplParent, "init", "go-cli")
+	if initExit != 0 {
+		t.Fatalf("spin init go-cli failed: exit=%d\n%s", initExit, initOut)
+	}
+	tplPath := filepath.Join(tplParent, "go-cli")
+
+	out, exitCode := runSpinClosedStdin(t, "new", tplPath, "--print-params")
+	if exitCode == 0 {
+		t.Fatalf("expected non-zero exit; got 0\n%s", out)
+	}
+	if !bytes.Contains(out, []byte("<name> is required in non-interactive mode")) {
+		t.Errorf("error should name missing <name>, not prompt for template; got:\n%s", out)
+	}
+}
+
 // a pipe (ModeNamedPipe, not ModeCharDevice) so isInteractive()
 // returns false. runSpinExit inherits the test runner's TTY and
 // would trigger the huh form.

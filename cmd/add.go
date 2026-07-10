@@ -21,7 +21,8 @@ var addCmd = &cobra.Command{
   spin add https://github.com/me/go-cli-template.git
 
   # List pinned templates
-  spin add --list`,
+  spin add --list
+`,
 	Args:          cobra.MinimumNArgs(0),
 	RunE:          runAdd,
 	SilenceUsage:  true,

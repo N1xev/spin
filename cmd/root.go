@@ -8,9 +8,9 @@ import (
 
 // rootCmd is the cobra root command for spin.
 var rootCmd = &cobra.Command{
-	Use:   "spin",
-	Short: "Universal project scaffolder",
-	Long:  "spin scaffolds projects from external templates -- git repos, local paths, or pinned specs -- for any language or framework.",
+	Use:                        "spin",
+	Short:                      "Universal project scaffolder",
+	Long:                       "spin scaffolds projects from external templates -- git repos, local paths, or pinned specs -- for any language or framework.",
 	Version:                    version.Version,
 	SilenceUsage:               true,
 	SilenceErrors:              true,

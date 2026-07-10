@@ -67,7 +67,7 @@ func TestCoerceParamValue_Number(t *testing.T) {
 		errFrag string
 	}{
 		{"8080", 8080, false, ""},
-		{"1", 1, false, ""},    // boundary
+		{"1", 1, false, ""}, // boundary
 		{"65535", 65535, false, ""},
 		{"-1", nil, true, "below min"},
 		{"65536", nil, true, "above max"},
@@ -141,10 +141,10 @@ func TestCoerceParamValue_MultiSelect(t *testing.T) {
 	}{
 		{"a,b,c", []string{"a", "b", "c"}},
 		{"a, b , c", []string{"a", "b", "c"}}, // spaces trimmed
-		{"a,,b", []string{"a", "b"}},           // empties dropped
-		{",a,", []string{"a"}},                 // leading/trailing comma handled
+		{"a,,b", []string{"a", "b"}},          // empties dropped
+		{",a,", []string{"a"}},                // leading/trailing comma handled
 		{"single", []string{"single"}},
-		{"", []string{}},                       // "" split = [""], all trimmed out => empty slice
+		{"", []string{}}, // "" split = [""], all trimmed out => empty slice
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {

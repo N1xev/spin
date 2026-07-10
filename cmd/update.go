@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/N1xev/spin/internal/log"
 	"github.com/N1xev/spin/internal/registry"
 )
 
@@ -80,15 +80,14 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		printSuccess("updated %s -> %s", updated.Name, short)
 		ok++
 	}
-	fmt.Fprintln(cmd.OutOrStdout())
 	if failed > 0 {
-		fmt.Fprintf(cmd.OutOrStdout(), "%d updated, %d failed\n", ok, failed)
+		log.Error("template refresh finished with failures", "updated", ok, "failed", failed)
 		return fmt.Errorf("spin update: %d template(s) failed to refresh", failed)
 	}
 	if ok == 1 {
-		fmt.Fprintln(cmd.OutOrStdout(), "1 template refreshed")
+		log.Stdout.Print("1 template refreshed")
 	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "%d templates refreshed\n", ok)
+		log.Stdout.Info(fmt.Sprintf("%d templates refreshed", ok))
 	}
 	return nil
 }
@@ -169,7 +168,9 @@ func refreshOne(client *registry.Client, p registry.Pinned) (registry.Pinned, er
 
 	// (4) All green. Delete the .bak.
 	if haveBackup {
-		_ = os.RemoveAll(backup)
+		if rmErr := os.RemoveAll(backup); rmErr != nil {
+			log.Debug("failed to remove update backup", "path", backup, "err", rmErr)
+		}
 	}
 	return updated, nil
 }
@@ -185,7 +186,3 @@ func backupPath(localPath string) (string, bool) {
 	ts := time.Now().Unix()
 	return fmt.Sprintf("%s.bak-%d", localPath, ts), true
 }
-
-// keep io import in the build even when only referenced by the
-// success summary line via cmd.OutOrStdout (which is an io.Writer).
-var _ = io.Discard

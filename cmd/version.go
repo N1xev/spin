@@ -9,12 +9,12 @@ import (
 )
 
 var versionCmd = &cobra.Command{
-	Use:               "version",
-	Short:             "Print the spin version",
-	Args:              cobra.NoArgs,
-	Run:               func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
-	SilenceUsage:      true,
-	SilenceErrors:     true,
+	Use:           "version",
+	Short:         "Print the spin version",
+	Args:          cobra.NoArgs,
+	Run:           func(cmd *cobra.Command, args []string) { fmt.Println(version.Version) },
+	SilenceUsage:  true,
+	SilenceErrors: true,
 }
 
 func init() {

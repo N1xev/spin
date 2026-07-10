@@ -8,23 +8,24 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/spf13/cobra"
 	"charm.land/huh/v2"
+	"github.com/spf13/cobra"
 
+	"github.com/N1xev/spin/internal/log"
 	"github.com/N1xev/spin/internal/params"
 	"github.com/N1xev/spin/internal/registry"
+	srcspec "github.com/N1xev/spin/internal/spec"
 	"github.com/N1xev/spin/internal/template"
 )
 
 var newCmd = &cobra.Command{
-	Use:   "new <name> [<template>]",
+	Use:   "new [<name>] [<template>]",
 	Short: "Scaffold a new project from a template",
-	Long:  "Scaffold a new project from an external template. A template is a git repo, local path, or pinned spec that contains a spin.toml manifest and a _base/ tree of overlay files. If <name> or <template> is omitted, spin prompts for it when running interactively.",
+	Long:  "Scaffold a new project from an external template. A template is a git repo, local path, or pinned spec that contains a spin.toml manifest and a _base/ tree of overlay files. If <name> or <template> is omitted, spin prompts for it when running interactively. A single positional argument that looks like a template (path, git URL, or alias/id shorthand) is treated as the template.",
 	Example: `  # Positional name + template (no flag needed)
   spin new myapp my-template
   spin new demoapp https://github.com/me/go-cli-template.git
@@ -58,6 +59,9 @@ var (
 	newPrintParams bool
 	newDryRun      bool
 	newParams      []string
+	newVerbose     bool
+	newNoHooks     bool
+	newYes         bool
 )
 
 func init() {
@@ -66,6 +70,9 @@ func init() {
 	newCmd.Flags().BoolVar(&newPrintParams, "print-params", false, "print the template's params as JSON and exit (no files written)")
 	newCmd.Flags().BoolVar(&newDryRun, "dry-run", false, "render to a temp dir, print the file list, and clean up (no project written)")
 	newCmd.Flags().StringArrayVar(&newParams, "param", nil, "set a template param as key=value (repeatable); skips the interactive form. Use --print-params to discover valid keys.")
+	newCmd.Flags().BoolVar(&newVerbose, "verbose", false, "print hook output while running")
+	newCmd.Flags().BoolVar(&newNoHooks, "no-hooks", false, "skip pre and post hooks")
+	newCmd.Flags().BoolVarP(&newYes, "yes", "y", false, "run template hooks without the trust confirmation prompt")
 	rootCmd.AddCommand(newCmd)
 }
 
@@ -89,7 +96,7 @@ func runNew(cmd *cobra.Command, args []string) error {
 		loader.PromptInvalidPinned = promptInvalidPinned
 		loader.PromptExistingDest = promptExistingDest
 	}
-	tpl, err := loader.Load(tplSpec)
+	tpl, err := loader.LoadContext(cmd.Context(), tplSpec)
 	if err != nil {
 		return fmt.Errorf("spin new: %w", err)
 	}
@@ -126,7 +133,21 @@ func runNew(cmd *cobra.Command, args []string) error {
 		return dryRunRender(tpl, resolved, dest)
 	}
 
-	if err := tpl.RenderToWithPost(dest, resolved); err != nil {
+	opts := template.HookOptions{
+		NoHooks:       newNoHooks,
+		PrintCommands: true,
+		Verbose:       newVerbose,
+	}
+	// A template pulled from a remote source runs its hooks as shell
+	// commands on this machine. Ask before executing them unless the
+	// user opted out (--no-hooks) or pre-consented (--yes).
+	if !opts.NoHooks && !newYes && isInteractive() && tpl.Repo != "" && template.HasHooks(tpl) {
+		if !confirmRunHooks(tpl) {
+			opts.NoHooks = true
+			printInfo("skipping hooks (declined)")
+		}
+	}
+	if err := tpl.RenderToWithPost(dest, resolved, opts); err != nil {
 		return fmt.Errorf("spin new: render: %w", err)
 	}
 
@@ -164,13 +185,25 @@ func printResolvedParams(tpl *template.Template, values map[string]any) error {
 // dryRunRender renders to a temp dir and lists the file paths
 // the project WOULD contain. No files are written to the dest.
 func dryRunRender(tpl *template.Template, values map[string]any, dest string) error {
+	printCommands := true
+	opts := template.HookOptions{NoHooks: true, PrintCommands: printCommands}
+	if len(tpl.SpinToml.Pre) > 0 {
+		log.Debug("dry run: pre-hooks (skipped)")
+		if err := template.RunPreHook(tpl, values, dest, opts); err != nil {
+			return fmt.Errorf("spin new: dry-run pre-hooks: %w", err)
+		}
+	}
 	files, err := tpl.Render(values)
 	if err != nil {
 		return fmt.Errorf("spin new: render: %w", err)
 	}
 	printInfo("dry run: would write %d files to %s", len(files), dest)
 	for path := range files {
-		fmt.Fprintf(os.Stdout, "  %s\n", filepath.Join(dest, path))
+		log.Stdout.Print(fmt.Sprintf("  %s", filepath.Join(dest, path)))
+	}
+	if len(tpl.SpinToml.Post) > 0 {
+		log.Debug("dry run: post-hooks (skipped)")
+		_ = template.RunPostHook(tpl, values, dest, opts)
 	}
 	return nil
 }
@@ -284,6 +317,26 @@ func promptPinAfterSuccess(_ string, tpl *template.Template) {
 		return
 	}
 	printSuccess("pinned %q (cloned to %s)", pinned.Name, pinned.LocalPath)
+}
+
+// confirmRunHooks asks the user whether to run a remote template's
+// pre/post hooks. A cancelled or failed prompt is treated as "no".
+func confirmRunHooks(tpl *template.Template) bool {
+	var run bool
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title(fmt.Sprintf("Run %q hooks?", tpl.Name)).
+				Description(fmt.Sprintf("This template (%s) runs shell commands via its [[pre]]/[[post]] hooks. Only run hooks from templates you trust.", tpl.Repo)).
+				Value(&run).
+				Affirmative("Run").
+				Negative("Skip"),
+		),
+	)
+	if err := form.Run(); err != nil {
+		return false
+	}
+	return run
 }
 
 // pinnedSnapshot returns the pin list. Swallows read errors:
@@ -423,7 +476,7 @@ func joinKnownParams(specs map[string]params.Spec) string {
 	for k := range specs {
 		names = append(names, k)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return strings.Join(names, ", ")
 }
 
@@ -442,16 +495,25 @@ func validateNewArgs(cmd *cobra.Command, args []string) error {
 // resolveNameAndTemplate fills name and template from args /
 // --template / interactive prompts. Returns precise non-interactive
 // errors naming whichever slot is missing.
+//
+// A single positional argument that looks like a template spec
+// (local path, git URL, or <alias>/<id> shorthand) is treated as the
+// template; the user is then prompted for the project name. This
+// matches the common "spin up this template" mental model.
 func resolveNameAndTemplate(cmd *cobra.Command, args []string) (string, string, error) {
 	var name, tpl string
-	if len(args) >= 1 {
-		name = args[0]
+	if len(args) == 1 && looksLikeTemplateSpec(args[0]) {
+		tpl = args[0]
+	} else {
+		if len(args) >= 1 {
+			name = args[0]
+		}
+		if len(args) >= 2 {
+			tpl = args[1]
+		}
 	}
-	if len(args) >= 2 {
-		tpl = args[1]
-	}
-	// Validator already rejected positional + --template; this is
-	// defense in depth -- prefer positional if both slipped through.
+	// Validator already rejected positional + --template; prefer the
+	// positional if both somehow arrive.
 	if cmd.Flags().Changed("template") {
 		if tpl != "" && newTemplate != "" && tpl != newTemplate {
 			printWarn("ignoring --template %q in favor of positional %q", newTemplate, tpl)
@@ -481,6 +543,13 @@ func resolveNameAndTemplate(cmd *cobra.Command, args []string) (string, string, 
 		tpl = v
 	}
 	return name, tpl, nil
+}
+
+// looksLikeTemplateSpec reports whether s is unambiguously a template
+// source: local path, git URL, or registry shorthand. Pinned names are
+// intentionally excluded -- they are resolved later by the loader.
+func looksLikeTemplateSpec(s string) bool {
+	return srcspec.IsLocalPath(s) || srcspec.IsGitURL(s) || srcspec.IsShorthand(s)
 }
 
 // promptForName asks for the project name via a huh Input. Exits
@@ -529,7 +598,7 @@ func promptForTemplate() (string, error) {
 	for _, p := range pinned {
 		names = append(names, p.Name)
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 
 	var choice string
 	opts := make([]huh.Option[string], 0, len(names))
