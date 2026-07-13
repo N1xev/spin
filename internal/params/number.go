@@ -36,6 +36,7 @@ func (p *NumberParam) Name() string   { return p.name }
 func (p *NumberParam) Type() Type     { return TypeNumber }
 func (p *NumberParam) Prompt() string { return p.prompt }
 func (p *NumberParam) Default() any   { return p.def }
+func (p *NumberParam) SetDefault()    { p.Apply(Value{Kind: TypeNumber, Int: p.def}) }
 func (p *NumberParam) Apply(v Value)  { p.value = v.Int; p.valueStr = fmt.Sprintf("%d", v.Int) }
 func (p *NumberParam) Value() Value {
 	if p.valueStr != "" {
@@ -45,8 +46,6 @@ func (p *NumberParam) Value() Value {
 	}
 	return Value{Kind: TypeNumber, Int: p.value}
 }
-func (p *NumberParam) Hmm() string { return p.String() }
-
 func (p *NumberParam) HuhField() huh.Field {
 	return huh.NewInput().
 		Key(p.name).

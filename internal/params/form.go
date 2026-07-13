@@ -36,31 +36,10 @@ func Run(ps []Param) error {
 	return Form(ps).Run()
 }
 
-// SetDefaults applies each param's Default to its current value.
-// Useful when --no-interactive is set.
+// SetDefaults applies each param's default value to its current value.
+// Useful when running non-interactively.
 func SetDefaults(ps []Param) {
 	for _, p := range ps {
-		switch p.Type() {
-		case TypeText, TypeTextarea, TypePath, TypeSecret:
-			if s, ok := p.Default().(string); ok {
-				p.Apply(Value{String: s})
-			}
-		case TypeNumber:
-			if i, ok := p.Default().(int); ok {
-				p.Apply(Value{Int: i})
-			}
-		case TypeSelect:
-			if s, ok := p.Default().(string); ok {
-				p.Apply(Value{String: s})
-			}
-		case TypeMultiSelect:
-			if ss, ok := p.Default().([]string); ok {
-				p.Apply(Value{List: ss})
-			}
-		case TypeBool:
-			if b, ok := p.Default().(bool); ok {
-				p.Apply(Value{Bool: b})
-			}
-		}
+		p.SetDefault()
 	}
 }

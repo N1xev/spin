@@ -22,10 +22,9 @@ func (p *SecretParam) Name() string   { return p.name }
 func (p *SecretParam) Type() Type     { return TypeSecret }
 func (p *SecretParam) Prompt() string { return p.prompt }
 func (p *SecretParam) Default() any   { return p.def }
+func (p *SecretParam) SetDefault()    { p.Apply(Value{Kind: TypeSecret, String: p.def}) }
 func (p *SecretParam) Apply(v Value)  { p.value = v.String }
 func (p *SecretParam) Value() Value   { return Value{Kind: TypeSecret, String: p.value} }
-func (p *SecretParam) Hmm() string    { return p.String() }
-
 func (p *SecretParam) HuhField() huh.Field {
 	return huh.NewInput().
 		Key(p.name).

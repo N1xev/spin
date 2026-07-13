@@ -23,10 +23,9 @@ func (p *SelectParam) Name() string   { return p.name }
 func (p *SelectParam) Type() Type     { return TypeSelect }
 func (p *SelectParam) Prompt() string { return p.prompt }
 func (p *SelectParam) Default() any   { return p.def }
+func (p *SelectParam) SetDefault()    { p.Apply(Value{Kind: TypeSelect, String: p.def}) }
 func (p *SelectParam) Apply(v Value)  { p.value = v.String }
 func (p *SelectParam) Value() Value   { return Value{Kind: TypeSelect, String: p.value} }
-func (p *SelectParam) Hmm() string    { return p.String() }
-
 func (p *SelectParam) HuhField() huh.Field {
 	opts := make([]huh.Option[string], 0, len(p.options))
 	for _, o := range p.options {

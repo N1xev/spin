@@ -37,7 +37,7 @@ type Param interface {
 	Type() Type
 	Prompt() string
 	Default() any
-	Hmm() string // human-readable summary
+	SetDefault()
 	Apply(v Value)
 	Value() Value
 	// HuhField builds the huh field for this param. The form runner
@@ -68,13 +68,9 @@ func (e ErrUnknownType) Error() string {
 	return fmt.Sprintf("param %q: unknown type %q (want text, textarea, number, select, multiselect, bool, path, secret)", e.Name, e.Type)
 }
 
-// orPrompt returns p if set, else the name. Keeps huh titles sensible when
-// a template author forgets to set a prompt.
 func orPrompt(name, p string) string {
 	if p != "" {
 		return p
 	}
 	return name
 }
-
-

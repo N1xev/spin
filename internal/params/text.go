@@ -21,10 +21,9 @@ func (p *TextParam) Name() string   { return p.name }
 func (p *TextParam) Type() Type     { return TypeText }
 func (p *TextParam) Prompt() string { return p.prompt }
 func (p *TextParam) Default() any   { return p.def }
+func (p *TextParam) SetDefault()    { p.Apply(Value{Kind: TypeText, String: p.def}) }
 func (p *TextParam) Apply(v Value)  { p.value = v.String }
 func (p *TextParam) Value() Value   { return Value{Kind: TypeText, String: p.value} }
-func (p *TextParam) Hmm() string    { return p.String() }
-
 func (p *TextParam) HuhField() huh.Field {
 	f := huh.NewInput().
 		Key(p.name).
