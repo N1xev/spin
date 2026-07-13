@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -145,6 +147,123 @@ func TestNew_MissingTemplateNonInteractive(t *testing.T) {
 	}
 	if !bytes.Contains(out, []byte("spin search")) {
 		t.Errorf("error should hint at `spin search`; got:\n%s", out)
+	}
+}
+
+// TestNew_PrintHooks verifies --print-hooks prints the template's
+// hook steps without writing files.
+func TestNew_PrintHooks(t *testing.T) {
+	tplParent := t.TempDir()
+	initOut, initExit := runSpinWithDir(t, tplParent, "init", "go-cli")
+	if initExit != 0 {
+		t.Fatalf("spin init go-cli failed: exit=%d\n%s", initExit, initOut)
+	}
+	tplPath := filepath.Join(tplParent, "go-cli")
+
+	out, exitCode := runSpinClosedStdin(t, "new", "myapp", tplPath, "--print-hooks")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0; got %d\n%s", exitCode, out)
+	}
+	// The init template always has a [[post]] step.
+	if !bytes.Contains(out, []byte("post")) && !bytes.Contains(out, []byte("echo")) {
+		t.Errorf("--print-hooks should show post-hook; got:\n%s", out)
+	}
+}
+
+// TestNew_DryRun_ListsFiles verifies --dry-run lists files
+// that would be written without actually creating them.
+func TestNew_DryRun_ListsFiles(t *testing.T) {
+	dir := t.TempDir()
+	tplParent := t.TempDir()
+	initOut, initExit := runSpinWithDir(t, tplParent, "init", "go-cli")
+	if initExit != 0 {
+		t.Fatalf("spin init go-cli failed: exit=%d\n%s", initExit, initOut)
+	}
+	tplPath := filepath.Join(tplParent, "go-cli")
+
+	out, exitCode := runSpinWithDir(t, dir, "new", "myapp", tplPath, "--dry-run")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0; got %d\n%s", exitCode, out)
+	}
+	if !bytes.Contains(out, []byte("file.txt")) {
+		t.Errorf("--dry-run should list file.txt; got:\n%s", out)
+	}
+	// The real dir must not exist.
+	if _, err := os.Stat(filepath.Join(dir, "myapp")); !os.IsNotExist(err) {
+		t.Error("--dry-run should not write the project directory")
+	}
+}
+
+// TestNew_NoHooks verifies --no-hooks skips pre/post hooks
+// but still renders files.
+func TestNew_NoHooks(t *testing.T) {
+	dir := t.TempDir()
+	tplParent := t.TempDir()
+	initOut, initExit := runSpinWithDir(t, tplParent, "init", "go-cli")
+	if initExit != 0 {
+		t.Fatalf("spin init go-cli failed: exit=%d\n%s", initExit, initOut)
+	}
+	tplPath := filepath.Join(tplParent, "go-cli")
+	outDir := filepath.Join(dir, "myapp")
+
+	out, exitCode := runSpinClosedStdin(t, "new", "myapp", tplPath, "--no-hooks", "--dest", outDir, "--yes")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0; got %d\n%s", exitCode, out)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "file.txt")); err != nil {
+		t.Error("file.txt should be rendered even with --no-hooks")
+	}
+	// Verify the success line.
+	if !bytes.Contains(out, []byte("created")) {
+		t.Errorf("expected 'created' success message; got:\n%s", out)
+	}
+}
+
+// TestList_JSON verifies `spin list --json` produces valid JSON.
+func TestList_JSON(t *testing.T) {
+	cache := withEmptyPinned(t)
+	seedPinned(t, cache, registry.Pinned{
+		Name:      "test-tpl",
+		Source:    "/tmp/test-tpl",
+		Version:   "v1",
+		LocalPath: "/tmp/test-tpl",
+	})
+	out, exitCode := runSpinExit(t, "list", "--json")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0; got %d\n%s", exitCode, out)
+	}
+	var rows []map[string]any
+	if err := json.Unmarshal(out, &rows); err != nil {
+		t.Fatalf("expected valid JSON; got: %v\n%s", err, out)
+	}
+	if len(rows) != 1 || rows[0]["name"] != "test-tpl" {
+		t.Errorf("unexpected JSON: %+v", rows)
+	}
+}
+
+// TestList_Empty verifies `spin list` with no pins prints a
+// helpful message rather than erroring.
+func TestList_Empty(t *testing.T) {
+	withEmptyPinned(t)
+	out, exitCode := runSpinExit(t, "list")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0; got %d\n%s", exitCode, out)
+	}
+	if len(out) == 0 {
+		t.Error("expected output, got nothing")
+	}
+}
+
+// TestAdd_List verifies `spin add --list` prints pinned templates
+// and works even when pinned.json is empty.
+func TestAdd_List(t *testing.T) {
+	withEmptyPinned(t)
+	out, exitCode := runSpinExit(t, "add", "--list")
+	if exitCode != 0 {
+		t.Fatalf("expected exit 0; got %d\n%s", exitCode, out)
+	}
+	if len(out) == 0 {
+		t.Error("expected output even with empty list")
 	}
 }
 

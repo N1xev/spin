@@ -1,6 +1,7 @@
 package template
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,7 +32,7 @@ func TestTemplate_RenderToWithPost_DeletesSpinToml(t *testing.T) {
 			Post:   nil, // empty -> no post-hook
 		},
 	}
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, HookOptions{}); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, HookOptions{}); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "spin.toml")); !os.IsNotExist(err) {
@@ -61,7 +62,7 @@ func TestTemplate_RenderToWithPost_NestedSpinToml(t *testing.T) {
 			Params: map[string]params.Spec{},
 		},
 	}
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, HookOptions{}); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, HookOptions{}); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(sub, "spin.toml")); !os.IsNotExist(err) {
@@ -91,7 +92,7 @@ func TestTemplate_RenderToWithPost_CopiesPreDir(t *testing.T) {
 			Pre:    []PreStep{{Run: "test -f _pre/init.sh"}},
 		},
 	}
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, HookOptions{}); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, HookOptions{}); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "_pre", "init.sh")); err != nil {
@@ -121,7 +122,7 @@ func TestTemplate_RenderToWithPost_CopiesPostDir(t *testing.T) {
 			Post:   []PostStep{{Run: "test -f _post/setup.sh"}},
 		},
 	}
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, HookOptions{}); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, HookOptions{}); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "_post", "setup.sh")); err != nil {
@@ -165,7 +166,7 @@ func TestTemplate_RenderToWithPost_AutoHookScripts(t *testing.T) {
 			Params: map[string]params.Spec{},
 		},
 	}
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, HookOptions{}); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, HookOptions{}); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	for _, marker := range []string{"pre-first", "pre-second", "post-setup", "post-cleanup"} {
@@ -421,7 +422,7 @@ func TestRenderToWithPost_PreHook(t *testing.T) {
 		},
 	}
 	opts := HookOptions{PrintCommands: true}
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, opts); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, opts); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "pre-hook-marker")); err != nil {
@@ -451,7 +452,7 @@ func TestRenderToWithPost_PreHookFailureStopsRender(t *testing.T) {
 		},
 	}
 	opts := HookOptions{PrintCommands: true}
-	err := tpl.RenderToWithPost(dest, map[string]any{}, opts)
+	err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, opts)
 	if err == nil {
 		t.Fatal("expected pre-hook failure")
 	}
@@ -481,7 +482,7 @@ func TestRenderToWithPost_NoHooks(t *testing.T) {
 		},
 	}
 	opts := HookOptions{NoHooks: true, PrintCommands: true}
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, opts); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, opts); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dest, "pre-hook-marker")); !os.IsNotExist(err) {
@@ -492,5 +493,294 @@ func TestRenderToWithPost_NoHooks(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, "hello.md")); err != nil {
 		t.Errorf("rendered file should exist: %v", err)
+	}
+}
+
+// TestRender_Exclude_DoubleStar verifies that `**` in exclude
+// patterns matches across multiple directory segments.
+func TestRender_Exclude_DoubleStar(t *testing.T) {
+	base := t.TempDir()
+	for _, rel := range []string{
+		"keep.md",
+		"a/b/keep.md",
+		"a/b/skip.md",
+		"a/b/c/skip.md",
+	} {
+		full := filepath.Join(base, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(rel), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tpl := &Template{
+		BaseDir: base,
+		SpinToml: &SpinToml{
+			Params:  map[string]params.Spec{},
+			Exclude: []string{"**/skip.md"},
+		},
+	}
+	out, err := tpl.Render(map[string]any{"name": "x"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if _, ok := out["keep.md"]; !ok {
+		t.Errorf("keep.md should be included")
+	}
+	if _, ok := out["a/b/keep.md"]; !ok {
+		t.Errorf("a/b/keep.md should be included")
+	}
+	if _, ok := out["a/b/skip.md"]; ok {
+		t.Errorf("a/b/skip.md should be excluded by **")
+	}
+	if _, ok := out["a/b/c/skip.md"]; ok {
+		t.Errorf("a/b/c/skip.md should be excluded by **")
+	}
+}
+
+// BenchmarkRender_Exclude measures Render with exclude patterns.
+func BenchmarkRender_Exclude(b *testing.B) {
+	base := b.TempDir()
+	for _, rel := range []string{"keep.md", "drop.md", "a/drop.md"} {
+		full := filepath.Join(base, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			b.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(rel), 0o644); err != nil {
+			b.Fatal(err)
+		}
+	}
+	tpl := &Template{
+		BaseDir: base,
+		SpinToml: &SpinToml{
+			Params:  map[string]params.Spec{},
+			Exclude: []string{"drop.md", "a/*.md"},
+		},
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		_, _ = tpl.Render(map[string]any{"name": "x"})
+	}
+}
+
+// TestRender_Exclude_DoubleStar_Middle verifies `**` in the
+// middle of an exclude pattern matches intermediate directories.
+func TestRender_Exclude_DoubleStar_Middle(t *testing.T) {
+	base := t.TempDir()
+	for _, rel := range []string{"docs/readme.md", "docs/a/readme.md", "docs/a/b/readme.md", "docs/keep.go"} {
+		full := filepath.Join(base, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(rel), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tpl := &Template{
+		BaseDir: base,
+		SpinToml: &SpinToml{
+			Params:  map[string]params.Spec{},
+			Exclude: []string{"docs/**/*.md"},
+		},
+	}
+	out, err := tpl.Render(map[string]any{"name": "x"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if _, ok := out["docs/readme.md"]; ok {
+		t.Errorf("docs/readme.md should be excluded")
+	}
+	if _, ok := out["docs/a/readme.md"]; ok {
+		t.Errorf("docs/a/readme.md should be excluded")
+	}
+	if _, ok := out["docs/a/b/readme.md"]; ok {
+		t.Errorf("docs/a/b/readme.md should be excluded")
+	}
+	if _, ok := out["docs/keep.go"]; !ok {
+		t.Errorf("docs/keep.go should be included (not .md)")
+	}
+}
+
+// TestRender_Exclude_DoubleStar_Trailing verifies a trailing
+// `**` excludes everything under a directory.
+func TestRender_Exclude_DoubleStar_Trailing(t *testing.T) {
+	base := t.TempDir()
+	for _, rel := range []string{"internal/x.go", "internal/y.go", "internal/sub/z.go", "keep.go"} {
+		full := filepath.Join(base, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(rel), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tpl := &Template{
+		BaseDir: base,
+		SpinToml: &SpinToml{
+			Params:  map[string]params.Spec{},
+			Exclude: []string{"internal/**"},
+		},
+	}
+	out, err := tpl.Render(map[string]any{"name": "x"})
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if _, ok := out["internal/x.go"]; ok {
+		t.Errorf("internal/x.go should be excluded")
+	}
+	if _, ok := out["internal/y.go"]; ok {
+		t.Errorf("internal/y.go should be excluded")
+	}
+	if _, ok := out["internal/sub/z.go"]; ok {
+		t.Errorf("internal/sub/z.go should be excluded")
+	}
+	if _, ok := out["keep.go"]; !ok {
+		t.Errorf("keep.go should be included")
+	}
+}
+
+// TestShouldInclude_IsDir verifies the isDir parameter is used
+// correctly: directories that match a rule but have a falsy If
+// return skipDir=true so the walker prunes the subtree.
+func TestShouldInclude_IsDir(t *testing.T) {
+	base := t.TempDir()
+	subDir := filepath.Join(base, "opt")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(subDir, "f.go"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tpl := &Template{
+		BaseDir: base,
+		SpinToml: &SpinToml{
+			Params: map[string]params.Spec{
+				"ci": {Type: params.TypeBool, Default: false},
+			},
+			Include: []IncludeRule{
+				{Path: "opt/**", If: "{{ .ci }}"},
+			},
+		},
+	}
+	funcs := funcMap()
+
+	// A file matching the rule with ci=false → not included.
+	inc, skip, err := tpl.shouldInclude("opt/f.go", "opt/f.go", false, map[string]any{"ci": false}, funcs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inc || skip {
+		t.Errorf("opt/f.go with ci=false: include=%v skipDir=%v, want false, false", inc, skip)
+	}
+
+	// Same file with ci=true → included.
+	inc, skip, err = tpl.shouldInclude("opt/f.go", "opt/f.go", false, map[string]any{"ci": true}, funcs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inc || skip {
+		t.Errorf("opt/f.go with ci=true: include=%v skipDir=%v, want true, false", inc, skip)
+	}
+
+	// Directory matching the rule with ci=false → not included, skipDir.
+	inc, skip, err = tpl.shouldInclude("opt", "opt", true, map[string]any{"ci": false}, funcs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inc {
+		t.Error("opt dir with ci=false should not be included")
+	}
+	if !skip {
+		t.Error("opt dir with ci=false should return skipDir=true")
+	}
+
+	// Same directory with ci=true → included, no skip.
+	inc, skip, err = tpl.shouldInclude("opt", "opt", true, map[string]any{"ci": true}, funcs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !inc || skip {
+		t.Errorf("opt dir with ci=true: include=%v skipDir=%v, want true, false", inc, skip)
+	}
+}
+
+// TestRenderToWithPost_CopiesPreDir verifies that _pre/ assets
+// are copied into dest before pre-hooks run.
+func TestRenderToWithPost_CopiesPreDir(t *testing.T) {
+	base := t.TempDir()
+	dest := t.TempDir()
+	preDir := filepath.Join(base, "_pre")
+	if err := os.MkdirAll(preDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(preDir, "init.sh"), []byte("echo ok"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tpl := &Template{
+		BaseDir:    base,
+		PreHookDir: preDir,
+		SpinToml: &SpinToml{
+			Params: map[string]params.Spec{},
+		},
+	}
+	opts := HookOptions{NoHooks: true, PrintCommands: true}
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, opts); err != nil {
+		t.Fatalf("RenderToWithPost: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "_pre", "init.sh")); err != nil {
+		t.Error("_pre/init.sh should be copied into dest")
+	}
+}
+
+// TestRenderToWithPost_CopiesPostDir verifies that _post/ assets
+// are copied into dest before post-hooks run.
+func TestRenderToWithPost_CopiesPostDir(t *testing.T) {
+	base := t.TempDir()
+	dest := t.TempDir()
+	postDir := filepath.Join(base, "_post")
+	if err := os.MkdirAll(postDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(postDir, "setup.sh"), []byte("echo ok"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tpl := &Template{
+		BaseDir:     base,
+		PostHookDir: postDir,
+		SpinToml: &SpinToml{
+			Params: map[string]params.Spec{},
+		},
+	}
+	opts := HookOptions{NoHooks: true, PrintCommands: true}
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, opts); err != nil {
+		t.Fatalf("RenderToWithPost: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "_post", "setup.sh")); err != nil {
+		t.Error("_post/setup.sh should be copied into dest")
+	}
+}
+
+// TestRenderToWithPost_ContextCancelled checks that a cancelled
+// context stops the pipeline early.
+func TestRenderToWithPost_ContextCancelled(t *testing.T) {
+	base := t.TempDir()
+	dest := t.TempDir()
+	if err := os.WriteFile(filepath.Join(base, "f.md"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tpl := &Template{
+		BaseDir: base,
+		SpinToml: &SpinToml{
+			Params: map[string]params.Spec{},
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := tpl.RenderToWithPost(ctx, dest, map[string]any{}, HookOptions{NoHooks: true})
+	if err == nil {
+		t.Fatal("expected error from cancelled context")
 	}
 }

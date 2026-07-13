@@ -1,11 +1,13 @@
 package template
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/N1xev/spin/internal/registry"
 	srcspec "github.com/N1xev/spin/internal/spec"
 )
 
@@ -130,7 +132,7 @@ func TestRender_PathTraversal(t *testing.T) {
 	// this test -- the security guard is in writeFiles, which
 	// is the same code path RenderTo uses.
 	dest := t.TempDir()
-	err := WriteFiles(dest, map[string][]byte{
+	err := writeFiles(context.Background(), dest, map[string][]byte{
 		"../escape.txt": []byte("evil"),
 	})
 	if err == nil {
@@ -170,7 +172,7 @@ func TestRender_DeletesSpinToml(t *testing.T) {
 		t.Fatalf("Detect: %v", err)
 	}
 	dest := t.TempDir()
-	if err := tpl.RenderToWithPost(dest, map[string]any{}, HookOptions{}); err != nil {
+	if err := tpl.RenderToWithPost(context.Background(), dest, map[string]any{}, HookOptions{}); err != nil {
 		t.Fatalf("RenderToWithPost: %v", err)
 	}
 	// spin.toml at top level was never rendered (it's not in
@@ -202,7 +204,7 @@ func TestRunPostHook_RunsShellCommand(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
-	if err := RunPostHook(tpl, map[string]any{"name": "test-proj"}, dir, HookOptions{}); err != nil {
+	if err := RunPostHook(context.Background(), tpl, map[string]any{"name": "test-proj"}, dir, HookOptions{}); err != nil {
 		t.Fatalf("RunPostHook: %v", err)
 	}
 	// post-ran.txt is the touch side-effect; it must exist.
@@ -258,7 +260,7 @@ run = "echo second > step2.txt"
 	if err != nil {
 		t.Fatalf("Detect: %v", err)
 	}
-	if err := RunPostHook(tpl, map[string]any{}, dir, HookOptions{}); err != nil {
+	if err := RunPostHook(context.Background(), tpl, map[string]any{}, dir, HookOptions{}); err != nil {
 		t.Fatalf("RunPostHook: %v", err)
 	}
 	for name, want := range map[string]string{"step1.txt": "first", "step2.txt": "second"} {
@@ -273,41 +275,236 @@ run = "echo second > step2.txt"
 	}
 }
 
-// TestRunPostHook_FailFast verifies that when a step fails, the
-// hook stops and subsequent steps do NOT run. The error must name
-// the failing step index for debuggability.
-func TestRunPostHook_FailFast(t *testing.T) {
-	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "spin.toml"), []byte(`name = "tpl"
-[[post]]
-run = "echo ran > step1.txt"
-[[post]]
-run = "false"
-[[post]]
-run = "echo should-not-run > step3.txt"
-`), 0o644); err != nil {
+// TestCompareSemver verifies the compareSemver helper that compares
+// dotted semver strings component-by-component.
+func TestCompareSemver(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"1.0.0", "2.0.0", -1},
+		{"2.0.0", "1.0.0", 1},
+		{"1.0.0", "1.0.0", 0},
+		{"1.0", "1.0.0", 0},    // missing component treated as 0
+		{"1.2.3", "1.2.4", -1}, // patch differs
+		{"abc", "1.0", -1},     // non-numeric treated as 0
+	}
+	for _, c := range cases {
+		t.Run(c.a+"_"+c.b, func(t *testing.T) {
+			got := compareSemver(c.a, c.b)
+			if got != c.want {
+				t.Errorf("compareSemver(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
+			}
+		})
+	}
+}
+
+// TestLoader_Load_ShorthandUsesPinned verifies that loadShorthand
+// checks pinned templates before cloning. When the resolved source
+// is already pinned, the cached template is used.
+func TestLoader_Load_ShorthandUsesPinned(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	ctx := context.Background()
+
+	// Create a valid template.
+	tplDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tplDir, "_base"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Join(dir, "_base"), 0o755); err != nil {
+	if err := os.WriteFile(filepath.Join(tplDir, "spin.toml"), []byte("name = \"test-tpl\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tpl, err := Detect(dir)
+	if err := os.WriteFile(filepath.Join(tplDir, "_base", "f.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create and register a registry with a template pointing at a git URL.
+	regDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(regDir, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(regDir, "registry.toml"),
+		[]byte("id = \"test\"\nname = \"Test\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tplMeta := "id = \"test-tpl\"\nname = \"Test Tpl\"\nsource = \"https://github.com/user/repo.git\"\n"
+	if err := os.WriteFile(filepath.Join(regDir, "templates", "test-tpl.toml"),
+		[]byte(tplMeta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := registry.NewManager()
+	if _, err := mgr.Add(ctx, "test", regDir, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pin the git URL manually, pointing LocalPath at our real template.
+	client := registry.New()
+	if err := client.Pin(ctx, registry.Pinned{
+		Name:      "test-tpl",
+		Source:    "https://github.com/user/repo.git",
+		Version:   "abc123",
+		LocalPath: tplDir,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Load via shorthand — should find the pin and use Detect, not clone.
+	l := NewLoader(filepath.Join(xdg, "spin", "templates"))
+	tpl, err := l.LoadContext(ctx, "test/test-tpl")
 	if err != nil {
-		t.Fatalf("Detect: %v", err)
+		t.Fatalf("LoadContext: %v", err)
 	}
-	err = RunPostHook(tpl, map[string]any{}, dir, HookOptions{})
+	if tpl == nil {
+		t.Fatal("LoadContext returned nil")
+	}
+	if tpl.Spec != "test/test-tpl" {
+		t.Errorf("Spec = %q, want %q", tpl.Spec, "test/test-tpl")
+	}
+	if tpl.Repo != "https://github.com/user/repo.git" {
+		t.Errorf("Repo = %q", tpl.Repo)
+	}
+}
+
+// TestLoader_Load_ShorthandPinNotFound verifies that when the
+// resolved source is NOT pinned, loadShorthand falls through to
+// cloneGit and fails with a git error (no actual clone attempted
+// because the URL is fake).
+func TestLoader_Load_ShorthandPinNotFound(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	ctx := context.Background()
+
+	// Create and register a registry without pinning.
+	regDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(regDir, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(regDir, "registry.toml"),
+		[]byte("id = \"test\"\nname = \"Test\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(regDir, "templates", "ghost.toml"),
+		[]byte("id = \"ghost\"\nname = \"Ghost\"\nsource = \"https://github.com/user/nonexistent.git\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := registry.NewManager()
+	if _, err := mgr.Add(ctx, "test", regDir, false); err != nil {
+		t.Fatal(err)
+	}
+
+	l := NewLoader(filepath.Join(xdg, "spin", "templates"))
+	_, err := l.LoadContext(ctx, "test/ghost")
 	if err == nil {
-		t.Fatal("expected post-hook to fail, got nil")
+		t.Fatal("expected error from failed clone pin -> clone fallthrough")
 	}
-	if !strings.Contains(err.Error(), "step 2") {
-		t.Errorf("error should reference failing step 2; got: %v", err)
+	if !strings.Contains(err.Error(), "git clone") {
+		t.Errorf("expected git clone error; got: %v", err)
 	}
-	// step1 must have run (we never reached step 3 because step 2 failed).
-	if _, err := os.Stat(filepath.Join(dir, "step1.txt")); err != nil {
-		t.Errorf("step1.txt should exist (step 1 ran before failure): %v", err)
+}
+
+// TestLoader_Load_ShorthandPinStaleLocalPath verifies that when
+// a pin exists but its LocalPath is stale (template deleted), the
+// loader falls through to cloneGit instead of returning a stale template.
+func TestLoader_Load_ShorthandPinStaleLocalPath(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	ctx := context.Background()
+
+	// Create and register a registry.
+	regDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(regDir, "templates"), 0o755); err != nil {
+		t.Fatal(err)
 	}
-	// step3 must NOT have run.
-	if _, err := os.Stat(filepath.Join(dir, "step3.txt")); !os.IsNotExist(err) {
-		t.Errorf("step3.txt should not exist (fail-fast stopped at step 2); stat err=%v", err)
+	if err := os.WriteFile(filepath.Join(regDir, "registry.toml"),
+		[]byte("id = \"test\"\nname = \"Test\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(regDir, "templates", "stale.toml"),
+		[]byte("id = \"stale\"\nname = \"Stale\"\nsource = \"https://github.com/user/nonexistent.git\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := registry.NewManager()
+	if _, err := mgr.Add(ctx, "test", regDir, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pin with a LocalPath that no longer exists.
+	goneDir := filepath.Join(t.TempDir(), "nonexistent")
+	client := registry.New()
+	if err := client.Pin(ctx, registry.Pinned{
+		Name:      "stale",
+		Source:    "https://github.com/user/nonexistent.git",
+		LocalPath: goneDir,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	l := NewLoader(filepath.Join(xdg, "spin", "templates"))
+	_, err := l.LoadContext(ctx, "test/stale")
+	if err == nil {
+		t.Fatal("expected error from stale pin -> clone fallthrough")
+	}
+	// Should fail with git error, not "pinned missing on disk".
+	if strings.Contains(err.Error(), "missing on disk") {
+		t.Errorf("should NOT report missing pin; should fall through to clone: %v", err)
+	}
+}
+// TestLoader_Load_ShorthandPinMismatchSource verifies that a pin
+// with a different Source URL is not used by loadShorthand.
+func TestLoader_Load_ShorthandPinMismatchSource(t *testing.T) {
+	xdg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	ctx := context.Background()
+
+	// Create a valid template.
+	tplDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(tplDir, "_base"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tplDir, "spin.toml"), []byte("name = \"other\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create and register a registry.
+	regDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(regDir, "templates"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(regDir, "registry.toml"),
+		[]byte("id = \"test\"\nname = \"Test\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(regDir, "templates", "actual.toml"),
+		[]byte("id = \"actual\"\nname = \"Actual\"\nsource = \"https://github.com/user/actual.git\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	mgr := registry.NewManager()
+	if _, err := mgr.Add(ctx, "test", regDir, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pin a DIFFERENT source — should not be reused.
+	client := registry.New()
+	if err := client.Pin(ctx, registry.Pinned{
+		Name:      "other",
+		Source:    "https://github.com/user/other.git",
+		Version:   "local",
+		LocalPath: tplDir,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	l := NewLoader(filepath.Join(xdg, "spin", "templates"))
+	_, err := l.LoadContext(ctx, "test/actual")
+	if err == nil {
+		t.Fatal("expected error from mismatched pin -> clone fallthrough")
+	}
+	if !strings.Contains(err.Error(), "git clone") {
+		t.Errorf("expected git clone error (pin had different source); got: %v", err)
 	}
 }

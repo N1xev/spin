@@ -292,3 +292,114 @@ func TestSetDefaults_PreservesOrder(t *testing.T) {
 		t.Errorf("names mismatch: %v vs %v", names, got)
 	}
 }
+
+// TestSetDefault_Textarea verifies SetDefault on a textarea param
+// applies the default string via Value().
+func TestSetDefault_Textarea(t *testing.T) {
+	p := NewTextarea("desc", "Description", "a\nb")
+	p.SetDefault()
+	got := p.Value()
+	want := Value{Kind: TypeTextarea, String: "a\nb"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Value() = %+v, want %+v", got, want)
+	}
+}
+
+// TestSetDefault_MultiSelect verifies SetDefault on a multiselect
+// param applies the default []string via Value().
+func TestSetDefault_MultiSelect(t *testing.T) {
+	p := NewMultiSelect("features", "Features", []string{"a", "b"}, []string{"a"})
+	p.SetDefault()
+	got := p.Value()
+	want := Value{Kind: TypeMultiSelect, List: []string{"a"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Value() = %+v, want %+v", got, want)
+	}
+}
+
+// TestSetDefault_Path verifies SetDefault on a path param
+// applies the default string via Value().
+func TestSetDefault_Path(t *testing.T) {
+	p := NewPath("out", "Output", "/tmp")
+	p.SetDefault()
+	got := p.Value()
+	want := Value{Kind: TypePath, Path: "/tmp"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Value() = %+v, want %+v", got, want)
+	}
+}
+
+// TestSetDefault_Secret verifies SetDefault on a secret param
+// applies the default string via Value().
+func TestSetDefault_Secret(t *testing.T) {
+	p := NewSecret("key", "API Key")
+	p.def = "sk-test"
+	p.SetDefault()
+	got := p.Value()
+	want := Value{Kind: TypeSecret, String: "sk-test"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Value() = %+v, want %+v", got, want)
+	}
+}
+
+// BenchmarkSetDefaultText measures SetDefault() for a text param.
+func BenchmarkSetDefaultText(b *testing.B) {
+	p := NewText("name", "Name", "default")
+	b.ResetTimer()
+	for b.Loop() {
+		p.SetDefault()
+	}
+}
+
+// BenchmarkSetDefaults_Small measures SetDefaults for 4 params
+// (the common template size).
+func BenchmarkSetDefaults_Small(b *testing.B) {
+	ps := []Param{
+		NewText("name", "Name", "myapp"),
+		NewNumber("port", "Port", 8080, nil, nil),
+		NewBool("debug", "Debug", true),
+		NewSelect("ed", "Edition", []string{"2021", "2024"}, "2021"),
+	}
+	b.ResetTimer()
+	for b.Loop() {
+		SetDefaults(ps)
+	}
+}
+
+// TestSetDefaults_AllTypes verifies SetDefaults covers every
+// param type in a single call.
+func TestSetDefaults_AllTypes(t *testing.T) {
+	ps := []Param{
+		NewText("a", "A", "txt"),
+		NewTextarea("b", "B", "area"),
+		NewNumber("c", "C", 42, nil, nil),
+		NewSelect("d", "D", []string{"x", "y"}, "y"),
+		NewMultiSelect("e", "E", []string{"x", "y"}, []string{"x"}),
+		NewBool("f", "F", true),
+		NewPath("g", "G", "/tmp"),
+		NewSecret("h", "H"),
+	}
+	ps[7].(*SecretParam).def = "shh"
+	SetDefaults(ps)
+
+	want := map[string]Value{
+		"a": {Kind: TypeText, String: "txt"},
+		"b": {Kind: TypeTextarea, String: "area"},
+		"c": {Kind: TypeNumber, Int: 42},
+		"d": {Kind: TypeSelect, String: "y"},
+		"e": {Kind: TypeMultiSelect, List: []string{"x"}},
+		"f": {Kind: TypeBool, Bool: true},
+		"g": {Kind: TypePath, Path: "/tmp"},
+		"h": {Kind: TypeSecret, String: "shh"},
+	}
+	for _, p := range ps {
+		w, ok := want[p.Name()]
+		if !ok {
+			t.Errorf("unexpected param %q", p.Name())
+			continue
+		}
+		if got := p.Value(); !reflect.DeepEqual(got, w) {
+			t.Errorf("%s Value() = %+v, want %+v", p.Name(), got, w)
+		}
+	}
+}
