@@ -8,5 +8,6 @@ Set FontSize 16
 Set Width 1000
 Set Height 500
 
-Type "spin new myapp --template https://github.com/example/go-cli-template.git" Sleep 500ms Enter
+Type "spin new myapp ./test-template --dry-run" Sleep 500ms Enter
+
 Sleep 3s

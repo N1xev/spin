@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -60,7 +61,7 @@ func TestRefresh_LocalPath(t *testing.T) {
 	}
 
 	client := registry.New()
-	updated, err := client.Refresh(pin)
+	updated, err := client.Refresh(context.Background(), pin)
 	if err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestRefresh_LocalPath(t *testing.T) {
 // mentions `spin add` so the user knows the fix.
 func TestRefresh_NoLocalPath(t *testing.T) {
 	c := registry.New()
-	_, err := c.Refresh(registry.Pinned{Name: "x", Source: "/foo"})
+	_, err := c.Refresh(context.Background(), registry.Pinned{Name: "x", Source: "/foo"})
 	if err == nil {
 		t.Fatal("expected error for empty LocalPath")
 	}
@@ -114,7 +115,7 @@ func TestRefresh_MissingOnDisk(t *testing.T) {
 	src := makeFixtureLocalSource(t)
 	dst := t.TempDir()
 	pin := registry.Pinned{Name: "x", Source: src, LocalPath: filepath.Join(dst, "x")}
-	updated, err := c.Refresh(pin)
+	updated, err := c.Refresh(context.Background(), pin)
 	if err != nil {
 		t.Fatalf("Refresh from local when LocalPath missing: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestRefreshOne_RollsBackOnFailure(t *testing.T) {
 	}
 
 	client := registry.New()
-	returned, err := refreshOne(client, pin)
+	returned, err := refreshOne(context.Background(), client, pin)
 	if err == nil {
 		t.Fatal("expected refresh to fail (source gone)")
 	}
@@ -205,7 +206,7 @@ func TestRefreshOne_SuccessClearsBackup(t *testing.T) {
 	pin := registry.Pinned{Name: "fixture", Source: src, Version: "local", LocalPath: dest}
 	client := registry.New()
 
-	_, err := refreshOne(client, pin)
+	_, err := refreshOne(context.Background(), client, pin)
 	if err != nil {
 		t.Fatalf("refreshOne: %v", err)
 	}

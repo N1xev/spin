@@ -6,6 +6,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 
 	"charm.land/fang/v2"
@@ -22,6 +24,10 @@ func main() {
 	)
 	if err == nil {
 		return
+	}
+	if errors.Is(err, cmd.ErrCancelled) {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(130)
 	}
 	os.Exit(1)
 }

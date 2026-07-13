@@ -23,3 +23,5 @@ coverage.txt
 # Test scratch dirs (integration tests use t.TempDir() which auto-cleans, but defensive)
 /scaffold-test-*/
 /e2e-*/
+test-template/
+.codegraph/

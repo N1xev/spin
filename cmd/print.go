@@ -11,49 +11,35 @@ import (
 	"github.com/N1xev/spin/internal/log"
 )
 
-// Styles. Built once at package init; lipgloss v2 styles are safe
-// to share across goroutines. The colour values mirror fang's
-// DefaultColorScheme so success/info/warn match the fang error
-// header visually.
+// Style for the table rendered by printTable.
 var (
-	styleSuccessMark = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
-	styleInfoMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	styleWarnMark    = lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Bold(true)
-	styleDim         = lipgloss.NewStyle().Faint(true)
-	styleHeader      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
-	styleCell        = lipgloss.NewStyle()
+	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
+	styleCell   = lipgloss.NewStyle()
 )
 
-// printSuccess writes "✓ <msg>" to stdout, fang-flag-green. Use
-// for actions the user just performed: "added", "created", "pinned".
+// printSuccess logs a success message to stdout. The charmbracelet/log
+// library's INFO level (green) is the user-facing indicator — no
+// custom icons needed.
 func printSuccess(format string, args ...any) {
-	log.Stdout.Print(fmt.Sprintf("%s %s",
-		styleSuccessMark.Render("✓"),
-		fmt.Sprintf(format, args...)))
+	log.Stdout.Info(fmt.Sprintf(format, args...))
 }
 
-// printInfo writes "ℹ <msg>" to stdout, fang-title-blue. Use for
-// neutral confirmations and "no items" messages.
+// printInfo logs an informational message to stdout via the log
+// library's INFO level.
 func printInfo(format string, args ...any) {
-	log.Stdout.Info(fmt.Sprintf("%s %s",
-		styleInfoMark.Render("ℹ"),
-		fmt.Sprintf(format, args...)))
+	log.Stdout.Info(fmt.Sprintf(format, args...))
 }
 
-// printWarn writes "⚠ <msg>" to stderr, amber. Use for conditions
-// the user should know about but which are not fatal (e.g. a
-// template that requires a newer spin).
+// printWarn logs a warning to stderr via the log library's WARN
+// level (yellow prefix).
 func printWarn(format string, args ...any) {
-	log.Warn(fmt.Sprintf("%s %s",
-		styleWarnMark.Render("⚠"),
-		fmt.Sprintf(format, args...)))
+	log.Warn(fmt.Sprintf(format, args...))
 }
 
-// printHint writes a dimmed hint to stderr. Used after an error or
-// an "info" line to suggest the next step (e.g. "Use `spin new
-// --template <user/repo>` to scaffold from a git repo.").
+// printHint prints a hint to stdout with no level prefix. Used after
+// an error or info line to suggest the next step.
 func printHint(format string, args ...any) {
-	log.Debug(fmt.Sprintf("  %s", styleDim.Render(fmt.Sprintf(format, args...))))
+	log.Stdout.Print(fmt.Sprintf(format, args...))
 }
 
 // printTable renders a styled table to w. headers is the column

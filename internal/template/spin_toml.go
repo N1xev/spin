@@ -98,9 +98,6 @@ func ParseSpinToml(path string) (*SpinToml, error) {
 	return ParseSpinTomlBytes(b)
 }
 
-// ParseSpinTomlBytes parses a spin.toml from raw bytes. Uses
-// github.com/BurntSushi/toml for full TOML support; there is no stdlib
-// encoding/toml package available in Go today.
 func ParseSpinTomlBytes(b []byte) (*SpinToml, error) {
 	st := &SpinToml{Params: map[string]params.Spec{}}
 	if err := parseTOML(b, st); err != nil {

@@ -54,7 +54,7 @@ func parseTOML(b []byte, st *SpinToml) error {
 	st.Type = raw.Type
 	st.Language = raw.Language
 	st.Version = raw.Version
-	st.Author = Author(rawAuthorToAuthor(raw.Author))
+	st.Author = Author(raw.Author)
 	st.License = raw.License
 	st.Repository = raw.Repository
 	st.MinSpinVersion = raw.MinSpinVersion
@@ -130,8 +130,4 @@ func asInt64(v any) (int64, bool) {
 		return int64(n), true
 	}
 	return 0, false
-}
-
-func rawAuthorToAuthor(r rawAuthor) Author {
-	return Author(r)
 }

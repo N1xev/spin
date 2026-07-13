@@ -54,9 +54,9 @@ func execList(cmd *cobra.Command, args []string) error {
 	var pinned []registry.Pinned
 	var err error
 	if listAllFlag {
-		pinned, err = client.ListAllPinned()
+		pinned, err = client.ListAllPinned(cmd.Context())
 	} else {
-		pinned, err = client.ListPinned()
+		pinned, err = client.ListPinned(cmd.Context())
 	}
 	if err != nil {
 		return err

@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/N1xev/spin/internal/params"
@@ -226,7 +228,7 @@ func TestApplyParamFlags_Happy(t *testing.T) {
 	if got["verbose"] != true {
 		t.Errorf("verbose = %v, want true", got["verbose"])
 	}
-	if !equalStrings(got["features"].([]string), []string{"ci", "release"}) {
+	if !slices.Equal(got["features"].([]string), []string{"ci", "release"}) {
 		t.Errorf("features = %v, want [ci release]", got["features"])
 	}
 	if got["name"] != "myapp" {
@@ -246,10 +248,10 @@ func TestApplyParamFlags_UnknownKey(t *testing.T) {
 		t.Fatal("expected error for unknown key")
 	}
 	msg := err.Error()
-	if !contains(msg, "unknown key") {
+	if !strings.Contains(msg, "unknown key") {
 		t.Errorf("error should mention 'unknown key'; got: %s", msg)
 	}
-	if !contains(msg, "port") {
+	if !strings.Contains(msg, "port") {
 		t.Errorf("error should list known key 'port'; got: %s", msg)
 	}
 }
@@ -302,7 +304,7 @@ func TestApplyParamFlags_BadBoolType(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error coercing 42 to bool")
 	}
-	if !contains(err.Error(), "bool") {
+	if !strings.Contains(err.Error(), "bool") {
 		t.Errorf("error should mention 'bool'; got: %s", err.Error())
 	}
 }
@@ -327,37 +329,10 @@ func TestJoinKnownParams(t *testing.T) {
 // reading the README.
 func TestParamFlag_HelpText(t *testing.T) {
 	out := runSpin(t, "new", "--help")
-	if !contains(string(out), "--param") {
+	if !strings.Contains(string(out), "--param") {
 		t.Errorf("`spin new --help` should document --param flag; got:\n%s", out)
 	}
-	if !contains(string(out), "key=value") {
+	if !strings.Contains(string(out), "key=value") {
 		t.Errorf("`spin new --help` should show --param format 'key=value'; got:\n%s", out)
 	}
-}
-
-// contains is a tiny stand-in for strings.Contains to keep the
-// test file's import set minimal.
-func contains(haystack, needle string) bool {
-	return len(needle) == 0 || (len(haystack) >= len(needle) && stringIndex(haystack, needle) >= 0)
-}
-
-func stringIndex(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

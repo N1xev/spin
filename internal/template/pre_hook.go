@@ -1,6 +1,7 @@
 package template
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/N1xev/spin/internal/log"
+	"github.com/N1xev/spin/internal/params"
 )
 
 // RunPreHook executes the template's [[pre]] steps (if any) after
@@ -18,7 +20,7 @@ import (
 // failure and returns that error.
 //
 // An empty or missing pre section is a no-op.
-func RunPreHook(t *Template, values map[string]any, dir string, opts HookOptions) error {
+func RunPreHook(ctx context.Context, t *Template, values map[string]any, dir string, opts HookOptions) error {
 	if t == nil || t.SpinToml == nil {
 		return nil
 	}
@@ -36,7 +38,7 @@ func RunPreHook(t *Template, values map[string]any, dir string, opts HookOptions
 	if len(steps) == 0 {
 		return nil
 	}
-	return runHooks("pre", steps, values, dir, opts)
+	return runHooks(ctx, "pre", steps, values, dir, opts)
 }
 
 // HasHooks reports whether the template would run any shell commands:
@@ -82,8 +84,15 @@ type hookStep struct {
 	Run string
 }
 
-func runHooks(kind string, steps []hookStep, values map[string]any, dir string, opts HookOptions) error {
-	resolved := unwrapValues(values)
+func runHooks(ctx context.Context, kind string, steps []hookStep, values map[string]any, dir string, opts HookOptions) error {
+	resolved := make(map[string]any, len(values))
+	for k, v := range values {
+		if pv, ok := v.(params.Value); ok {
+			resolved[k] = UnwrapValue(pv)
+		} else {
+			resolved[k] = v
+		}
+	}
 	for i, step := range steps {
 		if step.Run == "" {
 			continue
@@ -92,13 +101,16 @@ func runHooks(kind string, steps []hookStep, values map[string]any, dir string, 
 		if err != nil {
 			return fmt.Errorf("%s-hook step %d: render: %w", kind, i+1, err)
 		}
-		if opts.PrintCommands {
-			log.Stdout.Print(fmt.Sprintf("→ %s-hook: %s", kind, rendered))
-		}
 		if opts.NoHooks {
 			continue
 		}
-		c := exec.Command("sh", "-c", rendered)
+		if opts.PrintCommands {
+			log.Stdout.Print(fmt.Sprintf("→ %s-hook: %s", kind, rendered))
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		c := exec.CommandContext(ctx, "sh", "-c", rendered)
 		c.Dir = dir
 		if opts.Verbose {
 			c.Stdout = os.Stdout

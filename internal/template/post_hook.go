@@ -2,10 +2,9 @@ package template
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"text/template"
-
-	"github.com/N1xev/spin/internal/params"
 )
 
 // RunPostHook executes the template's [[post]] steps (if any) after
@@ -23,7 +22,7 @@ import (
 // might have been included in _base/) but ensures the project that
 // the user sees has spin.toml deleted by the time the scaffolder
 // returns.
-func RunPostHook(t *Template, values map[string]any, dir string, opts HookOptions) error {
+func RunPostHook(ctx context.Context, t *Template, values map[string]any, dir string, opts HookOptions) error {
 	if t == nil || t.SpinToml == nil {
 		return nil
 	}
@@ -41,29 +40,7 @@ func RunPostHook(t *Template, values map[string]any, dir string, opts HookOption
 	if len(steps) == 0 {
 		return nil
 	}
-	return runHooks("post", steps, values, dir, opts)
-}
-
-// unwrapValues walks the values map and replaces any params.Value
-// with its underlying primitive (String, Int, Bool, List, Path). This
-// is what template engines expect: a flat key→primitive map, not
-// nested struct values.
-func unwrapValues(in map[string]any) map[string]any {
-	out := make(map[string]any, len(in))
-	for k, v := range in {
-		out[k] = unwrapAny(v)
-	}
-	return out
-}
-
-func unwrapAny(v any) any {
-	if v == nil {
-		return nil
-	}
-	if pv, ok := v.(params.Value); ok {
-		return UnwrapValue(pv)
-	}
-	return v
+	return runHooks(ctx, "post", steps, values, dir, opts)
 }
 
 // renderHook parses the post-hook command as a text/template and

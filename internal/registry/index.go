@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,8 +27,8 @@ type Index struct {
 // validates each file, and returns the resulting index. Invalid
 // files are skipped; the per-registry error counts are returned in
 // `errors` so the CLI can surface them in the update summary.
-func (m Manager) Build() (*Index, map[string]int, error) {
-	cfg, err := m.Load()
+func (m Manager) Build(ctx context.Context) (*Index, map[string]int, error) {
+	cfg, err := m.Load(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -160,8 +161,8 @@ type scoredEntry struct {
 // Returns a slice of error messages for the registry.toml (id, name)
 // and any templates/*.toml that fail to parse or fail validTemplate.
 // Empty slice means the registry is fully valid.
-func (m Manager) Validate(alias string) []string {
-	reg, ok := m.Get(alias)
+func (m Manager) Validate(ctx context.Context, alias string) []string {
+	reg, ok := m.Get(ctx, alias)
 	if !ok {
 		return []string{fmt.Sprintf("%s: not registered", alias)}
 	}

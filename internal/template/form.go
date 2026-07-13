@@ -66,7 +66,7 @@ func (t *Template) ResolveForm(values map[string]any, interactive bool) (map[str
 		// Unwrap params.Value to its underlying primitive so
 		// text/template sees {{.project_name}} as a string, not
 		// the Value struct dump.
-		out[p.Name()] = unwrapValue(p.Value())
+		out[p.Name()] = UnwrapValue(p.Value())
 	}
 	// also copy through any caller-supplied keys that aren't params
 	for k, v := range values {
@@ -80,13 +80,13 @@ func (t *Template) ResolveForm(values map[string]any, interactive bool) (map[str
 func toParamValue(v any) params.Value {
 	switch x := v.(type) {
 	case string:
-		return params.Value{String: x}
+		return params.Value{Kind: params.TypeText, String: x}
 	case int:
-		return params.Value{Int: x}
+		return params.Value{Kind: params.TypeNumber, Int: x}
 	case bool:
-		return params.Value{Bool: x}
+		return params.Value{Kind: params.TypeBool, Bool: x}
 	case []string:
-		return params.Value{List: x}
+		return params.Value{Kind: params.TypeMultiSelect, List: x}
 	case []any:
 		out := make([]string, 0, len(x))
 		for _, item := range x {
@@ -94,7 +94,7 @@ func toParamValue(v any) params.Value {
 				out = append(out, s)
 			}
 		}
-		return params.Value{List: out}
+		return params.Value{Kind: params.TypeMultiSelect, List: out}
 	}
 	return params.Value{}
 }
@@ -104,6 +104,21 @@ func toParamValue(v any) params.Value {
 // (string, int, bool, []string), not the multi-field struct.
 // Exported because post_hook.go also needs it.
 func UnwrapValue(v params.Value) any {
+	if v.Kind != "" {
+		switch v.Kind {
+		case params.TypeNumber:
+			return v.Int
+		case params.TypeBool:
+			return v.Bool
+		case params.TypeMultiSelect:
+			return v.List
+		case params.TypePath:
+			return v.Path
+		case params.TypeSecret, params.TypeText, params.TypeTextarea, params.TypeSelect:
+			return v.String
+		}
+	}
+	// Fallback for Values without Kind (legacy callers).
 	switch {
 	case v.List != nil:
 		return v.List
@@ -118,8 +133,6 @@ func UnwrapValue(v params.Value) any {
 	}
 	return ""
 }
-
-func unwrapValue(v params.Value) any { return UnwrapValue(v) }
 
 // Hints returns a one-line-per-param summary, used by
 // `spin new <template> --print-params` and the template README.
