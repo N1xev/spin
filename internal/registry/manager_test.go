@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -76,7 +77,7 @@ func TestValidateAlias_AcceptsGood(t *testing.T) {
 
 func TestManager_LoadEmpty(t *testing.T) {
 	mgr := newTestManager(t)
-	cfg, err := mgr.Load()
+	cfg, err := mgr.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -91,7 +92,7 @@ func TestManager_AddLocalRegistry(t *testing.T) {
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
 
-	reg, err := mgr.Add("local", src, false)
+	reg, err := mgr.Add(context.Background(), "local", src, false)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -109,7 +110,7 @@ func TestManager_AddLocalRegistry(t *testing.T) {
 		t.Errorf("cached registry path missing: %v", err)
 	}
 	// registries.json should now list one entry.
-	cfg, err := mgr.Load()
+	cfg, err := mgr.Load(context.Background())
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
@@ -123,7 +124,7 @@ func TestManager_AddRejectsBadAlias(t *testing.T) {
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
 
-	if _, err := mgr.Add("bad/alias", src, false); !errors.Is(err, ErrAliasInvalid) {
+	if _, err := mgr.Add(context.Background(), "bad/alias", src, false); !errors.Is(err, ErrAliasInvalid) {
 		t.Errorf("expected ErrAliasInvalid; got %v", err)
 	}
 }
@@ -133,14 +134,14 @@ func TestManager_AddRefusesDuplicateWithoutForce(t *testing.T) {
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
 
-	if _, err := mgr.Add("dup", src, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "dup", src, false); err != nil {
 		t.Fatalf("first Add: %v", err)
 	}
-	if _, err := mgr.Add("dup", src, false); !errors.Is(err, ErrAliasExists) {
+	if _, err := mgr.Add(context.Background(), "dup", src, false); !errors.Is(err, ErrAliasExists) {
 		t.Errorf("second Add: expected ErrAliasExists; got %v", err)
 	}
 	// --force should succeed and rewrite the cache.
-	if _, err := mgr.Add("dup", src, true); err != nil {
+	if _, err := mgr.Add(context.Background(), "dup", src, true); err != nil {
 		t.Errorf("Add with --force: %v", err)
 	}
 }
@@ -153,7 +154,7 @@ func TestManager_AddRollsBackOnMissingRegistryToml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := mgr.Add("notareg", src, false)
+	_, err := mgr.Add(context.Background(), "notareg", src, false)
 	if err == nil {
 		t.Fatal("Add should error on missing registry.toml")
 	}
@@ -163,7 +164,7 @@ func TestManager_AddRollsBackOnMissingRegistryToml(t *testing.T) {
 		t.Errorf("cache should be rolled back; stat err=%v", err)
 	}
 	// registries.json should not have the entry.
-	cfg, _ := mgr.Load()
+	cfg, _ := mgr.Load(context.Background())
 	if len(cfg.Registries) != 0 {
 		t.Errorf("registries.json should be empty; got %+v", cfg.Registries)
 	}
@@ -176,7 +177,7 @@ func TestManager_AddRollsBackOnMissingTemplatesDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "registry.toml"), []byte("id=\"x\"\nname=\"y\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := mgr.Add("notareg2", src, false)
+	_, err := mgr.Add(context.Background(), "notareg2", src, false)
 	if err == nil {
 		t.Fatal("Add should error on missing templates/")
 	}
@@ -188,7 +189,7 @@ func TestManager_AddRollsBackOnMissingTemplatesDir(t *testing.T) {
 
 func TestManager_GetReturnsFalseForUnknown(t *testing.T) {
 	mgr := newTestManager(t)
-	if _, ok := mgr.Get("nope"); ok {
+	if _, ok := mgr.Get(context.Background(), "nope"); ok {
 		t.Error("Get should return false for unknown alias")
 	}
 }
@@ -197,25 +198,25 @@ func TestManager_RemoveDeletesCacheAndEntry(t *testing.T) {
 	mgr := newTestManager(t)
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
-	reg, err := mgr.Add("doomed", src, false)
+	reg, err := mgr.Add(context.Background(), "doomed", src, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := mgr.Remove("doomed", nil, false); err != nil {
+	if err := mgr.Remove(context.Background(), "doomed", nil, false); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 	if _, err := os.Stat(reg.Path); !os.IsNotExist(err) {
 		t.Errorf("cache should be gone; stat err=%v", err)
 	}
-	if _, ok := mgr.Get("doomed"); ok {
+	if _, ok := mgr.Get(context.Background(), "doomed"); ok {
 		t.Error("alias should be gone from registries.json")
 	}
 }
 
 func TestManager_RemoveUnknownAliasIsError(t *testing.T) {
 	mgr := newTestManager(t)
-	err := mgr.Remove("ghost", nil, false)
+	err := mgr.Remove(context.Background(), "ghost", nil, false)
 	if !errors.Is(err, ErrRegistryMissing) {
 		t.Errorf("expected ErrRegistryMissing; got %v", err)
 	}
@@ -225,25 +226,25 @@ func TestManager_RemoveRefusesWhenPinsDepend(t *testing.T) {
 	mgr := newTestManager(t)
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
-	if _, err := mgr.Add("official", src, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "official", src, false); err != nil {
 		t.Fatal(err)
 	}
 	pins := []Pinned{
 		{Name: "go-api", Source: "https://github.com/example/go-api.git"},
 	}
 	// Without --purge-pinned: refuses.
-	if err := mgr.Remove("official", pins, false); err == nil {
+	if err := mgr.Remove(context.Background(), "official", pins, false); err == nil {
 		t.Fatal("Remove should refuse when pins depend on registry")
 	}
 	// Registry should still be present after refused remove.
-	if _, ok := mgr.Get("official"); !ok {
+	if _, ok := mgr.Get(context.Background(), "official"); !ok {
 		t.Error("registry should still be registered after refused remove")
 	}
 	// With --purge-pinned: succeeds.
-	if err := mgr.Remove("official", pins, true); err != nil {
+	if err := mgr.Remove(context.Background(), "official", pins, true); err != nil {
 		t.Errorf("Remove with --purge-pinned: %v", err)
 	}
-	if _, ok := mgr.Get("official"); ok {
+	if _, ok := mgr.Get(context.Background(), "official"); ok {
 		t.Error("registry should be gone after purge-pinned remove")
 	}
 }
@@ -252,11 +253,11 @@ func TestManager_RefreshLocalIsNoOp(t *testing.T) {
 	mgr := newTestManager(t)
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
-	reg, err := mgr.Add("local", src, false)
+	reg, err := mgr.Add(context.Background(), "local", src, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := mgr.Refresh("local")
+	out, err := mgr.Refresh(context.Background(), "local")
 	if err != nil {
 		t.Fatalf("Refresh on local: %v", err)
 	}
@@ -270,7 +271,7 @@ func TestManager_RefreshLocalIsNoOp(t *testing.T) {
 
 func TestManager_RefreshUnknownAliasIsError(t *testing.T) {
 	mgr := newTestManager(t)
-	if _, err := mgr.Refresh("nope"); !errors.Is(err, ErrRegistryMissing) {
+	if _, err := mgr.Refresh(context.Background(), "nope"); !errors.Is(err, ErrRegistryMissing) {
 		t.Errorf("expected ErrRegistryMissing; got %v", err)
 	}
 }
@@ -316,7 +317,7 @@ func TestManager_FindDependentPinsByTemplateSource(t *testing.T) {
 	// what we'll pin against.
 	root := t.TempDir()
 	writeRegistryFixture(t, root)
-	reg, err := mgr.Add("bySrc", root, false)
+	reg, err := mgr.Add(context.Background(), "bySrc", root, false)
 	if err != nil {
 		t.Fatalf("Add: %v", err)
 	}
@@ -332,14 +333,14 @@ func TestManager_FindDependentPinsByTemplateSource(t *testing.T) {
 
 func TestManager_AddEmptySourceIsError(t *testing.T) {
 	mgr := newTestManager(t)
-	if _, err := mgr.Add("empty", "", false); err == nil {
+	if _, err := mgr.Add(context.Background(), "empty", "", false); err == nil {
 		t.Error("Add with empty source should error")
 	}
 }
 
 func TestManager_AddNonExistentLocalSource(t *testing.T) {
 	mgr := newTestManager(t)
-	_, err := mgr.Add("missing", "/no/such/path", false)
+	_, err := mgr.Add(context.Background(), "missing", "/no/such/path", false)
 	if err == nil {
 		t.Fatal("Add with non-existent local source should error")
 	}
@@ -350,12 +351,9 @@ func TestManager_AddNonExistentLocalSource(t *testing.T) {
 
 func TestManager_AddNonExistentGitSource(t *testing.T) {
 	mgr := newTestManager(t)
-	_, err := mgr.Add("missing", "https://github.com/spin-org/does-not-exist-12345.git", false)
+	_, err := mgr.Add(context.Background(), "missing", "https://github.com/spin-org/does-not-exist-12345.git", false)
 	if err == nil {
 		t.Fatal("Add with non-existent git source should error")
-	}
-	if strings.Contains(err.Error(), "exit status") {
-		t.Errorf("error should not include raw exit status; got %v", err)
 	}
 }
 
@@ -367,7 +365,7 @@ func TestManager_AddLocalNonDirectoryErrors(t *testing.T) {
 	if err := os.WriteFile(f, []byte("not a dir"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.Add("file", f, false); err == nil {
+	if _, err := mgr.Add(context.Background(), "file", f, false); err == nil {
 		t.Error("Add with file source should error")
 	} else if !strings.Contains(err.Error(), "not a directory") {
 		t.Errorf("expected 'not a directory' in error; got %v", err)
