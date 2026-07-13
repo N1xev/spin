@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
@@ -36,9 +37,9 @@ func init() {
 // for each.
 func runUpdate(cmd *cobra.Command, args []string) error {
 	client := registry.New()
-	pinned, err := client.ListPinned()
+	pinned, err := client.ListPinned(cmd.Context())
 	if err != nil {
-		return fmt.Errorf("spin update: read pinned: %w", err)
+		return err
 	}
 	if len(pinned) == 0 {
 		printInfo("no pinned templates to update")
@@ -67,7 +68,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 
 	var ok, failed int
 	for _, p := range targets {
-		updated, err := refreshOne(client, p)
+		updated, err := refreshOne(cmd.Context(), client, p)
 		if err != nil {
 			printWarn("%s: %v", p.Name, err)
 			failed++
@@ -102,7 +103,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 // failed. The error is the LAST thing that failed; the rollback
 // itself is best-effort and reported as a warning, since by then
 // we've done everything we can.
-func refreshOne(client *registry.Client, p registry.Pinned) (registry.Pinned, error) {
+func refreshOne(ctx context.Context, client *registry.Client, p registry.Pinned) (registry.Pinned, error) {
 	if p.LocalPath == "" {
 		return p, fmt.Errorf("no LocalPath on pin; re-run `spin add %s`", p.Source)
 	}
@@ -133,7 +134,7 @@ func refreshOne(client *registry.Client, p registry.Pinned) (registry.Pinned, er
 	// the original LocalPath; on success we delete the .bak and
 	// return the new pin. On failure, we attempt to move .bak
 	// back into place.
-	updated, err := client.Refresh(p)
+	updated, err := client.Refresh(ctx, p)
 	if err != nil {
 		// Roll back if we can. A failed rollback is reported but
 		// not returned, since the original error is the one the
@@ -153,7 +154,7 @@ func refreshOne(client *registry.Client, p registry.Pinned) (registry.Pinned, er
 	// (3) Success: persist the updated pin. We do this LAST so a
 	// write failure doesn't strand the user with a refreshed
 	// cache but an outdated Version.
-	if err := client.Pin(updated); err != nil {
+	if err := client.Pin(ctx, updated); err != nil {
 		// Cache is already refreshed; pin write failed. Roll back
 		// the cache so the recorded Version matches what's on
 		// disk.
@@ -163,7 +164,7 @@ func refreshOne(client *registry.Client, p registry.Pinned) (registry.Pinned, er
 					p.Name, err, rbErr, backup)
 			}
 		}
-		return p, fmt.Errorf("pin write failed: %w", err)
+		return p, fmt.Errorf("pin write failed: %v", err)
 	}
 
 	// (4) All green. Delete the .bak.

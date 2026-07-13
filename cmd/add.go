@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -37,6 +36,7 @@ func init() {
 }
 
 func runAdd(cmd *cobra.Command, args []string) error {
+	ctx := cmd.Context()
 	client := registry.New()
 
 	// `--list` (or no args) prints the pinned list and exits.
@@ -53,17 +53,17 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	// resolved git URL or local path.
 	if registry.IsShorthand(spec) {
 		mgr := registry.NewManager()
-		resolved, err := mgr.ResolveShorthand(spec)
+		resolved, err := mgr.ResolveShorthand(ctx, spec)
 		if err != nil {
-			return fmt.Errorf("spin add: %w", err)
+			alias, _ := registry.SplitAliasID(spec)
+			return fmt.Errorf("alias %q is not a registered registry; use a full git URL instead", alias)
 		}
-		pinned, err := client.Add(resolved.Source)
+		pinned, err := client.Add(ctx, resolved.Source)
 		if err != nil {
 			return err
 		}
 		pinned.Name = resolved.ID
-		pinned.PinnedAt = time.Now().UTC().Format(time.RFC3339)
-		if err := client.Pin(*pinned); err != nil {
+		if err := client.Pin(ctx, *pinned); err != nil {
 			return err
 		}
 		kind := "cloned from"
@@ -74,14 +74,12 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	pinned, err := client.Add(spec)
+	pinned, err := client.Add(ctx, spec)
 	if err != nil {
 		return err
 	}
 
-	// Persist. PinnedAt is the only field Add() does not set.
-	pinned.PinnedAt = time.Now().UTC().Format(time.RFC3339)
-	if err := client.Pin(*pinned); err != nil {
+	if err := client.Pin(ctx, *pinned); err != nil {
 		return err
 	}
 

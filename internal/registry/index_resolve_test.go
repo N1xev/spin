@@ -1,9 +1,10 @@
 package registry
 
 import (
-	"errors"
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -38,10 +39,10 @@ func TestManager_BuildReturnsEntries(t *testing.T) {
 	mgr := newTestManager(t)
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
-	if _, err := mgr.Add("official", src, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "official", src, false); err != nil {
 		t.Fatal(err)
 	}
-	idx, skip, err := mgr.Build()
+	idx, skip, err := mgr.Build(context.Background())
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -74,10 +75,10 @@ func TestManager_BuildSkipsInvalidTemplates(t *testing.T) {
 		[]byte("id = \"different-name\"\nname = \"Mismatch\"\nsource = \"https://x.com/y.git\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.Add("official", src, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "official", src, false); err != nil {
 		t.Fatal(err)
 	}
-	idx, skip, err := mgr.Build()
+	idx, skip, err := mgr.Build(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,10 +135,10 @@ func TestManager_ValidateReportsIssues(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "templates", "broken.toml"), []byte("not = \" = valid toml\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.Add("off", src, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "off", src, false); err != nil {
 		t.Fatal(err)
 	}
-	issues := mgr.Validate("off")
+	issues := mgr.Validate(context.Background(), "off")
 	if len(issues) == 0 {
 		t.Error("expected Validate to report at least one issue (broken.toml)")
 	}
@@ -147,10 +148,10 @@ func TestManager_ResolveShorthandHappyPath(t *testing.T) {
 	mgr := newTestManager(t)
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
-	if _, err := mgr.Add("official", src, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "official", src, false); err != nil {
 		t.Fatal(err)
 	}
-	res, err := mgr.ResolveShorthand("official/go-api")
+	res, err := mgr.ResolveShorthand(context.Background(), "official/go-api")
 	if err != nil {
 		t.Fatalf("ResolveShorthand: %v", err)
 	}
@@ -164,9 +165,9 @@ func TestManager_ResolveShorthandHappyPath(t *testing.T) {
 
 func TestManager_ResolveShorthandUnknownAlias(t *testing.T) {
 	mgr := newTestManager(t)
-	_, err := mgr.ResolveShorthand("ghost/nope")
-	if !errors.Is(err, ErrUnresolved) {
-		t.Errorf("expected ErrUnresolved; got %v", err)
+	_, err := mgr.ResolveShorthand(context.Background(), "ghost/nope")
+	if err == nil || !strings.Contains(err.Error(), "not registered") {
+		t.Errorf("expected 'not registered' error; got %v", err)
 	}
 }
 
@@ -174,20 +175,20 @@ func TestManager_ResolveShorthandUnknownID(t *testing.T) {
 	mgr := newTestManager(t)
 	src := t.TempDir()
 	writeRegistryFixture(t, src)
-	if _, err := mgr.Add("official", src, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "official", src, false); err != nil {
 		t.Fatal(err)
 	}
-	_, err := mgr.ResolveShorthand("official/nope")
-	if !errors.Is(err, ErrUnresolved) {
-		t.Errorf("expected ErrUnresolved; got %v", err)
+	_, err := mgr.ResolveShorthand(context.Background(), "official/nope")
+	if err == nil || !strings.Contains(err.Error(), "not in registry") {
+		t.Errorf("expected 'not in registry' error; got %v", err)
 	}
 }
 
 func TestManager_ResolveShorthandNotShorthand(t *testing.T) {
 	mgr := newTestManager(t)
-	_, err := mgr.ResolveShorthand("not a shorthand")
-	if !errors.Is(err, ErrUnresolved) {
-		t.Errorf("expected ErrUnresolved; got %v", err)
+	_, err := mgr.ResolveShorthand(context.Background(), "not a shorthand")
+	if err == nil || !strings.Contains(err.Error(), "<alias>/<id>") {
+		t.Errorf("expected '<alias>/<id>' error; got %v", err)
 	}
 }
 
@@ -207,7 +208,7 @@ source = "secondary/go-api-renamed"
 	if err := os.WriteFile(filepath.Join(srcA, "templates", "go-api.toml"), []byte(nested), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.Add("official", srcA, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "official", srcA, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -226,11 +227,11 @@ source = "secondary/go-api-renamed"
 		0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := mgr.Add("secondary", srcB, false); err != nil {
+	if _, err := mgr.Add(context.Background(), "secondary", srcB, false); err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := mgr.ResolveShorthand("official/go-api")
+	res, err := mgr.ResolveShorthand(context.Background(), "official/go-api")
 	if err != nil {
 		t.Fatalf("ResolveShorthand chain: %v", err)
 	}

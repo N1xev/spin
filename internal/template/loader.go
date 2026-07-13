@@ -4,11 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/N1xev/spin/internal/log"
 	"github.com/N1xev/spin/internal/registry"
@@ -69,24 +67,44 @@ func (l *Loader) LoadContext(ctx context.Context, spec string) (*Template, error
 		return l.loadShorthand(ctx, spec)
 	}
 	// Pinned name lookup backs `spin new --template <name>`.
-	if t, err := l.loadPinned(spec); err != nil {
+	if t, err := l.loadPinned(ctx, spec); err != nil {
 		return nil, err
 	} else if t != nil {
 		return t, nil
 	}
-	return nil, fmt.Errorf("%q is not a local path, git URL, or pinned name (run `spin add %s` first to pin a git URL or user/repo shorthand)", spec, spec)
+	return nil, fmt.Errorf("%q is not a local path, git URL, or pinned name (run `spin add %s` first to pin a git URL or registry shorthand)", spec, spec)
 }
 
 // loadShorthand resolves `<alias>/<id>` against the registry manager,
 // then routes the resolved source through the git-URL or local-path
 // path. The original spec is preserved on the returned Template so
 // the post-scaffold pin prompt offers to re-pin the shorthand.
+//
+// If the resolved source is already pinned locally, the cached
+// template is used instead of re-cloning.
 func (l *Loader) loadShorthand(ctx context.Context, spec string) (*Template, error) {
 	mgr := registry.NewManager()
-	resolved, err := mgr.ResolveShorthand(spec)
+	resolved, err := mgr.ResolveShorthand(ctx, spec)
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if the resolved source is already pinned.
+	if srcspec.IsGitURL(resolved.Source) {
+		client := registry.New()
+		if pinned, err := client.ListPinned(ctx); err == nil {
+			for _, p := range pinned {
+				if p.Source == resolved.Source && p.LocalPath != "" {
+					if t, err := Detect(p.LocalPath); err == nil {
+						t.Spec = spec
+						t.Repo = resolved.Source
+						return t, nil
+					}
+				}
+			}
+		}
+	}
+
 	var tpl *Template
 	switch {
 	case srcspec.IsLocalPath(resolved.Source):
@@ -101,6 +119,9 @@ func (l *Loader) loadShorthand(ctx context.Context, spec string) (*Template, err
 	}
 	if tpl != nil {
 		tpl.Spec = spec
+		if srcspec.IsGitURL(resolved.Source) {
+			tpl.Repo = resolved.Source
+		}
 	}
 	return tpl, nil
 }
@@ -108,9 +129,9 @@ func (l *Loader) loadShorthand(ctx context.Context, spec string) (*Template, err
 // loadPinned looks up spec in the registry's pinned.json. Returns
 // (nil, nil) when the spec is not pinned -- that's not an error, it
 // just means the loader should fall through to the next source kind.
-func (l *Loader) loadPinned(spec string) (*Template, error) {
+func (l *Loader) loadPinned(ctx context.Context, spec string) (*Template, error) {
 	client := registry.New()
-	pinned, err := client.ListPinned()
+	pinned, err := client.ListPinned(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read pinned: %w", err)
 	}
@@ -130,7 +151,7 @@ func (l *Loader) loadPinned(spec string) (*Template, error) {
 					prompt = defaultInvalidPinnedPrompt
 				}
 				if keep, perr := prompt(p.Name, p.LocalPath, err); perr == nil && !keep {
-					if rerr := client.Unpin(p.Name); rerr == nil {
+					if rerr := client.Unpin(ctx, p.Name); rerr == nil {
 						if rmErr := os.RemoveAll(p.LocalPath); rmErr != nil {
 							log.Debug("failed to remove invalid pinned template", "path", p.LocalPath, "err", rmErr)
 						}
@@ -179,7 +200,12 @@ func (l *Loader) cloneGit(ctx context.Context, url string) (*Template, error) {
 		}
 		switch action {
 		case DestReuse, DestPin:
-			return l.detectOrPromptInvalid(name, dest)
+			tpl, err := l.detectOrPromptInvalid(name, dest)
+			if err != nil {
+				return nil, err
+			}
+			tpl.Repo = url
+			return tpl, nil
 		case DestWipe:
 			if err := os.RemoveAll(dest); err != nil {
 				return nil, fmt.Errorf("clear cache for %s: %w", dest, err)
@@ -192,17 +218,17 @@ func (l *Loader) cloneGit(ctx context.Context, url string) (*Template, error) {
 	// Shallow clone, no terminal prompts. GIT_TERMINAL_PROMPT=0 keeps
 	// a missing credential from blocking on a password prompt; the
 	// context bounds a slow or hanging remote.
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", url, dest)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("git clone %s: %s: %w", url, strings.TrimSpace(string(out)), err)
+	if err := registry.GitClone(ctx, url, dest); err != nil {
+		return nil, err
 	}
-	return l.detectOrPromptInvalid(name, dest)
+	tpl, err := l.detectOrPromptInvalid(name, dest)
+	if err != nil {
+		return nil, err
+	}
+	tpl.Repo = url
+	return tpl, nil
 }
 
-// destExists reports whether path exists (file or dir).
 func (l *Loader) destExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
@@ -213,10 +239,10 @@ func (l *Loader) destExists(path string) bool {
 type DestAction int
 
 const (
-	DestReuse DestAction = iota // use the existing clone as-is
-	DestPin                     // reuse and persist the source for offline use
-	DestWipe                    // remove the clone and re-clone
-	DestCancel                  // abort without changes
+	DestReuse  DestAction = iota // use the existing clone as-is
+	DestPin                      // reuse and persist the source for offline use
+	DestWipe                     // remove the clone and re-clone
+	DestCancel                   // abort without changes
 )
 
 // detectOrPromptInvalid runs Detect(dest). On failure it asks the
@@ -310,14 +336,8 @@ func defaultCacheDir() string {
 	if base, err := os.UserConfigDir(); err == nil && base != "" {
 		return filepath.Join(base, "spin", "templates")
 	}
-	if h, err := homeDir(); err == nil && h != "" {
+	if h, err := os.UserHomeDir(); err == nil && h != "" {
 		return filepath.Join(h, ".config", "spin", "templates")
 	}
 	return "/tmp/spin-templates"
-}
-
-// homeDir is os.UserHomeDir, kept here to avoid an os import collision
-// with the wider package (which has its own os-using files).
-func homeDir() (string, error) {
-	return os.UserHomeDir()
 }

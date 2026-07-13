@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -96,14 +96,14 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return errors.New("spin init: name is required")
 	}
 	if err := validateTemplateName(name); err != nil {
-		return fmt.Errorf("spin init: %w", err)
+		return err
 	}
 
 	parent := initDirFlag
 	if parent == "" {
 		wd, err := os.Getwd()
 		if err != nil {
-			return fmt.Errorf("spin init: getwd: %w", err)
+			return err
 		}
 		parent = wd
 	}
@@ -115,11 +115,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if _, err := os.Stat(dest); err == nil {
 		return fmt.Errorf("spin init: %s already exists; pick a different name or remove it first", dest)
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("spin init: stat %s: %w", dest, err)
+		return fmt.Errorf("init: stat %s: %v", dest, err)
 	}
 
 	if err := os.MkdirAll(filepath.Join(dest, "_base"), 0o755); err != nil {
-		return fmt.Errorf("spin init: mkdir: %w", err)
+		return err
 	}
 
 	files := map[string]string{
@@ -133,17 +133,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// have _base/ today, but this keeps the loop safe if
 		// the manifest is extended).
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			return fmt.Errorf("spin init: mkdir %s: %w", filepath.Dir(full), err)
+			return fmt.Errorf("init: mkdir %s: %v", filepath.Dir(full), err)
 		}
 		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
-			return fmt.Errorf("spin init: write %s: %w", rel, err)
+			return fmt.Errorf("init: write %s: %v", rel, err)
 		}
 	}
 
 	// And `spin add <dest>` so the user can use --template <name>
 	// immediately. We do this LAST so a partial init doesn't
 	// leave a broken pin.
-	_ = tryAutoPin(name, dest)
+	_ = tryAutoPin(cmd.Context(), name, dest)
 
 	printSuccess("created template %q at %s", name, dest)
 	printHint("edit spin.toml and _base/, then `spin new <project> --template %s`", name)
@@ -179,16 +179,15 @@ func initSpinToml(name string) string {
 // tryAutoPin runs `spin add <dest>` so the freshly created template
 // is immediately usable as `--template <name>`. Errors are best-effort:
 // if pinning fails we print the manual command instead of failing init.
-func tryAutoPin(name, dest string) error {
+func tryAutoPin(ctx context.Context, name, dest string) error {
 	client := registry.New()
-	pinned, err := client.Add(dest)
+	pinned, err := client.Add(ctx, dest)
 	if err != nil {
 		printHint("run `spin add %s` to pin for offline use later", dest)
 		return nil
 	}
 	pinned.Name = name
-	pinned.PinnedAt = time.Now().UTC().Format(time.RFC3339)
-	if err := client.Pin(*pinned); err != nil {
+	if err := client.Pin(ctx, *pinned); err != nil {
 		printHint("run `spin add %s` to pin for offline use later", dest)
 		return nil
 	}

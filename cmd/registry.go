@@ -82,9 +82,9 @@ func init() {
 func runRegistryAdd(cmd *cobra.Command, args []string) error {
 	alias, source := args[0], args[1]
 	mgr := registry.NewManager()
-	reg, err := mgr.Add(alias, source, registryAddForce)
+	reg, err := mgr.Add(cmd.Context(), alias, source, registryAddForce)
 	if err != nil {
-		return fmt.Errorf("spin registry add: %w", err)
+		return err
 	}
 	kind := string(reg.Kind)
 	printSuccess("registered %q (%s, cached at %s)", reg.Alias, kind, reg.Path)
@@ -103,7 +103,7 @@ type registryRow struct {
 
 func runRegistryList(cmd *cobra.Command, args []string) error {
 	mgr := registry.NewManager()
-	regs, err := mgr.List()
+	regs, err := mgr.List(cmd.Context())
 	if err != nil {
 		return err
 	}
@@ -174,12 +174,12 @@ func runRegistryUpdate(cmd *cobra.Command, args []string) error {
 	mgr := registry.NewManager()
 	if len(args) == 1 {
 		alias := args[0]
-		if _, ok := mgr.Get(alias); !ok {
+		if _, ok := mgr.Get(cmd.Context(), alias); !ok {
 			return fmt.Errorf("spin registry update: %q is not registered", alias)
 		}
-		reg, err := mgr.Refresh(alias)
+		reg, err := mgr.Refresh(cmd.Context(), alias)
 		if err != nil {
-			return fmt.Errorf("spin registry update: %w", err)
+			return err
 		}
 		if reg.Kind == registry.KindLocal {
 			printInfo("%s is local; nothing to update", alias)
@@ -191,7 +191,7 @@ func runRegistryUpdate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	regs, errs := mgr.RefreshAll()
+	regs, errs := mgr.RefreshAll(cmd.Context())
 	if len(regs) == 0 && len(errs) == 0 {
 		printInfo("no git registries to update")
 		return nil
@@ -215,11 +215,11 @@ func runRegistryRemove(cmd *cobra.Command, args []string) error {
 	mgr := registry.NewManager()
 
 	client := registry.New()
-	pinned, err := client.ListAllPinned()
+	pinned, err := client.ListAllPinned(cmd.Context())
 	if err != nil {
-		return fmt.Errorf("spin registry remove: read pinned: %w", err)
+		return err
 	}
-	if err := mgr.Remove(alias, pinned, registryRemovePurge); err != nil {
+	if err := mgr.Remove(cmd.Context(), alias, pinned, registryRemovePurge); err != nil {
 		if errors.Is(err, registry.ErrRegistryMissing) {
 			return fmt.Errorf("spin registry remove: %q is not registered", alias)
 		}

@@ -38,9 +38,9 @@ func init() {
 func runRemove(cmd *cobra.Command, args []string) error {
 	name := args[0]
 	client := registry.New()
-	all, err := client.ListAllPinned()
+	all, err := client.ListAllPinned(cmd.Context())
 	if err != nil {
-		return fmt.Errorf("spin remove: read pinned: %w", err)
+		return err
 	}
 	var match *registry.Pinned
 	for i := range all {
@@ -53,8 +53,8 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("spin remove: no pinned template named %q (run `spin list`)", name)
 	}
 	if removePurgeFlag {
-		if err := client.Purge(name); err != nil {
-			return fmt.Errorf("spin remove: %w", err)
+		if err := client.Purge(cmd.Context(), name); err != nil {
+			return err
 		}
 		if match.LocalPath != "" {
 			printSuccess("removed %q and deleted cache at %s", name, match.LocalPath)
@@ -63,8 +63,8 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		}
 		return nil
 	}
-	if err := client.Unpin(name); err != nil {
-		return fmt.Errorf("spin remove: write pinned.json: %w", err)
+	if err := client.Unpin(cmd.Context(), name); err != nil {
+		return err
 	}
 	if match.LocalPath != "" {
 		printSuccess("removed %q (cache kept at %s; run `spin remove %q --purge` to delete)", name, match.LocalPath, name)
