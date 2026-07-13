@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/N1xev/spin/internal/log"
 	srcspec "github.com/N1xev/spin/internal/spec"
 )
 
@@ -23,42 +23,39 @@ type Client struct {
 	CacheDir string // where Pinned entries are stored; defaults to ~/.config/spin/pinned.json
 }
 
-// New returns a Client rooted at the default config dir.
 func New() *Client {
-	cache, _ := os.UserConfigDir()
-	if cache == "" {
-		cache = "."
-	}
-	return &Client{CacheDir: filepath.Join(cache, "spin")}
+	return &Client{CacheDir: defaultConfigDir()}
 }
 
-// Add resolves a spec (local path, git URL, or GitHub user/repo
-// shorthand) into a Pinned template. The clone/copy runs before the
-// Pinned record is returned, so the caller writes pinned.json only on
-// success. "user/repo" is expanded to its canonical GitHub URL.
-func (c *Client) Add(spec string) (*Pinned, error) {
+// Add resolves a spec (local path or git URL) into a Pinned
+// template. The clone/copy runs before the Pinned record is
+// returned, so the caller writes pinned.json only on success.
+func (c *Client) Add(ctx context.Context, spec string) (*Pinned, error) {
 	if spec == "" {
 		return nil, fmt.Errorf("registry: add: empty spec")
 	}
-	if srcspec.IsShorthand(spec) {
-		spec = expandShorthand(spec)
-	}
+	var pinned *Pinned
+	var err error
 	switch {
 	case srcspec.IsLocalPath(spec):
-		return c.addLocal(spec)
+		pinned, err = c.addLocal(ctx, spec)
 	case srcspec.IsGitURL(spec):
-		return c.addGit(spec)
+		pinned, err = c.addGit(ctx, spec)
 	default:
-		return nil, fmt.Errorf("registry: cannot resolve spec %q; expected a local path, a git URL, or a user/repo shorthand", spec)
+		return nil, fmt.Errorf("registry: cannot resolve spec %q; expected a local path or git URL", spec)
 	}
+	if err != nil {
+		return nil, err
+	}
+	pinned.PinnedAt = time.Now().UTC().Format(time.RFC3339)
+	return pinned, nil
 }
 
-// expandShorthand turns "user/repo" into the canonical GitHub URL.
-func expandShorthand(s string) string {
-	return "https://github.com/" + s + ".git"
-}
 
-func (c *Client) addLocal(spec string) (*Pinned, error) {
+func (c *Client) addLocal(ctx context.Context, spec string) (*Pinned, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	src, err := expandHome(spec)
 	if err != nil {
 		return nil, fmt.Errorf("registry: add local: %w", err)
@@ -99,7 +96,11 @@ func (c *Client) addLocal(spec string) (*Pinned, error) {
 	}, nil
 }
 
-func (c *Client) addGit(spec string) (*Pinned, error) {
+func (c *Client) addGit(ctx context.Context, spec string) (*Pinned, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	templatesDir := filepath.Join(c.CacheDir, "templates")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		return nil, fmt.Errorf("registry: add git: mkdir templates: %w", err)
@@ -113,12 +114,8 @@ func (c *Client) addGit(spec string) (*Pinned, error) {
 
 	// Shallow clone, no terminal prompts. GIT_TERMINAL_PROMPT=0 keeps
 	// a missing credential from blocking on a password prompt.
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", spec, dest)
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("git clone %s: %s: %w", spec, strings.TrimSpace(string(out)), err)
+	if err := GitClone(ctx, spec, dest); err != nil {
+		return nil, err
 	}
 
 	// Best-effort: capture the resolved HEAD sha so a refresh can
@@ -185,14 +182,21 @@ func copyDir(src, dst string) error {
 			}
 			return os.Symlink(linkTarget, target)
 		}
-		data, err := os.ReadFile(path)
+		srcFile, err := os.Open(path)
 		if err != nil {
 			return err
 		}
+		defer srcFile.Close()
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, info.Mode().Perm())
+		dstFile, err := os.OpenFile(target, os.O_RDWR|os.O_CREATE|os.O_TRUNC, info.Mode().Perm())
+		if err != nil {
+			return err
+		}
+		defer dstFile.Close()
+		_, err = io.Copy(dstFile, srcFile)
+		return err
 	})
 }
 
@@ -248,18 +252,15 @@ func SanitiseRepoName(rawURL string) string {
 
 // ─── pinned templates (local state) ───────────────────────────────
 
-// PinnedPath returns the absolute path to the pinned.json file.
-// Atomic writes (writePinned) protect against partial updates.
 func (c *Client) PinnedPath() string {
 	return filepath.Join(c.CacheDir, "pinned.json")
 }
 
-// ListAllPinned returns every persisted Pinned entry, including the
-// soft-deleted ones (Removed=true). A missing file is not an error:
-// it returns (nil, nil). Use this when you need to see removed pins
-// (e.g. `spin list --all`) or look up a pin that may already have
-// been un-pinned.
-func (c *Client) ListAllPinned() ([]Pinned, error) {
+// Returns every persisted Pinned entry, including soft-deleted ones.
+func (c *Client) ListAllPinned(ctx context.Context) ([]Pinned, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	b, err := os.ReadFile(c.PinnedPath())
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -277,11 +278,8 @@ func (c *Client) ListAllPinned() ([]Pinned, error) {
 	return out, nil
 }
 
-// ListPinned returns the active Pinned entries (Removed=false).
-// Soft-deleted pins are filtered out so the default views of
-// `spin list`, `spin new`, and `spin update` don't surface them.
-func (c *Client) ListPinned() ([]Pinned, error) {
-	all, err := c.ListAllPinned()
+func (c *Client) ListPinned(ctx context.Context) ([]Pinned, error) {
+	all, err := c.ListAllPinned(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -294,10 +292,10 @@ func (c *Client) ListPinned() ([]Pinned, error) {
 	return out, nil
 }
 
-// Pin persists a Pinned record. If a record with the same Name
-// already exists it is replaced; otherwise the new record is
-// appended. Writes are atomic (write to temp file, then rename).
-func (c *Client) Pin(p Pinned) error {
+func (c *Client) Pin(ctx context.Context, p Pinned) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(c.CacheDir, 0o755); err != nil {
 		return err
 	}
@@ -305,7 +303,10 @@ func (c *Client) Pin(p Pinned) error {
 	if p.LocalPath == "" {
 		p.LocalPath = filepath.Join(c.CacheDir, "templates", p.Name)
 	}
-	all, _ := c.ListPinned()
+	all, err := c.ListPinned(ctx)
+	if err != nil {
+		return err
+	}
 	for i, x := range all {
 		if x.Name == p.Name {
 			all[i] = p
@@ -316,12 +317,14 @@ func (c *Client) Pin(p Pinned) error {
 	return c.writePinned(all)
 }
 
-// Unpin soft-deletes the Pinned record with the given name: it
-// marks Removed=true so the entry is hidden from ListPinned but
-// still in pinned.json. The on-disk cache is left alone -- call
-// Purge(name) to drop the entry AND delete its cache.
-func (c *Client) Unpin(name string) error {
-	all, _ := c.ListAllPinned()
+func (c *Client) Unpin(ctx context.Context, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	all, err := c.ListAllPinned(ctx)
+	if err != nil {
+		return err
+	}
 	found := false
 	for i, x := range all {
 		if x.Name == name {
@@ -335,12 +338,14 @@ func (c *Client) Unpin(name string) error {
 	return c.writePinned(all)
 }
 
-// Purge removes the named Pinned record entirely and deletes its
-// on-disk cache (if any). Use this after Unpin to fully reclaim
-// disk space; calling it on an already-removed pin is fine. Returns
-// an error if no pin (active or removed) is named that.
-func (c *Client) Purge(name string) error {
-	all, _ := c.ListAllPinned()
+func (c *Client) Purge(ctx context.Context, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	all, err := c.ListAllPinned(ctx)
+	if err != nil {
+		return err
+	}
 	var match *Pinned
 	out := all[:0]
 	for i, x := range all {
@@ -371,7 +376,10 @@ func (c *Client) Purge(name string) error {
 //
 // `pin` is passed by value so callers can decide whether to keep
 // the returned record (call Pin with it) or just inspect it.
-func (c *Client) Refresh(pin Pinned) (Pinned, error) {
+func (c *Client) Refresh(ctx context.Context, pin Pinned) (Pinned, error) {
+	if err := ctx.Err(); err != nil {
+		return Pinned{}, err
+	}
 	if pin.Name == "" {
 		return Pinned{}, fmt.Errorf("registry: refresh: empty pin name")
 	}
@@ -402,12 +410,8 @@ func (c *Client) Refresh(pin Pinned) (Pinned, error) {
 		}
 		pin.Version = "local"
 	case srcspec.IsGitURL(pin.Source):
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-		defer cancel()
-		cmd := exec.CommandContext(ctx, "git", "clone", "--depth=1", pin.Source, pin.LocalPath)
-		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return Pinned{}, fmt.Errorf("git clone %s: %s: %w", pin.Source, strings.TrimSpace(string(out)), err)
+		if err := GitClone(ctx, pin.Source, pin.LocalPath); err != nil {
+			return Pinned{}, err
 		}
 		pin.Version = "git"
 		if sha, _ := gitHeadSHA(pin.LocalPath); sha != "" {
@@ -424,43 +428,5 @@ func (c *Client) Refresh(pin Pinned) (Pinned, error) {
 // file. This prevents a partial write (e.g. process killed) from
 // leaving pinned.json in a corrupt state.
 func (c *Client) writePinned(all []Pinned) error {
-	b, err := json.MarshalIndent(all, "", "  ")
-	if err != nil {
-		return err
-	}
-	finalPath := c.PinnedPath()
-	tmp, err := os.CreateTemp(filepath.Dir(finalPath), ".pinned-*.json.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	// Best-effort cleanup if anything below fails.
-	cleanup := true
-	defer func() {
-		if cleanup {
-			if rmErr := os.Remove(tmpName); rmErr != nil {
-				log.Debug("failed to remove temp pinned file", "path", tmpName, "err", rmErr)
-			}
-		}
-	}()
-	if _, err := tmp.Write(b); err != nil {
-		if closeErr := tmp.Close(); closeErr != nil {
-			log.Debug("failed to close temp pinned file", "path", tmpName, "err", closeErr)
-		}
-		return err
-	}
-	if err := tmp.Sync(); err != nil {
-		if closeErr := tmp.Close(); closeErr != nil {
-			log.Debug("failed to close temp pinned file", "path", tmpName, "err", closeErr)
-		}
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, finalPath); err != nil {
-		return err
-	}
-	cleanup = false
-	return nil
+	return atomicWriteJSON(c.PinnedPath(), all, ".pinned-*.json.tmp")
 }

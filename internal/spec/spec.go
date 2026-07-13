@@ -20,10 +20,6 @@ func IsGitURL(s string) bool {
 	return false
 }
 
-// IsShorthand reports whether s is a "<left>/<right>" shorthand: exactly
-// one slash, both sides non-empty, and not a local path or git URL. It
-// covers both the GitHub "user/repo" form and the registry "alias/id"
-// form.
 func IsShorthand(s string) bool {
 	if s == "" || IsLocalPath(s) || IsGitURL(s) {
 		return false

@@ -43,7 +43,7 @@ func TestIsGitURL(t *testing.T) {
 	}
 }
 
-func TestIsShorthand(t *testing.T) {
+func TestIsShorthand_UserRepo(t *testing.T) {
 	cases := []struct {
 		in   string
 		want bool
