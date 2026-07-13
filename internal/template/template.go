@@ -2,6 +2,7 @@ package template
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,7 +22,6 @@ type Template struct {
 	PostHookDir string    // _post/ inside Source (optional)
 }
 
-// Detect checks whether a directory contains a valid template.
 // A valid template has spin.toml and _base/.
 func Detect(dir string) (*Template, error) {
 	stPath := filepath.Join(dir, "spin.toml")
@@ -79,7 +79,7 @@ func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 			}
 			return nil
 		}
-		include, skipDir, err := t.shouldInclude(rel, candidate, values, funcs)
+		include, skipDir, err := t.shouldInclude(rel, candidate, info.IsDir(), values, funcs)
 		if err != nil {
 			return err
 		}
@@ -116,12 +116,10 @@ func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 // at least one rule whose If template renders truthy. Directories
 // with no matching true rule return skipDir=true so the walk can
 // prune the subtree.
-func (t *Template) shouldInclude(rel, candidate string, values map[string]any, funcs template.FuncMap) (include bool, skipDir bool, err error) {
+func (t *Template) shouldInclude(rel, candidate string, isDir bool, values map[string]any, funcs template.FuncMap) (include bool, skipDir bool, err error) {
 	if len(t.SpinToml.Include) == 0 {
 		return true, false, nil
 	}
-	info, statErr := os.Stat(filepath.Join(t.BaseDir, rel))
-	isDir := statErr == nil && info.IsDir()
 	matched := false
 	for _, rule := range t.SpinToml.Include {
 		ok, merr := matchIncludeRule(rule, rel, candidate)
@@ -205,8 +203,9 @@ func matchAnySuffix(name, suffixPattern string) bool {
 		return true
 	}
 	segments := strings.Split(suffixPattern, "/")
-	for i := 0; i <= len(strings.Split(name, "/"))-len(segments); i++ {
-		candidate := strings.Join(strings.Split(name, "/")[i:], "/")
+	nameParts := strings.Split(name, "/")
+	for i := 0; i <= len(nameParts)-len(segments); i++ {
+		candidate := strings.Join(nameParts[i:], "/")
 		if ok, _ := filepath.Match(suffixPattern, candidate); ok {
 			return true
 		}
@@ -236,15 +235,12 @@ func renderBool(tpl string, values map[string]any, funcs template.FuncMap) (bool
 	return false, nil
 }
 
-// isExcluded reports whether path matches any of the exclude globs.
-// Matching uses filepath.Match semantics (e.g. "*.md", "docs/*") so
-// template authors get the familiar shell-glob behaviour.
 func isExcluded(path string, patterns []string) bool {
 	for _, p := range patterns {
 		if p == "" {
 			continue
 		}
-		if ok, err := filepath.Match(p, path); err == nil && ok {
+		if ok, err := matchGlob(p, path); err == nil && ok {
 			return true
 		}
 	}
@@ -253,12 +249,12 @@ func isExcluded(path string, patterns []string) bool {
 
 // RenderTo writes the rendered files to dest. Same path-traversal
 // guard as scaffold.emit.
-func (t *Template) RenderTo(dest string, values map[string]any) error {
+func (t *Template) RenderTo(ctx context.Context, dest string, values map[string]any) error {
 	files, err := t.Render(values)
 	if err != nil {
 		return err
 	}
-	return writeFiles(dest, files)
+	return writeFiles(ctx, dest, files)
 }
 
 // RenderToWithPost is the full v2.0 template pipeline:
@@ -272,30 +268,30 @@ func (t *Template) RenderTo(dest string, values map[string]any) error {
 // Returns the first non-nil error encountered. The post-hook and
 // the spin.toml deletion are best-effort cleanup operations: if
 // the post-hook fails, the spin.toml deletion still runs.
-func (t *Template) RenderToWithPost(dest string, values map[string]any, opts HookOptions) error {
+func (t *Template) RenderToWithPost(ctx context.Context, dest string, values map[string]any, opts HookOptions) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return fmt.Errorf("mkdir %q: %w", dest, err)
 	}
-	if err := t.copyPreDir(dest); err != nil {
+	if err := t.copyPreDir(ctx, dest); err != nil {
 		return err
 	}
-	if err := RunPreHook(t, values, dest, opts); err != nil {
+	if err := RunPreHook(ctx, t, values, dest, opts); err != nil {
 		return err
 	}
 	files, err := t.Render(values)
 	if err != nil {
 		return err
 	}
-	if err := writeFiles(dest, files); err != nil {
+	if err := writeFiles(ctx, dest, files); err != nil {
 		return err
 	}
-	if err := t.copyPostDir(dest); err != nil {
+	if err := t.copyPostDir(ctx, dest); err != nil {
 		return err
 	}
 	// Post-hook: best-effort. Even if it fails, we still attempt
 	// to delete spin.toml from the output (TPL-16).
-	hookErr := RunPostHook(t, values, dest, opts)
-	deleteErr := deleteSpinToml(dest)
+	hookErr := RunPostHook(ctx, t, values, dest, opts)
+	deleteErr := deleteSpinToml(ctx, dest)
 	if hookErr != nil {
 		return hookErr
 	}
@@ -307,8 +303,11 @@ func (t *Template) RenderToWithPost(dest string, values map[string]any, opts Hoo
 // project; a defensive walk handles the case where a template
 // accidentally included a spin.toml in _base/ (instead of relying
 // on the manifest never being rendered in the first place).
-func deleteSpinToml(dest string) error {
+func deleteSpinToml(ctx context.Context, dest string) error {
 	return filepath.Walk(dest, func(path string, info os.FileInfo, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return walkErr
 		}
@@ -325,21 +324,21 @@ func deleteSpinToml(dest string) error {
 // copyPreDir copies the template's optional _pre/ directory into
 // dest/_pre/ so pre-hooks can reference scripts or assets before the
 // main _base/ files are written.
-func (t *Template) copyPreDir(dest string) error {
-	return copyHookAssets(t.PreHookDir, filepath.Join(dest, "_pre"))
+func (t *Template) copyPreDir(ctx context.Context, dest string) error {
+	return copyHookAssets(ctx, t.PreHookDir, filepath.Join(dest, "_pre"))
 }
 
 // copyPostDir copies the template's optional _post/ directory into
 // dest/_post/ so post-hooks can reference scripts or assets stored
 // alongside the template.
-func (t *Template) copyPostDir(dest string) error {
-	return copyHookAssets(t.PostHookDir, filepath.Join(dest, "_post"))
+func (t *Template) copyPostDir(ctx context.Context, dest string) error {
+	return copyHookAssets(ctx, t.PostHookDir, filepath.Join(dest, "_post"))
 }
 
 // copyHookAssets copies a hook-asset directory verbatim (no .tmpl
 // rendering). The destination must stay inside destRoot. Missing src
 // is a no-op; any other error is returned.
-func copyHookAssets(src, destRoot string) error {
+func copyHookAssets(ctx context.Context, src, destRoot string) error {
 	if src == "" {
 		return nil
 	}
@@ -355,6 +354,9 @@ func copyHookAssets(src, destRoot string) error {
 	}
 	cleanDestRoot := filepath.Clean(destRoot) + string(filepath.Separator)
 	return filepath.Walk(src, func(path string, info os.FileInfo, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return walkErr
 		}
