@@ -19,15 +19,15 @@ import (
 // ErrAliasInvalid is returned when an alias fails ValidateAlias. The
 // reason is included in the wrapped error so the CLI can surface it
 // verbatim.
-var ErrAliasInvalid = errors.New("registry: invalid alias")
+var ErrAliasInvalid = errors.New("invalid alias")
 
 // ErrAliasExists is returned by Manager.Add when the alias is already
 // registered and the caller did not pass force.
-var ErrAliasExists = errors.New("registry: alias already registered")
+var ErrAliasExists = errors.New("alias already registered")
 
 // ErrRegistryMissing is returned by Manager.Refresh/Remove/Get when
 // the named alias is not in registries.json.
-var ErrRegistryMissing = errors.New("registry: alias not registered")
+var ErrRegistryMissing = errors.New("alias not registered")
 
 // Manager owns the local registry catalogue (registries.json) and
 // the on-disk caches under CacheDir/registries/<alias>/. It does not
@@ -102,7 +102,7 @@ func (m Manager) Load(ctx context.Context) (RegistriesConfig, error) {
 		return out, nil
 	}
 	if err := json.Unmarshal(b, &out); err != nil {
-		return out, fmt.Errorf("registry: registries.json: %w", err)
+		return out, fmt.Errorf("registries.json: %w", err)
 	}
 	return out, nil
 }
@@ -220,6 +220,10 @@ func (m Manager) Add(ctx context.Context, alias, source string, force bool) (Reg
 func (m Manager) cloneOrLink(ctx context.Context, alias, source, dest string) (RegistryKind, error) {
 	if srcspec.IsLocalPath(source) {
 		src, err := expandHome(source)
+		if err != nil {
+			return "", fmt.Errorf("resolve source: %w", err)
+		}
+		src, err = filepath.Abs(src)
 		if err != nil {
 			return "", fmt.Errorf("resolve source: %w", err)
 		}
@@ -370,7 +374,7 @@ func (m Manager) Remove(ctx context.Context, alias string, pinnedTemplates []Pin
 		for i, p := range dependents {
 			names[i] = p.Name
 		}
-		return fmt.Errorf("registry: remove: %q is used by pinned templates: %s (run with --purge-pinned to drop them first)",
+		return fmt.Errorf("%q is used by pinned templates: %s (run with --purge-pinned to drop them first)",
 			alias, strings.Join(names, ", "))
 	}
 
@@ -383,7 +387,7 @@ func (m Manager) Remove(ctx context.Context, alias string, pinnedTemplates []Pin
 		// registries the path is a symlink -- RemoveAll removes the
 		// link itself, not the target.
 		if err := os.RemoveAll(match.Path); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("registry: remove: delete cache %s: %w", match.Path, err)
+			return fmt.Errorf("delete cache %s: %w", match.Path, err)
 		}
 	}
 

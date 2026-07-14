@@ -32,7 +32,7 @@ func New() *Client {
 // returned, so the caller writes pinned.json only on success.
 func (c *Client) Add(ctx context.Context, spec string) (*Pinned, error) {
 	if spec == "" {
-		return nil, fmt.Errorf("registry: add: empty spec")
+		return nil, fmt.Errorf("empty spec")
 	}
 	var pinned *Pinned
 	var err error
@@ -42,7 +42,7 @@ func (c *Client) Add(ctx context.Context, spec string) (*Pinned, error) {
 	case srcspec.IsGitURL(spec):
 		pinned, err = c.addGit(ctx, spec)
 	default:
-		return nil, fmt.Errorf("registry: cannot resolve spec %q; expected a local path or git URL", spec)
+		return nil, fmt.Errorf("cannot resolve spec %q; expected a local path or git URL", spec)
 	}
 	if err != nil {
 		return nil, err
@@ -51,31 +51,54 @@ func (c *Client) Add(ctx context.Context, spec string) (*Pinned, error) {
 	return pinned, nil
 }
 
+// validateTemplateDir checks that dir contains spin.toml and _base/.
+// Used by addLocal and addGit to reject non-template directories
+// at pin time rather than deferring the error to `spin new`.
+func validateTemplateDir(dir string) error {
+	if _, err := os.Stat(filepath.Join(dir, "spin.toml")); err != nil {
+		return fmt.Errorf("spin.toml not found in %s", dir)
+	}
+	if info, err := os.Stat(filepath.Join(dir, "_base")); err != nil || !info.IsDir() {
+		return fmt.Errorf("_base/ directory not found in %s", dir)
+	}
+	return nil
+}
+
 func (c *Client) addLocal(ctx context.Context, spec string) (*Pinned, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	src, err := expandHome(spec)
 	if err != nil {
-		return nil, fmt.Errorf("registry: add local: %w", err)
+		return nil, fmt.Errorf("add local: %w", err)
+	}
+	// Resolve to absolute so the symlink target survives when
+	// followed from any directory (the cache lives under
+	// ~/.config/spin/templates/, not the user's cwd).
+	src, err = filepath.Abs(src)
+	if err != nil {
+		return nil, fmt.Errorf("add local: %w", err)
 	}
 	info, err := os.Stat(src)
 	if err != nil {
-		return nil, fmt.Errorf("registry: add local: %w", err)
+		return nil, fmt.Errorf("add local: %w", err)
 	}
 	if !info.IsDir() {
-		return nil, fmt.Errorf("registry: add local: %s is not a directory", src)
+		return nil, fmt.Errorf("%s is not a directory", src)
+	}
+	if err := validateTemplateDir(src); err != nil {
+		return nil, err
 	}
 	templatesDir := filepath.Join(c.CacheDir, "templates")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
-		return nil, fmt.Errorf("registry: add local: mkdir templates: %w", err)
+		return nil, fmt.Errorf("mkdir templates: %w", err)
 	}
 	dest := filepath.Join(templatesDir, filepath.Base(src))
 
 	// Remove any previous pin of this name so the symlink/copy is
 	// fresh. (Pin-de-dupe is a separate concern, handled in Pin().)
 	if err := os.RemoveAll(dest); err != nil {
-		return nil, fmt.Errorf("registry: add local: clear dest: %w", err)
+		return nil, fmt.Errorf("clear dest: %w", err)
 	}
 
 	// Try symlink first (cheap, no copy). On Windows without
@@ -83,7 +106,7 @@ func (c *Client) addLocal(ctx context.Context, spec string) (*Pinned, error) {
 	// support symlinks, fall back to a recursive copy.
 	if err := os.Symlink(src, dest); err != nil {
 		if copyErr := copyDir(src, dest); copyErr != nil {
-			return nil, fmt.Errorf("registry: add local: symlink (%v) and copy (%w) both failed", err, copyErr)
+			return nil, fmt.Errorf("symlink (%v) and copy (%w) both failed", err, copyErr)
 		}
 	}
 
@@ -102,18 +125,22 @@ func (c *Client) addGit(ctx context.Context, spec string) (*Pinned, error) {
 
 	templatesDir := filepath.Join(c.CacheDir, "templates")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
-		return nil, fmt.Errorf("registry: add git: mkdir templates: %w", err)
+		return nil, fmt.Errorf("mkdir templates: %w", err)
 	}
 	dest := filepath.Join(templatesDir, SanitiseRepoName(spec))
 
 	// Remove any previous clone.
 	if err := os.RemoveAll(dest); err != nil {
-		return nil, fmt.Errorf("registry: add git: clear dest: %w", err)
+		return nil, fmt.Errorf("clear dest: %w", err)
 	}
 
 	// Shallow clone, no terminal prompts. GIT_TERMINAL_PROMPT=0 keeps
 	// a missing credential from blocking on a password prompt.
 	if err := GitClone(ctx, spec, dest); err != nil {
+		return nil, err
+	}
+	if err := validateTemplateDir(dest); err != nil {
+		_ = os.RemoveAll(dest)
 		return nil, err
 	}
 
@@ -272,7 +299,7 @@ func (c *Client) ListAllPinned(ctx context.Context) ([]Pinned, error) {
 	}
 	var out []Pinned
 	if err := json.Unmarshal(b, &out); err != nil {
-		return nil, fmt.Errorf("registry: pinned.json: %w", err)
+		return nil, fmt.Errorf("pinned.json: %w", err)
 	}
 	return out, nil
 }
@@ -355,11 +382,11 @@ func (c *Client) Purge(ctx context.Context, name string) error {
 		out = append(out, x)
 	}
 	if match == nil {
-		return fmt.Errorf("registry: purge: no pinned template named %q", name)
+		return fmt.Errorf("no pinned template named %q", name)
 	}
 	if match.LocalPath != "" {
 		if err := os.RemoveAll(match.LocalPath); err != nil {
-			return fmt.Errorf("registry: purge: delete cache %s: %w", match.LocalPath, err)
+			return fmt.Errorf("delete cache %s: %w", match.LocalPath, err)
 		}
 	}
 	return c.writePinned(out)
@@ -380,10 +407,10 @@ func (c *Client) Refresh(ctx context.Context, pin Pinned) (Pinned, error) {
 		return Pinned{}, err
 	}
 	if pin.Name == "" {
-		return Pinned{}, fmt.Errorf("registry: refresh: empty pin name")
+		return Pinned{}, fmt.Errorf("empty pin name")
 	}
 	if pin.LocalPath == "" {
-		return Pinned{}, fmt.Errorf("registry: refresh: pin %q has no LocalPath; re-run `spin add`", pin.Name)
+		return Pinned{}, fmt.Errorf("pin %q has no LocalPath; re-run `spin add`", pin.Name)
 	}
 
 	// Branch on source kind. Local paths are re-copied in place
@@ -399,17 +426,23 @@ func (c *Client) Refresh(ctx context.Context, pin Pinned) (Pinned, error) {
 		// Re-copy from source. If the source is gone, fail so the
 		// user re-pins rather than keeping a stale copy.
 		if _, err := os.Stat(pin.Source); err != nil {
-			return Pinned{}, fmt.Errorf("registry: refresh: source %s is gone: %w", pin.Source, err)
+			return Pinned{}, fmt.Errorf("source %s is gone: %w", pin.Source, err)
 		}
 		if err := os.RemoveAll(pin.LocalPath); err != nil {
-			return Pinned{}, fmt.Errorf("registry: refresh: clear %s: %w", pin.LocalPath, err)
+			return Pinned{}, fmt.Errorf("clear %s: %w", pin.LocalPath, err)
 		}
 		if err := copyDir(pin.Source, pin.LocalPath); err != nil {
-			return Pinned{}, fmt.Errorf("registry: refresh: copy %s: %w", pin.Source, err)
+			return Pinned{}, fmt.Errorf("copy %s: %w", pin.Source, err)
+		}
+		if err := validateTemplateDir(pin.LocalPath); err != nil {
+			return Pinned{}, err
 		}
 		pin.Version = "local"
 	case srcspec.IsGitURL(pin.Source):
 		if err := GitClone(ctx, pin.Source, pin.LocalPath); err != nil {
+			return Pinned{}, err
+		}
+		if err := validateTemplateDir(pin.LocalPath); err != nil {
 			return Pinned{}, err
 		}
 		pin.Version = "git"
@@ -417,7 +450,7 @@ func (c *Client) Refresh(ctx context.Context, pin Pinned) (Pinned, error) {
 			pin.Version = sha
 		}
 	default:
-		return Pinned{}, fmt.Errorf("registry: refresh: %q has unknown source %q", pin.Name, pin.Source)
+		return Pinned{}, fmt.Errorf("%q has unknown source %q", pin.Name, pin.Source)
 	}
 	return pin, nil
 }
