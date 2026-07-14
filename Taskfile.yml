@@ -3,6 +3,8 @@ version: "3"
 vars:
   NAME: spin
   BIN: ./bin/{{.NAME}}
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "0.1.0"
 
 env:
   CGO_ENABLED: "0"
@@ -15,7 +17,7 @@ tasks:
   build:
     desc: Build the spin binary
     cmds:
-      - go build -o {{.BIN}} .
+      - go build -ldflags "-X github.com/N1xev/spin/internal/version.Version={{.VERSION}}" -o {{.BIN}} .
 
   test:
     desc: Run unit and integration tests
