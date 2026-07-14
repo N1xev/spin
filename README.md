@@ -8,7 +8,7 @@ the template's questions, renders the files, runs the hooks. Done.
 spin new myapp --template https://github.com/me/go-cli-template.git
 ```
 
-![spin logo](https://spin.pages.dev/SpinLogo.png)
+![spin logo](https://spincli.pages.dev/SpinLogo.png)
 
 ## Install
 
@@ -17,7 +17,7 @@ go install github.com/N1xev/spin@latest
 
 # or
 
-curl -sSfL https://spin.pages.dev/install.sh | sh
+curl -sSfL https://spincli.pages.dev/install.sh | sh
 ```
 
 Needs `git` on `$PATH`. Single static binary, nothing else.
@@ -56,7 +56,7 @@ my-template/
   _base/          # file tree → project
 ```
 
-`spin init my-template` writes a starter. Full docs: https://spin.pages.dev
+`spin init my-template` writes a starter. Full docs: https://spincli.pages.dev
 
 ## License
 

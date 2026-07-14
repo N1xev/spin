@@ -9,8 +9,8 @@
 # --force. Idempotent.
 #
 # Usage:
-#   curl -sSfL https://spin.pages.dev/install.sh | sh
-#   curl -sSfL https://spin.pages.dev/install.sh | sh -s -- --force
+#   curl -sSfL https://spincli.pages.dev/install.sh | sh
+#   curl -sSfL https://spincli.pages.dev/install.sh | sh -s -- --force
 set -euo pipefail
 
 REPO="N1xev/spin"
