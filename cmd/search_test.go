@@ -126,12 +126,12 @@ language = "rust"`), 0o644); err != nil {
 		query string
 		found bool
 	}{
-		{"special-tpl", true},   // ID match
-		{"Rust", true},          // Description match
-		{"rust", true},          // Language match (lowercase query)
-		{"tui", true},           // Type + tag match
-		{"nonexistent", false},  // No match
-		{"xyz", false},          // No match
+		{"special-tpl", true},  // ID match
+		{"Rust", true},         // Description match
+		{"rust", true},         // Language match (lowercase query)
+		{"tui", true},          // Type + tag match
+		{"nonexistent", false}, // No match
+		{"xyz", false},         // No match
 	}
 	for _, tc := range tests {
 		t.Run(tc.query, func(t *testing.T) {

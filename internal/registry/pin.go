@@ -51,7 +51,6 @@ func (c *Client) Add(ctx context.Context, spec string) (*Pinned, error) {
 	return pinned, nil
 }
 
-
 func (c *Client) addLocal(ctx context.Context, spec string) (*Pinned, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

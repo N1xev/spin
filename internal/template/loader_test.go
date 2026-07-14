@@ -453,6 +453,7 @@ func TestLoader_Load_ShorthandPinStaleLocalPath(t *testing.T) {
 		t.Errorf("should NOT report missing pin; should fall through to clone: %v", err)
 	}
 }
+
 // TestLoader_Load_ShorthandPinMismatchSource verifies that a pin
 // with a different Source URL is not used by loadShorthand.
 func TestLoader_Load_ShorthandPinMismatchSource(t *testing.T) {
