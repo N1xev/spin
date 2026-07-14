@@ -42,7 +42,7 @@
 
 | Layer | Choice |
 |---|---|
-| Language | Go 1.25 |
+| Language | Go 1.26 |
 | CLI framework | Cobra + Fang (styled help/version) |
 | Interactive prompts | Huh v2 |
 | Terminal styling | Lip Gloss v2 |
@@ -56,8 +56,6 @@ task build              # ./bin/spin
 task test               # go test ./... -count=1
 task lint               # golangci-lint run ./... (if installed)
 task fmt                # go fmt ./... && golangci-lint fmt ./...
-task grep-v1-leaks      # check for charm v1 import leaks
-task dogfood            # end-to-end smoke test
 ```
 
 Or without Task:

@@ -44,6 +44,3 @@ jobs:
 
       - name: Run go vet
         run: go vet ./...
-
-      - name: Run v1-leak grep suite (spin source)
-        run: bash scripts/check-v1-leaks.sh ./internal

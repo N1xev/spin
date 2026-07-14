@@ -1,6 +1,6 @@
 module github.com/N1xev/spin
 
-go 1.25.8
+go 1.26
 
 require (
 	charm.land/fang/v2 v2.0.1
