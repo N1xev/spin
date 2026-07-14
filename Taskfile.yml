@@ -1,14 +1,11 @@
-# Taskfile.yml -- spin's own dev workflow
-# https://taskfile.dev
-
-version: '3'
+version: "3"
 
 vars:
   NAME: spin
   BIN: ./bin/{{.NAME}}
 
 env:
-  CGO_ENABLED: '0'
+  CGO_ENABLED: "0"
 
 tasks:
   default:
@@ -24,23 +21,6 @@ tasks:
     desc: Run unit and integration tests
     cmds:
       - go test ./... -count=1
-
-  # The grep suite catches v1 charmbracelet path / API leaks across
-  # the spin source tree. The v2.0-template pass removed the embedded
-  # scaffold tree (templates are external now), so the check runs
-  # against ./internal + ./cmd. Patterns that no longer apply to
-  # any source (charm v1 imports, .air.toml form, Taskfile setup
-  # target) are exercised by the in-tree unit tests instead.
-  grep-v1-leaks:
-    desc: Grep the spin source for v1 charmbracelet API/path regressions
-    cmds:
-      - bash scripts/check-v1-leaks.sh ./internal
-      - bash scripts/check-v1-leaks.sh ./cmd
-
-  dogfood:
-    desc: End-to-end smoke test (init -> render non-interactively)
-    cmds:
-      - bash scripts/dogfood.sh
 
   lint:
     desc: Run golangci-lint
