@@ -113,9 +113,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// to overwrite can `rm -rf` and re-run; we don't want a typo
 	// to clobber a real template.
 	if _, err := os.Stat(dest); err == nil {
-		return fmt.Errorf("spin init: %s already exists; pick a different name or remove it first", dest)
+		return fmt.Errorf("%s already exists; pick a different name or remove it first", dest)
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("init: stat %s: %v", dest, err)
+		return fmt.Errorf("stat %s: %v", dest, err)
 	}
 
 	if err := os.MkdirAll(filepath.Join(dest, "_base"), 0o755); err != nil {
@@ -133,10 +133,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		// have _base/ today, but this keeps the loop safe if
 		// the manifest is extended).
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-			return fmt.Errorf("init: mkdir %s: %v", filepath.Dir(full), err)
+			return fmt.Errorf("mkdir %s: %v", filepath.Dir(full), err)
 		}
 		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
-			return fmt.Errorf("init: write %s: %v", rel, err)
+			return fmt.Errorf("write %s: %v", rel, err)
 		}
 	}
 

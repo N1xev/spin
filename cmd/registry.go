@@ -175,7 +175,7 @@ func runRegistryUpdate(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 {
 		alias := args[0]
 		if _, ok := mgr.Get(cmd.Context(), alias); !ok {
-			return fmt.Errorf("spin registry update: %q is not registered", alias)
+			return fmt.Errorf("%q is not registered", alias)
 		}
 		reg, err := mgr.Refresh(cmd.Context(), alias)
 		if err != nil {
@@ -205,7 +205,7 @@ func runRegistryUpdate(cmd *cobra.Command, args []string) error {
 		printWarn("%v", e)
 	}
 	if len(errs) > 0 && len(regs) == 0 {
-		return fmt.Errorf("spin registry update: all registries failed")
+		return fmt.Errorf("all registries failed")
 	}
 	return nil
 }
@@ -221,7 +221,7 @@ func runRegistryRemove(cmd *cobra.Command, args []string) error {
 	}
 	if err := mgr.Remove(cmd.Context(), alias, pinned, registryRemovePurge); err != nil {
 		if errors.Is(err, registry.ErrRegistryMissing) {
-			return fmt.Errorf("spin registry remove: %q is not registered", alias)
+			return fmt.Errorf("%q is not registered", alias)
 		}
 		return err
 	}

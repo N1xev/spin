@@ -50,7 +50,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		}
 	}
 	if match == nil {
-		return fmt.Errorf("spin remove: no pinned template named %q (run `spin list`)", name)
+		return fmt.Errorf("no pinned template named %q (run `spin list`)", name)
 	}
 	if removePurgeFlag {
 		if err := client.Purge(cmd.Context(), name); err != nil {

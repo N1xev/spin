@@ -50,6 +50,12 @@ contributions — `go vet` catches the critical issues.
 - **Add tests** for new functionality. Use `go test -count=1` locally.
 - **No comments** unless explaining *why*, not *what*. The code should
   be self-documenting.
+- **Error messages are zero-level**: no `registry:`, `spin <cmd>:`, or other
+  category prefixes. Errors returned to the user are plain, direct
+  sentences (e.g. `"spin.toml not found in /path"`, not
+  `"registry: add local: spin.toml not found in /path"`). Internal
+  sentinel errors used with `errors.Is` may carry a short prefix for
+  disambiguation.
 
 ## Pull requests
 

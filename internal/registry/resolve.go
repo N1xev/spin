@@ -15,7 +15,7 @@ import (
 
 // ErrUnresolved is returned when a `<alias>/<id>` shorthand cannot
 // be matched to a registered template.
-var ErrUnresolved = errors.New("registry: shorthand unresolved")
+var ErrUnresolved = errors.New("shorthand unresolved")
 
 // SplitAliasID splits a `<alias>/<id>` shorthand into its parts.
 func SplitAliasID(spec string) (alias, id string) {
@@ -63,7 +63,7 @@ func (m Manager) ResolveShorthand(ctx context.Context, spec string) (Resolved, e
 // to another shorthand and we're following the chain.
 func (m Manager) resolveShorthandDepth(ctx context.Context, spec string, depth int) (Resolved, error) {
 	if depth > 1 {
-		return Resolved{}, fmt.Errorf("registry: shorthand chain too deep (cycle?): %s", spec)
+		return Resolved{}, fmt.Errorf("shorthand chain too deep (cycle?): %s", spec)
 	}
 	if !IsShorthand(spec) {
 		return Resolved{}, fmt.Errorf("shorthand %q is not an <alias>/<id>", spec)
@@ -79,10 +79,10 @@ func (m Manager) resolveShorthandDepth(ctx context.Context, spec string, depth i
 	}
 	var tpl TemplateMetadata
 	if _, err := toml.DecodeFile(tplPath, &tpl); err != nil {
-		return Resolved{}, fmt.Errorf("registry: parse %s: %w", tplPath, err)
+		return Resolved{}, fmt.Errorf("parse %s: %w", tplPath, err)
 	}
 	if tpl.Source == "" {
-		return Resolved{}, fmt.Errorf("registry: template %q has empty source", id)
+		return Resolved{}, fmt.Errorf("template %q has empty source", id)
 	}
 	// If the source is itself a shorthand, follow the chain.
 	if IsShorthand(tpl.Source) {

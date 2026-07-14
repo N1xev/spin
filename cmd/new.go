@@ -330,10 +330,10 @@ func joinKnownParams(specs map[string]params.Spec) string {
 // positionals and rejects positional <template> + --template.
 func validateNewArgs(cmd *cobra.Command, args []string) error {
 	if len(args) > 2 {
-		return fmt.Errorf("spin new: accepts at most 2 positional args (<name> [<template>]), got %d", len(args))
+		return fmt.Errorf("accepts at most 2 positional args (<name> [<template>]), got %d", len(args))
 	}
 	if len(args) == 2 && cmd.Flags().Changed("template") {
-		return fmt.Errorf("spin new: cannot pass <template> both positionally and via --template")
+		return fmt.Errorf("cannot pass <template> both positionally and via --template")
 	}
 	return nil
 }

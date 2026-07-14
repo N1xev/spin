@@ -60,7 +60,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if len(targets) == 0 {
-			return fmt.Errorf("spin update: no pinned template named %q (run `spin list`)", name)
+			return fmt.Errorf("no pinned template named %q (run `spin list`)", name)
 		}
 	} else {
 		targets = pinned
@@ -83,7 +83,7 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 	}
 	if failed > 0 {
 		log.Error("template refresh finished with failures", "updated", ok, "failed", failed)
-		return fmt.Errorf("spin update: %d template(s) failed to refresh", failed)
+		return fmt.Errorf("%d template(s) failed to refresh", failed)
 	}
 	if ok == 1 {
 		log.Stdout.Print("1 template refreshed")

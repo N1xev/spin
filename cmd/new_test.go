@@ -61,7 +61,7 @@ func TestNew_PositionalPlusFlagConflicts(t *testing.T) {
 	if exitCode == 0 {
 		t.Fatalf("expected non-zero exit; got 0\n%s", out)
 	}
-	if !bytes.Contains(out, []byte("cannot pass <template> both positionally")) {
+	if !strings.Contains(strings.ToLower(string(out)), "cannot pass <template> both positionally") {
 		t.Errorf("error should mention the conflict; got:\n%s", out)
 	}
 }

@@ -74,6 +74,7 @@ golangci-lint run ./...
 - Keep `spin` itself small and language-agnostic.
 - Templates are the only extension surface.
 - All file-changing work goes through the normal tool workflow; no special GSD command is required for this repo.
+- **Error messages use zero-level nesting**: no `registry:`, `spin <cmd>:`, or other category prefixes. Errors are plain, direct sentences aimed at the end user (e.g. `"spin.toml not found in /path"`, not `"registry: add local: spin.toml not found in /path"`). Internal sentinel errors (used with `errors.Is`) may optionally carry a short prefix for disambiguation in tests.
 
 ## Architecture
 
