@@ -1,5 +1,15 @@
 # Contributing to spin
 
+## Design goals
+
+Spin aims to stay:
+
+- Fast
+- Language-agnostic
+- Git-first
+- Decentralized
+- Dependency-free
+
 ## Quick start
 
 ```sh
@@ -7,7 +17,7 @@ task build     # compiles to ./bin/spin
 task test      # runs go test ./... -count=1
 ```
 
-Or without Task:
+Task is optional. You can run the commands directly:
 
 ```sh
 go build -o bin/spin .
@@ -30,16 +40,22 @@ contributions — `go vet` catches the critical issues.
 
 ## Code conventions
 
-- **Single binary, no plugins.** No daemon, no embedded templates.
+- **Keep Spin small.** Single binary, no plugins, no daemon, no embedded templates.
 - **Language-agnostic.** Templates target any stack. spin only owns the
   load / prompt / render / hook pipeline.
 - **Templates are external.** No defaults shipped with the binary.
 - **Read files before editing them.** Match existing indentation (tabs),
   error formats, and comment style.
-- **Context propagation.** All I/O functions accept `context.Context`.
+- **Context propagation.** Pass `context.Context` through long-running or I/O operations.
 - **Add tests** for new functionality. Use `go test -count=1` locally.
 - **No comments** unless explaining *why*, not *what*. The code should
   be self-documenting.
+
+## Pull requests
+
+- Keep changes focused.
+- Open an issue before making large architectural changes.
+- Update documentation when behavior changes.
 
 ## Project structure
 
