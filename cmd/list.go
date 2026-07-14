@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -127,19 +128,15 @@ func pinnedDescription(localPath string) string {
 	return st.Description
 }
 
-// shortenLocal renders p as a path relative to the cache root when
-// possible (e.g. "templates/foo/bar"), so the table stays readable.
-// Falls back to the absolute path when the path is not under the
-// cache root (older pin files that pre-date LocalPath).
-func shortenLocal(p, cacheRoot string) string {
+// shortenLocal renders p with ~ for the user's home directory
+// when possible (e.g. "~/.config/spin/templates/test-template"),
+// or as the absolute path otherwise. Empty paths show "(unknown)".
+func shortenLocal(p, _ string) string {
 	if p == "" {
 		return "(unknown)"
 	}
-	if cacheRoot == "" {
-		return p
-	}
-	if rel, err := filepath.Rel(cacheRoot, p); err == nil && !strings.HasPrefix(rel, "..") {
-		return rel
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+string(filepath.Separator)) {
+		return "~" + p[len(home):]
 	}
 	return p
 }

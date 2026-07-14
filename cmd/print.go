@@ -15,6 +15,7 @@ import (
 var (
 	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
 	styleCell   = lipgloss.NewStyle()
+	styleBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 // printSuccess logs a success message to stdout. The charmbracelet/log
@@ -47,15 +48,14 @@ func printHint(format string, args ...any) {
 // Columns are sized to the widest cell. Used by `spin list` and any
 // future tabular output.
 //
-// Padding is applied via a 2-space left pad in StyleFunc. We don't
-// use BorderColumn(true) because that draws box-drawing characters
-// that look heavy in a pipelined/non-TTY context; plain padding
-// reads cleanly in both.
+// Padding is applied via a 1-space left/right pad in StyleFunc.
+// Column separators use a subtle dim-gray box-drawing character
+// that reads cleanly in both TTY and piped output.
 func printTable(w io.Writer, headers []string, rows [][]string) {
 	if len(rows) == 0 {
 		return
 	}
-	pad := lipgloss.NewStyle().PaddingLeft(2)
+	pad := lipgloss.NewStyle().PaddingLeft(1).PaddingRight(1)
 	headerStyle := pad.Inherit(styleHeader)
 	cellStyle := pad.Inherit(styleCell)
 	t := table.New().
@@ -65,8 +65,9 @@ func printTable(w io.Writer, headers []string, rows [][]string) {
 		BorderBottom(false).
 		BorderLeft(false).
 		BorderRight(false).
-		BorderColumn(false).
-		BorderRow(false).
+		BorderColumn(true).
+		BorderRow(true).
+		BorderStyle(styleBorder).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {
 				return headerStyle
