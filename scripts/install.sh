@@ -9,8 +9,8 @@
 # --force. Idempotent.
 #
 # Usage:
-#   curl -sSfL https://raw.githubusercontent.com/N1xev/spin/main/scripts/install.sh | sh
-#   curl -sSfL https://raw.githubusercontent.com/N1xev/spin/main/scripts/install.sh | sh -s -- --force
+#   curl -sSfL https://spin.pages.dev/install.sh | sh
+#   curl -sSfL https://spin.pages.dev/install.sh | sh -s -- --force
 set -euo pipefail
 
 REPO="N1xev/spin"
@@ -23,15 +23,23 @@ for arg in "$@"; do
     --force|-f) FORCE=1 ;;
     --version=*) VERSION="${arg#--version=}" ;;
     --help|-h)
-      sed -n '2,18p' "$0"
+      sed -n '2,9p' "$0"
       exit 0
       ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
 done
 
-# Pick install dir: prefer ~/.local/bin (XDG-friendly, no sudo),
-# fall back to /usr/local/bin.
+# If Go is available and no specific version was requested, use go install.
+if [[ -z "$VERSION" ]] && command -v go >/dev/null 2>&1; then
+  echo "Installing $BIN via go install..."
+  go install "github.com/$REPO@latest"
+  echo "Installed to $(go env GOPATH)/bin/$BIN"
+  echo "Run '$BIN help' to get started."
+  exit 0
+fi
+
+# No Go available or specific version requested — download binary.
 INSTALL_DIR="$HOME/.local/bin"
 if [[ ! -d "$INSTALL_DIR" ]]; then
   if [[ -w "/usr/local/bin" ]]; then
@@ -54,15 +62,14 @@ case "$OS" in
   *) echo "unsupported OS: $OS" >&2; exit 2 ;;
 esac
 
-# Resolve "latest" if no version was given. The API returns 403 on
-# rate limit; if that happens, fall back to redirect-following with
-# a hardcoded GitHub releases URL.
+# Resolve the latest release tag from the GitHub API.
 if [[ -z "$VERSION" ]]; then
-  VERSION="$(curl -sSfL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/')" || {
-    echo "could not resolve latest version via API; pass --version=vX.Y.Z" >&2
+  VERSION="$(curl -sfL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+    | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/' || true)"
+  if [[ -z "$VERSION" ]]; then
+    echo "no release found; pass --version=vX.Y.Z or create a release first" >&2
     exit 1
-  }
+  fi
 fi
 VERSION="${VERSION#v}"
 TARBALL="${BIN}_${VERSION}_${OS}_${ARCH}.tar.gz"
@@ -87,7 +94,7 @@ tar -xzf "$TMP/$TARBALL" -C "$TMP"
 install -m 0755 "$TMP/$BIN" "$INSTALL_DIR/$BIN"
 
 echo "Installed $BIN $VERSION to $INSTALL_DIR/$BIN"
-echo "Run '$BIN --help' to get started."
+echo "Run '$BIN help' to get started."
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
   echo ""
   echo "Add $INSTALL_DIR to your PATH:"
