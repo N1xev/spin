@@ -29,13 +29,14 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26.5'
           cache: true
 
       - name: Sanity build
-        # Catches the obvious "main doesn't compile" failure before
-        # goreleaser spends 5 minutes on a doomed release.
         run: go build ./...
+
+      - name: Check formatting
+        run: test -z "$(go fmt ./...)" || (echo "Not formatted." && exit 1)
 
       - name: Sanity test
         run: go test ./... -count=1

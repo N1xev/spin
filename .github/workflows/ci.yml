@@ -1,18 +1,7 @@
 # .github/workflows/ci.yml
 #
-# Base CI for the spin repo: build the binary, run the unit + integration
-# tests, and run `go vet`. Mirrors the local `task test` target so a green
-# run here matches a green `task test` on a developer's machine.
-#
-# Notes:
-#   - The previous "v1-leak grep suite" ran scripts/check-v1-leaks.sh against
-#     ./internal/scaffold/templates. The v2.0-template pass removed the
-#     embedded scaffold tree (templates are external now), so the grep
-#     suite is run against the v2 source tree instead. Patterns that no
-#     longer apply (charm v1 import paths, .air.toml form) are guarded by
-#     the unit tests in internal/template/ + internal/registry/.
-#   - dogfood.yml runs the end-to-end scaffolder smoke test (spin init ->
-#     spin new on the produced starter -> go mod tidy + go build + go test).
+# CI for spin: build, format check, mod tidy check, test, vet.
+# Mirrors the local `task test` target.
 name: ci
 
 on:
@@ -33,14 +22,30 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25'
+          go-version: '1.26.5'
           cache: true
 
       - name: Build
         run: go build ./...
+
+      - name: Check formatting
+        run: test -z "$(go fmt ./...)" || (echo "Not formatted. Run go fmt ./... locally." && exit 1)
+
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          test -z "$(git diff -- go.mod go.sum)" || (echo "go.mod/go.sum are stale. Run go mod tidy locally." && exit 1)
 
       - name: Run tests
         run: go test ./... -count=1
 
       - name: Run go vet
         run: go vet ./...
+
+      - name: Run staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
+
+      - name: Check install script
+        run: bash -n scripts/install.sh || (echo "install.sh syntax error" && exit 1)
