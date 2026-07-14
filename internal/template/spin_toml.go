@@ -12,7 +12,6 @@ import (
 // Example:
 //
 //	name            = "rust-cli"
-//	version         = "0.1.0"
 //	description     = "Minimal Rust CLI"
 //	type            = "cli"
 //	language        = "rust"
@@ -36,7 +35,6 @@ import (
 //	run = "git init && git add -A"
 type SpinToml struct {
 	Name           string                 `toml:"name"`
-	Version        string                 `toml:"version"`
 	Description    string                 `toml:"description"`
 	Type           string                 `toml:"type"`     // "tui" | "cli" | "lib" | ...
 	Language       string                 `toml:"language"` // "go" | "rust" | "ts" | ...

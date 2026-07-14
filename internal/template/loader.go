@@ -57,22 +57,26 @@ func (l *Loader) Load(spec string) (*Template, error) {
 // pinned name from ~/.config/spin/pinned.json. ctx bounds any git
 // clone the loader performs.
 func (l *Loader) LoadContext(ctx context.Context, spec string) (*Template, error) {
+	var t *Template
+	var err error
+
 	if srcspec.IsLocalPath(spec) {
-		return Detect(spec)
+		t, err = Detect(spec)
+	} else if srcspec.IsGitURL(spec) {
+		t, err = l.cloneGit(ctx, spec)
+	} else if registry.IsShorthand(spec) {
+		t, err = l.loadShorthand(ctx, spec)
+	} else {
+		t, err = l.loadPinned(ctx, spec)
+		if t == nil && err == nil {
+			return nil, fmt.Errorf("%q is not a local path, git URL, or pinned name (run `spin add %s` first to pin a git URL or registry shorthand)", spec, spec)
+		}
 	}
-	if srcspec.IsGitURL(spec) {
-		return l.cloneGit(ctx, spec)
-	}
-	if registry.IsShorthand(spec) {
-		return l.loadShorthand(ctx, spec)
-	}
-	// Pinned name lookup backs `spin new --template <name>`.
-	if t, err := l.loadPinned(ctx, spec); err != nil {
+	if err != nil {
 		return nil, err
-	} else if t != nil {
-		return t, nil
 	}
-	return nil, fmt.Errorf("%q is not a local path, git URL, or pinned name (run `spin add %s` first to pin a git URL or registry shorthand)", spec, spec)
+	l.warnMinSpinVersion(t)
+	return t, nil
 }
 
 // loadShorthand resolves `<alias>/<id>` against the registry manager,
@@ -160,7 +164,6 @@ func (l *Loader) loadPinned(ctx context.Context, spec string) (*Template, error)
 				}
 				return nil, fmt.Errorf("pinned %q: %w", p.Name, err)
 			}
-			l.warnMinSpinVersion(t)
 			return t, nil
 		}
 	}

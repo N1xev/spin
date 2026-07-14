@@ -12,7 +12,6 @@ import (
 func TestParseTOML_AllFields(t *testing.T) {
 	input := `
 name             = "rust-cli"
-version          = "0.1.0"
 description      = "Minimal Rust CLI"
 type             = "cli"
 language         = "rust"
@@ -50,9 +49,6 @@ run = "git init"
 	}
 	if st.Name != "rust-cli" {
 		t.Errorf("Name = %q, want %q", st.Name, "rust-cli")
-	}
-	if st.Version != "0.1.0" {
-		t.Errorf("Version = %q, want %q", st.Version, "0.1.0")
 	}
 	if st.License != "MIT" {
 		t.Errorf("License = %q, want %q", st.License, "MIT")
@@ -119,7 +115,7 @@ func TestParseTOML_Minimal(t *testing.T) {
 	if st.Name != "minimal" {
 		t.Errorf("Name = %q", st.Name)
 	}
-	if st.Version != "" || st.License != "" || st.Repository != "" {
+	if st.License != "" || st.Repository != "" {
 		t.Errorf("expected empty optional fields, got %+v", st)
 	}
 }
@@ -127,7 +123,7 @@ func TestParseTOML_Minimal(t *testing.T) {
 // TestParseTOML_NameRequired guards the invariant that a manifest
 // without a name is rejected.
 func TestParseTOML_NameRequired(t *testing.T) {
-	_, err := ParseSpinTomlBytes([]byte(`version = "0.1.0"`))
+	_, err := ParseSpinTomlBytes([]byte(`description = "no name field"`))
 	if err == nil || !strings.Contains(err.Error(), "name") {
 		t.Fatalf("expected name-required error, got %v", err)
 	}

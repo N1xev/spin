@@ -56,7 +56,6 @@ func printResolvedParams(tpl *template.Template, values map[string]any) error {
 		"name": tpl.Name,
 	}
 	if tpl.SpinToml != nil {
-		meta["version"] = tpl.SpinToml.Version
 		meta["description"] = tpl.SpinToml.Description
 		meta["type"] = tpl.SpinToml.Type
 		meta["language"] = tpl.SpinToml.Language

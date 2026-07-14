@@ -18,7 +18,6 @@ type rawSpinToml struct {
 	Description    string         `toml:"description"`
 	Type           string         `toml:"type"`
 	Language       string         `toml:"language"`
-	Version        string         `toml:"version"`
 	Author         rawAuthor      `toml:"author"`
 	License        string         `toml:"license"`
 	Repository     string         `toml:"repository"`
@@ -53,7 +52,6 @@ func parseTOML(b []byte, st *SpinToml) error {
 	st.Description = raw.Description
 	st.Type = raw.Type
 	st.Language = raw.Language
-	st.Version = raw.Version
 	st.Author = Author(raw.Author)
 	st.License = raw.License
 	st.Repository = raw.Repository

@@ -158,7 +158,6 @@ func initSpinToml(name string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "name = %q\n", name)
 	b.WriteString("description = \"A new spin template -- edit me\"\n")
-	b.WriteString("version = \"0.1.0\"\n")
 	b.WriteString("type = \"cli\"\n")
 	b.WriteString("language = \"go\"\n")
 	b.WriteString("min_spin_version = \"0.1.0\"\n\n")
