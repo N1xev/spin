@@ -56,9 +56,6 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-      - '^chore:'
       - Merge pull request
       - Merge branch
 
@@ -81,16 +78,3 @@ release:
     ```
 
     Or download a binary below.
-
-brews:
-  # Homebrew tap at N1xev/homebrew-tap. The maintainer creates the
-  # tap repo once; goreleaser then opens a PR on every release.
-  - repository:
-      owner: N1xev
-      name: homebrew-tap
-    homepage: https://github.com/N1xev/spin
-    description: Language-agnostic scaffolder for external templates
-    install: |
-      bin.install "spin"
-    test: |
-      system "#{bin}/spin version"
