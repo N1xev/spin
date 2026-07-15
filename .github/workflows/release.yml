@@ -64,7 +64,7 @@ jobs:
 
       - name: Install goreleaser
         run: |
-          go install github.com/goreleaser/goreleaser/v2/cmd/goreleaser@latest
+          go install github.com/goreleaser/goreleaser/v2@latest
 
       - name: Run goreleaser
         env:
