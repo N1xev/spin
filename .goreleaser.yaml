@@ -67,8 +67,7 @@ release:
   name_template: "{{ .ProjectName }} v{{ .Version }}"
   header: |
     ## spin {{ .Tag }}
-    Released {{ .Date }}
-    Built with Go {{ .Env.GOVERSION }}.
+    Released {{ .Date }}.
   footer: |
     ## Install
 
