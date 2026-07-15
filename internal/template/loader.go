@@ -75,7 +75,9 @@ func (l *Loader) LoadContext(ctx context.Context, spec string) (*Template, error
 	if err != nil {
 		return nil, err
 	}
-	l.warnMinSpinVersion(t)
+	if err := l.checkMinSpinVersion(t); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
 
@@ -170,20 +172,17 @@ func (l *Loader) loadPinned(ctx context.Context, spec string) (*Template, error)
 	return nil, nil
 }
 
-// warnMinSpinVersion emits a single non-fatal line on stderr when
-// the template's min_spin_version is newer than the running spin.
-// Not an error: many templates will leave this unset, and even when
-// set the user may knowingly use a newer-template-with-older-spin.
-func (l *Loader) warnMinSpinVersion(t *Template) {
+// checkMinSpinVersion returns an error when the template requires a
+// newer spin version than the running binary. Blocks scaffolding
+// because the template may rely on features this spin lacks.
+func (l *Loader) checkMinSpinVersion(t *Template) error {
 	if t.SpinToml == nil || t.SpinToml.MinSpinVersion == "" {
-		return
+		return nil
 	}
 	if compareSemver(t.SpinToml.MinSpinVersion, version.Version) > 0 {
-		log.Warn("template requires a newer spin version; some features may not work",
-			"template", t.Name,
-			"required", t.SpinToml.MinSpinVersion,
-			"running", version.Version)
+		return fmt.Errorf("template %q requires spin >= %s (running %s)", t.Name, t.SpinToml.MinSpinVersion, version.Version)
 	}
+	return nil
 }
 
 func (l *Loader) cloneGit(ctx context.Context, url string) (*Template, error) {
