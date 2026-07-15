@@ -35,6 +35,11 @@ tasks:
       - go fmt ./...
       - test -x "$(go env GOPATH)/bin/golangci-lint" && golangci-lint fmt ./... || echo "golangci-lint not installed; skipping"
 
+  install:
+    desc: Build and move spin binary to go bin dir
+    cmds:
+      - go build -o spin main.go && mv spin ~/go/bin/
+
   clean:
     cmds:
       - rm -rf ./bin ./tmp ./dist ./.tmp
