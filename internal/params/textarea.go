@@ -25,11 +25,15 @@ func (p *TextareaParam) SetDefault()    { p.Apply(Value{Kind: TypeTextarea, Stri
 func (p *TextareaParam) Apply(v Value)  { p.value = v.String }
 func (p *TextareaParam) Value() Value   { return Value{Kind: TypeTextarea, String: p.value} }
 func (p *TextareaParam) HuhField() huh.Field {
-	return huh.NewText().
+	f := huh.NewText().
 		Key(p.name).
 		Title(orPrompt(p.name, p.prompt)).
 		CharLimit(0).
 		Value(&p.value)
+	if p.def != "" {
+		f = f.Placeholder(p.def)
+	}
+	return f
 }
 
 func (p *TextareaParam) String() string {

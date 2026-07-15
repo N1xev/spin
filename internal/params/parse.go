@@ -2,13 +2,14 @@ package params
 
 import (
 	"fmt"
+	"sort"
 )
 
 // SpecMap is a raw spin.toml `params` block: param name → Spec.
 type SpecMap map[string]Spec
 
-// Parse turns a SpecMap into a list of typed Param instances.
-// Spec.Type determines the concrete type.
+// Parse turns a SpecMap into a list of typed Param instances, sorted
+// alphabetically for consistent display order.
 func Parse(specs SpecMap) ([]Param, error) {
 	out := make([]Param, 0, len(specs))
 	for name, s := range specs {
@@ -18,6 +19,9 @@ func Parse(specs SpecMap) ([]Param, error) {
 		}
 		out = append(out, p)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].Name() < out[j].Name()
+	})
 	return out, nil
 }
 
