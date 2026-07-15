@@ -131,7 +131,12 @@ func runNew(cmd *cobra.Command, args []string) error {
 	// non-interactive so we never reask the user for answers they
 	// already supplied.
 	interactive := isInteractive() && !newPrintParams && !newPrintHooks && !newDryRun && len(newParams) == 0
-	resolved, err := tpl.ResolveForm(values, interactive)
+	var resolved map[string]any
+	if interactive && tpl.SpinToml != nil && len(tpl.SpinToml.Params) > 0 {
+		resolved, err = runNewTUI(tpl)
+	} else {
+		resolved, err = tpl.ResolveForm(values, interactive)
+	}
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return ErrCancelled
