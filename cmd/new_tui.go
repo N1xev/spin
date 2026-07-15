@@ -158,7 +158,7 @@ func (m newTUIModel) statusView(form string) string {
 		}
 	}
 	const statusWidth = 50
-	statusMarginLeft := max(m.width - statusWidth - lipgloss.Width(form) - s.Status.GetMarginRight(), 0)
+	statusMarginLeft := max(m.width-statusWidth-lipgloss.Width(form)-s.Status.GetMarginRight(), 0)
 	return s.Status.
 		Width(statusWidth).
 		Height(lipgloss.Height(form)).
