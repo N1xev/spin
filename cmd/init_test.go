@@ -159,13 +159,8 @@ func TestInit_HelpText(t *testing.T) {
 // destination from the test process's CWD.
 func runSpinWithDir(t *testing.T, dir string, args ...string) ([]byte, int) {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "spin-init")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Dir = repoRoot(t)
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
-	run := exec.Command(bin, args...)
+	ensureBin(t)
+	run := exec.Command(binPath, args...)
 	run.Dir = dir
 	out, err := run.CombinedOutput()
 	if err == nil {

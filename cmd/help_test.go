@@ -8,9 +8,16 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"charm.land/fang/v2"
+)
+
+var (
+	binOnce sync.Once
+	binPath string
+	binErr  error
 )
 
 // TestFangStyledHelp verifies that `spin --help` renders with fang
@@ -152,17 +159,27 @@ func TestFangExecuteNoPanic(t *testing.T) {
 	}
 }
 
+func ensureBin(t testing.TB) {
+	binOnce.Do(func() {
+		binPath = filepath.Join(os.TempDir(), fmt.Sprintf("spin-test-%d", os.Getpid()))
+		root := repoRoot(t)
+		build := exec.Command("go", "build", "-o", binPath, ".")
+		build.Dir = root
+		if out, err := build.CombinedOutput(); err != nil {
+			binErr = fmt.Errorf("go build: %w\n%s", err, out)
+		}
+	})
+	if binErr != nil {
+		t.Fatalf("go build: %v", binErr)
+	}
+}
+
 // runSpin builds the spin binary from the repo root and runs it with
 // the given args. Returns combined stdout+stderr.
 func runSpin(t *testing.T, args ...string) []byte {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "spin-run")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Dir = repoRoot(t)
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
-	run := exec.Command(bin, args...)
+	ensureBin(t)
+	run := exec.Command(binPath, args...)
 	out, err := run.CombinedOutput()
 	if err != nil {
 		// For tests that expect errors (TestUnknownFlagSuggestion), the
@@ -177,18 +194,12 @@ func runSpin(t *testing.T, args ...string) []byte {
 // the exit code. Used for tests that assert on non-zero exits.
 func runSpinExit(t *testing.T, args ...string) ([]byte, int) {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "spin-run-exit")
-	build := exec.Command("go", "build", "-o", bin, ".")
-	build.Dir = repoRoot(t)
-	if out, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
-	run := exec.Command(bin, args...)
+	ensureBin(t)
+	run := exec.Command(binPath, args...)
 	out, err := run.CombinedOutput()
 	if err == nil {
 		return out, 0
 	}
-	// Try to extract the exit code; fall back to 1 on parse failure.
 	exitErr, ok := err.(*exec.ExitError)
 	if !ok {
 		return out, 1
@@ -199,13 +210,12 @@ func runSpinExit(t *testing.T, args ...string) ([]byte, int) {
 // repoRoot returns the absolute path of the spin repo root. The test
 // process CWD may be cmd/ (during `go test ./cmd/...`); we always
 // build from the repo root where main.go + go.mod live.
-func repoRoot(t *testing.T) string {
+func repoRoot(t testing.TB) string {
 	t.Helper()
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	// Walk up until we find go.mod.
 	dir := wd
 	for {
 		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
