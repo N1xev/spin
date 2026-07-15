@@ -3,54 +3,40 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"os"
+	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
+	"golang.org/x/term"
 
 	"github.com/N1xev/spin/internal/log"
 )
 
-// Style for the table rendered by printTable.
 var (
 	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
 	styleCell   = lipgloss.NewStyle()
 	styleBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
-// printSuccess logs a success message to stdout. The charmbracelet/log
-// library's INFO level (green) is the user-facing indicator — no
-// custom icons needed.
 func printSuccess(format string, args ...any) {
 	log.Stdout.Info(fmt.Sprintf(format, args...))
 }
-
-// printInfo logs an informational message to stdout via the log
-// library's INFO level.
 func printInfo(format string, args ...any) {
 	log.Stdout.Info(fmt.Sprintf(format, args...))
 }
-
-// printWarn logs a warning to stderr via the log library's WARN
-// level (yellow prefix).
 func printWarn(format string, args ...any) {
 	log.Warn(fmt.Sprintf(format, args...))
 }
-
-// printHint prints a hint to stdout with no level prefix. Used after
-// an error or info line to suggest the next step.
 func printHint(format string, args ...any) {
-	log.Stdout.Print(fmt.Sprintf(format, args...))
+	style := lipgloss.NewStyle().
+		MarginTop(1).
+		Foreground(lipgloss.Color("245")).
+		Italic(true)
+	fmt.Fprintln(os.Stdout, style.Render(fmt.Sprintf(format, args...)))
 }
 
-// printTable renders a styled table to w. headers is the column
-// names; rows is the data (each row same length as headers).
-// Columns are sized to the widest cell. Used by `spin list` and any
-// future tabular output.
-//
-// Padding is applied via a 1-space left/right pad in StyleFunc.
-// Column separators use a subtle dim-gray box-drawing character
-// that reads cleanly in both TTY and piped output.
 func printTable(w io.Writer, headers []string, rows [][]string) {
 	if len(rows) == 0 {
 		return
@@ -61,6 +47,7 @@ func printTable(w io.Writer, headers []string, rows [][]string) {
 	t := table.New().
 		Headers(headers...).
 		Rows(rows...).
+		Width(termWidth()).
 		BorderTop(false).
 		BorderBottom(false).
 		BorderLeft(false).
@@ -77,8 +64,47 @@ func printTable(w io.Writer, headers []string, rows [][]string) {
 	_, _ = fmt.Fprintln(w, t.Render())
 }
 
-// truncate is a tiny string helper for table cells. We keep it
-// here next to printTable so cmd/list.go doesn't need its own copy.
+// termWidth returns the terminal width from the TTY, $COLUMNS, or 120.
+func termWidth() int {
+	if w, _, err := term.GetSize(int(os.Stdout.Fd())); err == nil && w > 0 {
+		return w
+	}
+	if s := os.Getenv("COLUMNS"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 120
+}
+
+func shrinkCol(headers []string, rows [][]string) [][]string {
+	if len(rows) == 0 || len(headers) == 0 {
+		return rows
+	}
+	termW := termWidth()
+	overhead := (len(headers) - 1) + (len(headers) * 2)
+	fixedW := 0
+	for i := 0; i < len(headers)-1; i++ {
+		w := len(headers[i])
+		for _, r := range rows {
+			if len(r[i]) > w {
+				w = len(r[i])
+			}
+		}
+		fixedW += w
+	}
+	flexW := max(termW-overhead-fixedW, 10)
+	out := make([][]string, len(rows))
+	last := len(headers) - 1
+	for i, r := range rows {
+		cp := make([]string, len(r))
+		copy(cp, r)
+		cp[last] = truncate(r[last], flexW)
+		out[i] = cp
+	}
+	return out
+}
+
 func truncate(s string, n int) string {
 	if n <= 1 || len(s) <= n {
 		return s

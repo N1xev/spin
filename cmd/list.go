@@ -102,14 +102,14 @@ func execList(cmd *cobra.Command, args []string) error {
 	tableRows := make([][]string, 0, len(rows))
 	for _, r := range rows {
 		tableRows = append(tableRows, []string{
-			truncate(r.Name, 30),
-			truncate(r.Version, 10),
-			truncate(r.PinnedAt, 12),
-			truncate(r.Description, 36),
+			r.Name,
+			r.Version,
+			r.PinnedAt,
+			r.Description,
 			shortenLocal(r.LocalPath, client.CacheDir),
 		})
 	}
-	printTable(io.Writer(cmd.OutOrStdout()), headers, tableRows)
+	printTable(io.Writer(cmd.OutOrStdout()), headers, shrinkCol(headers, tableRows))
 	printHint("use `spin new <project> --template <name>` to scaffold from a pinned template")
 	return nil
 }

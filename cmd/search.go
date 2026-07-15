@@ -180,7 +180,7 @@ func runSearch(cmd *cobra.Command, args []string) error {
 			e.Description,
 		})
 	}
-	printTable(os.Stdout, headers, rows)
+	printTable(os.Stdout, headers, shrinkCol(headers, rows))
 	printHint("use `spin add <name>` to pin a template, or `spin add <alias>/<id>` from a registry")
 	return nil
 }
