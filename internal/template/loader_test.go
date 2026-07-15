@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/N1xev/spin/internal/registry"
 	srcspec "github.com/N1xev/spin/internal/spec"
@@ -396,7 +397,9 @@ func TestLoader_Load_ShorthandPinNotFound(t *testing.T) {
 	}
 
 	l := NewLoader(filepath.Join(xdg, "spin", "templates"))
-	_, err := l.LoadContext(ctx, "test/ghost")
+	loadCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_, err := l.LoadContext(loadCtx, "test/ghost")
 	if err == nil {
 		t.Fatal("expected error from failed clone pin -> clone fallthrough")
 	}
@@ -444,7 +447,9 @@ func TestLoader_Load_ShorthandPinStaleLocalPath(t *testing.T) {
 	}
 
 	l := NewLoader(filepath.Join(xdg, "spin", "templates"))
-	_, err := l.LoadContext(ctx, "test/stale")
+	loadCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_, err := l.LoadContext(loadCtx, "test/stale")
 	if err == nil {
 		t.Fatal("expected error from stale pin -> clone fallthrough")
 	}
@@ -501,7 +506,9 @@ func TestLoader_Load_ShorthandPinMismatchSource(t *testing.T) {
 	}
 
 	l := NewLoader(filepath.Join(xdg, "spin", "templates"))
-	_, err := l.LoadContext(ctx, "test/actual")
+	loadCtx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer cancel()
+	_, err := l.LoadContext(loadCtx, "test/actual")
 	if err == nil {
 		t.Fatal("expected error from mismatched pin -> clone fallthrough")
 	}

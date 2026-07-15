@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newTestManager returns a Manager whose CacheDir is a fresh temp
@@ -351,7 +352,9 @@ func TestManager_AddNonExistentLocalSource(t *testing.T) {
 
 func TestManager_AddNonExistentGitSource(t *testing.T) {
 	mgr := newTestManager(t)
-	_, err := mgr.Add(context.Background(), "missing", "https://github.com/spin-org/does-not-exist-12345.git", false)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, err := mgr.Add(ctx, "missing", "https://github.com/spin-org/does-not-exist-12345.git", false)
 	if err == nil {
 		t.Fatal("Add with non-existent git source should error")
 	}
