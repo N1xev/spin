@@ -24,6 +24,14 @@ type Template struct {
 
 // A valid template has spin.toml and _base/.
 func Detect(dir string) (*Template, error) {
+	// Expand ~ to home so registry sources and CLI args work uniformly.
+	if strings.HasPrefix(dir, "~/") {
+		h, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("template: expand home: %w", err)
+		}
+		dir = filepath.Join(h, dir[2:])
+	}
 	stPath := filepath.Join(dir, "spin.toml")
 	if _, err := os.Stat(stPath); err != nil {
 		return nil, fmt.Errorf("template: spin.toml not found in %s", dir)
