@@ -132,8 +132,9 @@ func runNew(cmd *cobra.Command, args []string) error {
 	// already supplied.
 	interactive := isInteractive() && !newPrintParams && !newPrintHooks && !newDryRun && len(newParams) == 0
 	var resolved map[string]any
+	renderedByTUI := false
 	if interactive && tpl.SpinToml != nil && len(tpl.SpinToml.Params) > 0 {
-		resolved, err = runNewTUI(tpl)
+		renderedByTUI, resolved, err = runNewTUI(tpl, cmd.Context(), dest, name, newNoHooks, newYes, newVerbose)
 	} else {
 		resolved, err = tpl.ResolveForm(values, interactive)
 	}
@@ -155,24 +156,28 @@ func runNew(cmd *cobra.Command, args []string) error {
 		return dryRunRender(cmd.Context(), tpl, resolved, dest)
 	}
 
+	// When the TUI already ran the full scaffold (form + hook review),
+	// don't render a second time.
+	if renderedByTUI {
+		printSuccess("created %s at %s", name, dest)
+		printHint("cd %s", dest)
+		if isInteractive() && tpl.Repo != "" {
+			promptPinAfterSuccess(cmd.Context(), name, tpl)
+		}
+		return nil
+	}
+
 	opts := template.HookOptions{
 		NoHooks:       newNoHooks,
 		PrintCommands: true,
 		Verbose:       newVerbose,
-	}
-	// A template runs shell hooks on this machine. Ask before executing
-	// them unless the user opted out (--no-hooks) or pre-consented (--yes).
-	if !opts.NoHooks && !newYes && isInteractive() && template.HasHooks(tpl) {
-		if !confirmRunHooks(tpl) {
-			opts.NoHooks = true
-			printInfo("skipping hooks (declined)")
-		}
 	}
 	if err := tpl.RenderToWithPost(cmd.Context(), dest, resolved, opts); err != nil {
 		return err
 	}
 
 	printSuccess("created %s at %s", name, dest)
+	printHint("cd %s", dest)
 
 	if isInteractive() && tpl.Repo != "" {
 		promptPinAfterSuccess(cmd.Context(), name, tpl)

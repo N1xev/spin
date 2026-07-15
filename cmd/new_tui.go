@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"image/color"
 	"strings"
@@ -41,16 +42,35 @@ func newTUIStyles() *tuiStyles {
 	}
 }
 
+type tuiStep int
+
+const (
+	stepForm tuiStep = iota
+	stepHooks
+)
+
 type newTUIModel struct {
-	styles *tuiStyles
-	form   *huh.Form
-	width  int
-	tpl    *template.Template
-	params []params.Param
+	styles  *tuiStyles
+	form    *huh.Form
+	width   int
+	height  int
+	tpl     *template.Template
+	params  []params.Param
+	step    tuiStep
+	hooks   hooksModel
+
+	ctx     context.Context
+	dest    string
+	name    string
+	noHooks bool
+	yes     bool
+	verbose bool
+
+	resolved map[string]any
 }
 
 func newNewTUIModel(tpl *template.Template) (newTUIModel, error) {
-	m := newTUIModel{tpl: tpl, styles: newTUIStyles(), width: termWidth()}
+	m := newTUIModel{tpl: tpl, styles: newTUIStyles(), width: termWidth(), height: 24}
 	ps, err := params.Parse(tpl.SpinToml.Params)
 	if err != nil {
 		return m, err
@@ -71,12 +91,17 @@ func newNewTUIModel(tpl *template.Template) (newTUIModel, error) {
 func (m newTUIModel) Init() tea.Cmd { return m.form.Init() }
 
 func (m newTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	s := m.styles
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.width = min(msg.Width, termWidth()) - s.Base.GetHorizontalFrameSize()
+		m.width = min(msg.Width, termWidth()) - m.styles.Base.GetHorizontalFrameSize()
+		m.height = msg.Height
+		if m.step == stepHooks {
+			m.hooks = m.hooks.resize(m.width, m.height)
+			return m, nil
+		}
 		m.form = m.form.WithWidth(min(m.width/2, 60)).
 			WithHeight(msg.Height - 8)
+		return m, nil
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "ctrl+c":
@@ -85,17 +110,46 @@ func (m newTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
+
+	switch m.step {
+	case stepHooks:
+		var cmd tea.Cmd
+		m.hooks, cmd = m.hooks.update(msg)
+		return m, cmd
+	default:
+		return m.updateForm(msg)
+	}
+}
+
+// updateForm is the Update loop for the param form step.
+func (m newTUIModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
 		m.form = f
 	}
 	if m.form.State == huh.StateCompleted {
+		resolved := collectResolved(m.params, m.name)
+		m.resolved = resolved
+		if len(template.CollectHooks(m.tpl)) > 0 {
+			m.step = stepHooks
+			m.hooks = newHooksModel(m.tpl, m.styles, m.width, m.height, resolved, m.ctx, m.dest, m.name, m.noHooks, m.yes, m.verbose)
+			return m, nil
+		}
 		return m, tea.Quit
 	}
 	return m, cmd
 }
 
 func (m newTUIModel) View() tea.View {
+	switch m.step {
+	case stepHooks:
+		return m.hooks.view()
+	default:
+		return m.formView()
+	}
+}
+
+func (m newTUIModel) formView() tea.View {
 	s := m.styles
 
 	title := gradientText("Spin  Create Project — "+m.tpl.Name, tuiPink, tuiAccent)
@@ -116,7 +170,9 @@ func (m newTUIModel) View() tea.View {
 	if len(errors) > 0 {
 		footer = m.appErrorBoundaryView("")
 	}
-	return tea.NewView(s.Base.Render(header + "\n" + body + "\n\n" + footer))
+	hv := tea.NewView(s.Base.Render(header + "\n" + body + "\n\n" + footer))
+	hv.AltScreen = true
+	return hv
 }
 
 func (m newTUIModel) statusView(form string) string {
@@ -142,7 +198,7 @@ func (m newTUIModel) statusView(form string) string {
 		}
 		hooks := len(m.tpl.SpinToml.Pre) + len(m.tpl.SpinToml.Post)
 		if hooks > 0 {
-			fmt.Fprintf(&b, "\n%s\n", thdr("Terminal", tuiBrightRed))
+			fmt.Fprintf(&b, "\n%s\n", thdr("Hooks", tuiBrightRed))
 			for _, pre := range m.tpl.SpinToml.Pre {
 				fmt.Fprintf(&b, "  pre: %s\n", pre.Run)
 			}
@@ -236,18 +292,40 @@ func (m newTUIModel) appBoundaryViewFoot(text string) string {
 	)
 }
 
-func runNewTUI(tpl *template.Template) (map[string]any, error) {
+// collectResolved merges the answered params with the implicit
+// name/project_name keys every template can reference.
+func collectResolved(ps []params.Param, name string) map[string]any {
+	out := map[string]any{
+		"name":         name,
+		"project_name": name,
+	}
+	for _, p := range ps {
+		out[p.Name()] = template.UnwrapValue(p.Value())
+	}
+	return out
+}
+
+// runNewTUI runs the interactive form, and (when the template has
+// hooks) the hook review screen. It returns whether the scaffold was
+// already executed by the TUI (so runNew can skip its own render), the
+// resolved param values, and any error.
+func runNewTUI(tpl *template.Template, ctx context.Context, dest, name string, noHooks, yes, verbose bool) (bool, map[string]any, error) {
 	m, err := newNewTUIModel(tpl)
 	if err != nil {
-		return nil, err
+		return false, nil, err
 	}
+	m.ctx = ctx
+	m.dest = dest
+	m.name = name
+	m.noHooks = noHooks
+	m.yes = yes
+	m.verbose = verbose
 	p := tea.NewProgram(m)
 	if _, err := p.Run(); err != nil {
-		return nil, err
+		return false, nil, err
 	}
-	out := map[string]any{}
-	for _, param := range m.params {
-		out[param.Name()] = template.UnwrapValue(param.Value())
+	if m.resolved == nil {
+		m.resolved = collectResolved(m.params, name)
 	}
-	return out, nil
+	return m.hooks.didRun, m.resolved, nil
 }
