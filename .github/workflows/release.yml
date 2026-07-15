@@ -19,6 +19,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -29,8 +33,12 @@ jobs:
 
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.26.5'
+          go-version-file: go.mod
           cache: true
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          test -z "$(git diff -- go.mod go.sum)" || (echo "go.mod/go.sum are stale." && exit 1)
 
       - name: Sanity build
         run: go build ./...
@@ -38,8 +46,21 @@ jobs:
       - name: Check formatting
         run: test -z "$(go fmt ./...)" || (echo "Not formatted." && exit 1)
 
+      - name: Check go mod tidy
+        run: |
+          go mod tidy
+          test -z "$(git diff -- go.mod go.sum)" || (echo "go.mod/go.sum are stale." && exit 1)
+
       - name: Sanity test
         run: go test ./... -count=1
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run staticcheck
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest
+          staticcheck ./...
 
       - name: Install goreleaser
         run: |
@@ -48,5 +69,4 @@ jobs:
       - name: Run goreleaser
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          goreleaser release --clean
+        run: goreleaser release --clean
