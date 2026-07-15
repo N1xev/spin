@@ -55,7 +55,7 @@ func (p *NumberParam) HuhField() huh.Field {
 		Validate(func(s string) error {
 			n, err := strconv.Atoi(s)
 			if err != nil {
-				return fmt.Errorf("not a number: %q", s)
+				return fmt.Errorf("Not a number: %q", s)
 			}
 			if p.min != nil && n < *p.min {
 				return fmt.Errorf("must be >= %d", *p.min)
