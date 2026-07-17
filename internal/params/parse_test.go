@@ -245,7 +245,7 @@ func TestSetDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	SetDefaults(ps)
+	SetDefaults(ps, map[string]any{})
 
 	want := map[string]Value{
 		"name":  {Kind: TypeText, String: "myapp"},
@@ -280,7 +280,7 @@ func TestSetDefaults_PreservesOrder(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 	names := []string{ps[0].Name(), ps[1].Name(), ps[2].Name()}
-	SetDefaults(ps)
+	SetDefaults(ps, map[string]any{})
 	got := []string{ps[0].Name(), ps[1].Name(), ps[2].Name()}
 	if !reflect.DeepEqual(names, got) {
 		t.Errorf("order changed: %v → %v", names, got)
@@ -297,7 +297,7 @@ func TestSetDefaults_PreservesOrder(t *testing.T) {
 // applies the default string via Value().
 func TestSetDefault_Textarea(t *testing.T) {
 	p := NewTextarea("desc", "Description", "a\nb")
-	p.SetDefault()
+	p.SetDefault(map[string]any{})
 	got := p.Value()
 	want := Value{Kind: TypeTextarea, String: "a\nb"}
 	if !reflect.DeepEqual(got, want) {
@@ -309,7 +309,7 @@ func TestSetDefault_Textarea(t *testing.T) {
 // param applies the default []string via Value().
 func TestSetDefault_MultiSelect(t *testing.T) {
 	p := NewMultiSelect("features", "Features", []string{"a", "b"}, []string{"a"})
-	p.SetDefault()
+	p.SetDefault(map[string]any{})
 	got := p.Value()
 	want := Value{Kind: TypeMultiSelect, List: []string{"a"}}
 	if !reflect.DeepEqual(got, want) {
@@ -321,7 +321,7 @@ func TestSetDefault_MultiSelect(t *testing.T) {
 // applies the default string via Value().
 func TestSetDefault_Path(t *testing.T) {
 	p := NewPath("out", "Output", "/tmp")
-	p.SetDefault()
+	p.SetDefault(map[string]any{})
 	got := p.Value()
 	want := Value{Kind: TypePath, Path: "/tmp"}
 	if !reflect.DeepEqual(got, want) {
@@ -334,7 +334,7 @@ func TestSetDefault_Path(t *testing.T) {
 func TestSetDefault_Secret(t *testing.T) {
 	p := NewSecret("key", "API Key")
 	p.def = "sk-test"
-	p.SetDefault()
+	p.SetDefault(map[string]any{})
 	got := p.Value()
 	want := Value{Kind: TypeSecret, String: "sk-test"}
 	if !reflect.DeepEqual(got, want) {
@@ -347,7 +347,7 @@ func BenchmarkSetDefaultText(b *testing.B) {
 	p := NewText("name", "Name", "default")
 	b.ResetTimer()
 	for b.Loop() {
-		p.SetDefault()
+		p.SetDefault(map[string]any{})
 	}
 }
 
@@ -362,7 +362,7 @@ func BenchmarkSetDefaults_Small(b *testing.B) {
 	}
 	b.ResetTimer()
 	for b.Loop() {
-		SetDefaults(ps)
+		SetDefaults(ps, map[string]any{})
 	}
 }
 
@@ -380,7 +380,7 @@ func TestSetDefaults_AllTypes(t *testing.T) {
 		NewSecret("h", "H"),
 	}
 	ps[7].(*SecretParam).def = "shh"
-	SetDefaults(ps)
+	SetDefaults(ps, map[string]any{})
 
 	want := map[string]Value{
 		"a": {Kind: TypeText, String: "txt"},

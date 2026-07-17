@@ -22,7 +22,9 @@ func (p *MultiSelectParam) Name() string   { return p.name }
 func (p *MultiSelectParam) Type() Type     { return TypeMultiSelect }
 func (p *MultiSelectParam) Prompt() string { return p.prompt }
 func (p *MultiSelectParam) Default() any   { return p.def }
-func (p *MultiSelectParam) SetDefault()    { p.Apply(Value{Kind: TypeMultiSelect, List: p.def}) }
+func (p *MultiSelectParam) SetDefault(values map[string]any) {
+	p.Apply(Value{Kind: TypeMultiSelect, List: p.def})
+}
 func (p *MultiSelectParam) Apply(v Value) {
 	if v.List == nil {
 		p.value = []string{}
@@ -32,7 +34,7 @@ func (p *MultiSelectParam) Apply(v Value) {
 }
 func (p *MultiSelectParam) Value() Value { return Value{Kind: TypeMultiSelect, List: p.value} }
 
-func (p *MultiSelectParam) HuhField() huh.Field {
+func (p *MultiSelectParam) HuhField(values map[string]any) huh.Field {
 	opts := make([]huh.Option[string], 0, len(p.options))
 	for _, o := range p.options {
 		opt := huh.NewOption(o, o)
@@ -45,7 +47,7 @@ func (p *MultiSelectParam) HuhField() huh.Field {
 	}
 	return huh.NewMultiSelect[string]().
 		Key(p.name).
-		Title(orPrompt(p.name, p.prompt)).
+		Title(orPrompt(p.name, renderStr(p.prompt, values))).
 		Options(opts...).
 		Value(&p.value)
 }
