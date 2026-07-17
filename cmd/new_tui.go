@@ -49,17 +49,30 @@ type newTUIModel struct {
 	params []params.Param
 }
 
-func newNewTUIModel(tpl *template.Template) (newTUIModel, error) {
+func newNewTUIModel(tpl *template.Template, values map[string]any) (newTUIModel, error) {
 	m := newTUIModel{tpl: tpl, styles: newTUIStyles(), width: termWidth()}
 	ps, err := params.Parse(tpl.SpinToml.Params)
 	if err != nil {
 		return m, err
 	}
-	params.SetDefaults(ps)
+	params.SetDefaults(ps, values)
+	// Seed builtins (name, project_name) and any other supplied values
+	// onto params whose name matches, so the form opens with them
+	// pre-filled -- matching the non-TTY ResolveForm behaviour. Guard
+	// against empty strings: an empty value must never clobber a
+	// param's own default.
+	for _, p := range ps {
+		if v, ok := values[p.Name()]; ok {
+			if s, ok := v.(string); ok && s == "" {
+				continue
+			}
+			p.Apply(params.FromAny(v))
+		}
+	}
 	m.params = ps
 	var fields []huh.Field
 	for _, p := range ps {
-		fields = append(fields, p.HuhField())
+		fields = append(fields, p.HuhField(values))
 	}
 	m.form = huh.NewForm(huh.NewGroup(fields...)).
 		WithWidth(min(m.width/2, 60)).
@@ -236,8 +249,8 @@ func (m newTUIModel) appBoundaryViewFoot(text string) string {
 	)
 }
 
-func runNewTUI(tpl *template.Template) (map[string]any, error) {
-	m, err := newNewTUIModel(tpl)
+func runNewTUI(tpl *template.Template, values map[string]any) (map[string]any, error) {
+	m, err := newNewTUIModel(tpl, values)
 	if err != nil {
 		return nil, err
 	}
@@ -248,6 +261,15 @@ func runNewTUI(tpl *template.Template) (map[string]any, error) {
 	out := map[string]any{}
 	for _, param := range m.params {
 		out[param.Name()] = template.UnwrapValue(param.Value())
+	}
+	// Copy through any caller-supplied/builtin keys that aren't
+	// backed by a param (e.g. project_name). Mirrors
+	// Template.ResolveForm so the TTY and non-TTY paths produce the
+	// same value map.
+	for k, v := range values {
+		if _, ok := out[k]; !ok {
+			out[k] = v
+		}
 	}
 	return out, nil
 }

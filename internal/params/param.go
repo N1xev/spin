@@ -37,12 +37,14 @@ type Param interface {
 	Type() Type
 	Prompt() string
 	Default() any
-	SetDefault()
+	SetDefault(values map[string]any)
 	Apply(v Value)
 	Value() Value
 	// HuhField builds the huh field for this param. The form runner
-	// writes the result back via Apply().
-	HuhField() huh.Field
+	// writes the result back via Apply(). values are the currently
+	// known template values, used to render the param's prompt and
+	// default (e.g. `prompt = "Name for {{ .name }}"`).
+	HuhField(values map[string]any) huh.Field
 	// String returns a one-line summary, used by `spin new --print-params`.
 	String() string
 }

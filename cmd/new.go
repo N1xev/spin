@@ -133,7 +133,7 @@ func runNew(cmd *cobra.Command, args []string) error {
 	interactive := isInteractive() && !newPrintParams && !newPrintHooks && !newDryRun && len(newParams) == 0
 	var resolved map[string]any
 	if interactive && tpl.SpinToml != nil && len(tpl.SpinToml.Params) > 0 {
-		resolved, err = runNewTUI(tpl)
+		resolved, err = runNewTUI(tpl, values)
 	} else {
 		resolved, err = tpl.ResolveForm(values, interactive)
 	}

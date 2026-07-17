@@ -28,13 +28,15 @@ func (p *PathParam) Name() string   { return p.name }
 func (p *PathParam) Type() Type     { return TypePath }
 func (p *PathParam) Prompt() string { return p.prompt }
 func (p *PathParam) Default() any   { return p.def }
-func (p *PathParam) SetDefault()    { p.Apply(Value{Kind: TypePath, Path: p.def}) }
-func (p *PathParam) Apply(v Value)  { p.value = v.Path }
-func (p *PathParam) Value() Value   { return Value{Kind: TypePath, Path: p.value} }
-func (p *PathParam) HuhField() huh.Field {
+func (p *PathParam) SetDefault(values map[string]any) {
+	p.Apply(Value{Kind: TypePath, Path: renderStr(p.def, values)})
+}
+func (p *PathParam) Apply(v Value) { p.value = v.Path }
+func (p *PathParam) Value() Value  { return Value{Kind: TypePath, Path: p.value} }
+func (p *PathParam) HuhField(values map[string]any) huh.Field {
 	f := huh.NewFilePicker().
 		Key(p.name).
-		Title(orPrompt(p.name, p.prompt))
+		Title(orPrompt(p.name, renderStr(p.prompt, values)))
 	if p.dir {
 		f = f.FileAllowed(false).DirAllowed(true)
 	} else {

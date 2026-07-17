@@ -3,6 +3,8 @@ package template
 import (
 	"strings"
 	"testing"
+
+	"github.com/N1xev/spin/internal/params"
 )
 
 // TestSnakeCase verifies the snakeCase helper that converts
@@ -22,7 +24,7 @@ func TestSnakeCase(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {
-			got := snakeCase(c.in)
+			got := params.SnakeCase(c.in)
 			if got != c.want {
 				t.Errorf("snakeCase(%q) = %q, want %q", c.in, got, c.want)
 			}
@@ -43,7 +45,7 @@ func TestShellQuote(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {
-			got := shellQuote(c.in)
+			got := params.ShellQuote(c.in)
 			if got != c.want {
 				t.Errorf("shellQuote(%q) = %q, want %q", c.in, got, c.want)
 			}
@@ -54,7 +56,7 @@ func TestShellQuote(t *testing.T) {
 // TestFuncMapHelpers verifies the key template helpers registered
 // by funcMap(), ensuring they produce the expected input→output.
 func TestFuncMapHelpers(t *testing.T) {
-	fm := funcMap()
+	fm := params.FuncMap()
 
 	t.Run("upper", func(t *testing.T) {
 		fn, ok := fm["upper"]

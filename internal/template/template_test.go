@@ -663,7 +663,7 @@ func TestShouldInclude_IsDir(t *testing.T) {
 			},
 		},
 	}
-	funcs := funcMap()
+	funcs := params.FuncMap()
 
 	// A file matching the rule with ci=false → not included.
 	inc, skip, err := tpl.shouldInclude("opt/f.go", "opt/f.go", false, map[string]any{"ci": false}, funcs)
