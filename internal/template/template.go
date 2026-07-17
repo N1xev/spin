@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/N1xev/spin/internal/params"
 )
 
 // Template is a loaded external template, ready to render.
@@ -73,7 +75,7 @@ func (t *Template) Render(values map[string]any) (map[string][]byte, error) {
 	out := map[string][]byte{}
 	// Build the template helpers once and reuse them for every file
 	// and every [[include]] rule in this pass.
-	funcs := funcMap()
+	funcs := params.FuncMap()
 	err := filepath.Walk(t.BaseDir, func(path string, info os.FileInfo, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
