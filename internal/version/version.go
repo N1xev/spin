@@ -9,7 +9,7 @@ import (
 const defaultVersion = "0.1.0"
 
 var Version = defaultVersion
-var pseudoVersion = regexp.MustCompile(`\.[0-9]{14}-`)
+var pseudoVersion = regexp.MustCompile(`[0-9]{12,14}-`)
 
 func init() {
 	if Version != defaultVersion {
