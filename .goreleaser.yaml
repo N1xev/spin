@@ -29,8 +29,6 @@ builds:
     ldflags:
       - -s -w
       - -X github.com/N1xev/spin/internal/version.Version={{.Version}}
-      - -X github.com/N1xev/spin/internal/version.Commit={{.ShortCommit}}
-      - -X github.com/N1xev/spin/internal/version.Date={{.CommitDate}}
 
 archives:
   - id: spin
