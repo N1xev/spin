@@ -288,60 +288,72 @@ func (m Manager) upsert(ctx context.Context, reg Registry) error {
 	return m.writeRegistries(cfg)
 }
 
-// Refresh pulls the latest commits for a git registry (no-op for
-// local) and stamps LastUpdated. Returns ErrRegistryMissing when
-// alias is not registered.
-func (m Manager) Refresh(ctx context.Context, alias string) (Registry, error) {
+// Refresh pulls the latest commits for a git registry and reports
+// whether anything actually changed. Local registries are a no-op
+// (changed=false). Returns ErrRegistryMissing when alias is not
+// registered. LastUpdated is only stamped when the git HEAD moves,
+// so an up-to-date registry keeps its old timestamp.
+func (m Manager) Refresh(ctx context.Context, alias string) (Registry, bool, error) {
 	cfg, err := m.Load(ctx)
 	if err != nil {
-		return Registry{}, err
+		return Registry{}, false, err
 	}
 	for i, r := range cfg.Registries {
 		if r.Alias != alias {
 			continue
 		}
 		if r.Kind == KindLocal {
-			// No-op; don't stamp LastUpdated because nothing changed.
-			return r, nil
+			// No-op; nothing changed and nothing to stamp.
+			return r, false, nil
 		}
+		before, _ := gitHeadSHA(r.Path)
 		if err := GitFetch(ctx, r.Path); err != nil {
-			return r, err
+			return r, false, err
 		}
 		if err := GitReset(ctx, r.Path); err != nil {
-			return r, err
+			return r, false, err
 		}
-		r.LastUpdated = time.Now().UTC().Format(time.RFC3339)
-		cfg.Registries[i] = r
-		if err := m.writeRegistries(cfg); err != nil {
-			return r, err
+		after, _ := gitHeadSHA(r.Path)
+		changed := before != after
+		if changed {
+			r.LastUpdated = time.Now().UTC().Format(time.RFC3339)
+			cfg.Registries[i] = r
+			if err := m.writeRegistries(cfg); err != nil {
+				return r, false, err
+			}
 		}
-		return r, nil
+		return r, changed, nil
 	}
-	return Registry{}, fmt.Errorf("%w: %q", ErrRegistryMissing, alias)
+	return Registry{}, false, fmt.Errorf("%w: %q", ErrRegistryMissing, alias)
 }
 
 // RefreshAll refreshes every git registry in declaration order.
 // Returns one error per failure so the CLI can print a per-registry
 // summary; the loop never aborts on the first failure.
-func (m Manager) RefreshAll(ctx context.Context) ([]Registry, []error) {
+func (m Manager) RefreshAll(ctx context.Context) ([]Registry, []string, []error) {
 	cfg, err := m.Load(ctx)
 	if err != nil {
-		return nil, []error{err}
+		return nil, nil, []error{err}
 	}
 	var updated []Registry
+	var skipped []string
 	var errs []error
 	for _, r := range cfg.Registries {
 		if r.Kind == KindLocal {
 			continue
 		}
-		if _, err := m.Refresh(ctx, r.Alias); err != nil {
+		reg, changed, err := m.Refresh(ctx, r.Alias)
+		if err != nil {
 			errs = append(errs, fmt.Errorf("%s: %w", r.Alias, err))
 			continue
 		}
-		fresh, _ := m.Get(ctx, r.Alias)
-		updated = append(updated, fresh)
+		if changed {
+			updated = append(updated, reg)
+		} else {
+			skipped = append(skipped, r.Alias)
+		}
 	}
-	return updated, errs
+	return updated, skipped, errs
 }
 
 // Remove drops alias from registries.json and deletes the cache

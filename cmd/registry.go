@@ -177,12 +177,18 @@ func runRegistryUpdate(cmd *cobra.Command, args []string) error {
 		if _, ok := mgr.Get(cmd.Context(), alias); !ok {
 			return fmt.Errorf("%q is not registered", alias)
 		}
-		reg, err := mgr.Refresh(cmd.Context(), alias)
+		reg, changed, err := mgr.Refresh(cmd.Context(), alias)
 		if err != nil {
 			return err
 		}
 		if reg.Kind == registry.KindLocal {
 			printInfo("%s is local; nothing to update", alias)
+			return nil
+		}
+		if !changed {
+			if !registryUpdateQuiet {
+				printInfo("%s already up to date", alias)
+			}
 			return nil
 		}
 		if !registryUpdateQuiet {
@@ -191,14 +197,17 @@ func runRegistryUpdate(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	regs, errs := mgr.RefreshAll(cmd.Context())
-	if len(regs) == 0 && len(errs) == 0 {
+	regs, skipped, errs := mgr.RefreshAll(cmd.Context())
+	if len(regs) == 0 && len(skipped) == 0 && len(errs) == 0 {
 		printInfo("no git registries to update")
 		return nil
 	}
 	if !registryUpdateQuiet {
 		for _, r := range regs {
 			printSuccess("updated %s", r.Alias)
+		}
+		for _, alias := range skipped {
+			printInfo("%s already up to date", alias)
 		}
 	}
 	for _, e := range errs {
