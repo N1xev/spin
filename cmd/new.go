@@ -171,6 +171,10 @@ func runNew(cmd *cobra.Command, args []string) error {
 		NoHooks:       newNoHooks,
 		PrintCommands: true,
 		Verbose:       newVerbose,
+		Output: stdoutHookOutput(),
+		StepStart: func(kind, cmd string) {
+			fmt.Fprint(os.Stdout, hookStepHeader(kind, cmd))
+		},
 	}
 	if err := tpl.RenderToWithPost(cmd.Context(), dest, resolved, opts); err != nil {
 		return err

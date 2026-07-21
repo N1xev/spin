@@ -83,6 +83,10 @@ type HookOptions struct {
 	// by the interactive TUI to stream hook execution into a viewport.
 	// When Output is nil, PrintCommands falls back to the package logger.
 	Output io.Writer
+	// StepStart, when set, is called before each step runs so the caller
+	// can print a styled header. Only used when PrintCommands is true;
+	// falls back to a plain log line otherwise.
+	StepStart func(kind, cmd string)
 }
 
 // hookStep is the common shape of PreStep and PostStep.
@@ -110,14 +114,15 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 		if opts.NoHooks {
 			continue
 		}
-		echo := func(line string) {
-			if opts.Output != nil {
-				fmt.Fprintln(opts.Output, line)
-			} else if opts.PrintCommands {
-				log.Stdout.Print(line)
+		if opts.PrintCommands {
+			if opts.StepStart != nil {
+				opts.StepStart(kind, rendered)
+			} else if opts.Output != nil {
+				fmt.Fprintln(opts.Output, fmt.Sprintf("→ %s-hook: %s", kind, rendered))
+			} else {
+				log.Stdout.Print(fmt.Sprintf("→ %s-hook: %s", kind, rendered))
 			}
 		}
-		echo(fmt.Sprintf("→ %s-hook: %s", kind, rendered))
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -132,8 +137,10 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 				c.Stderr = os.Stderr
 			}
 			if err := c.Run(); err != nil {
+				flushWriter(opts.Output)
 				return fmt.Errorf("%s-hook step %d %q failed: %w", kind, i+1, rendered, err)
 			}
+			flushWriter(opts.Output)
 			continue
 		}
 		out, err := c.CombinedOutput()
@@ -142,6 +149,18 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 		}
 	}
 	return nil
+}
+
+// flusher is implemented by callers that buffer streamed hook output and
+// need to emit a trailing partial line once a command finishes.
+type flusher interface{ Flush() error }
+
+// flushWriter flushes w if it buffers output (e.g. cmd's tree writer).
+// Writers that stream directly (os.Stdout) have no Flush and are ignored.
+func flushWriter(w io.Writer) {
+	if f, ok := w.(flusher); ok {
+		_ = f.Flush()
+	}
 }
 
 // autoHookScripts returns shell commands for every file in
@@ -186,48 +205,4 @@ func scriptCommand(fullDir, dirName, name string) (string, error) {
 		return "./" + scriptPath, nil
 	}
 	return "sh " + scriptPath, nil
-}
-
-// hookAssetDir returns the template's _pre or _post script directory
-// for the given phase.
-func hookAssetDir(t *Template, phase string) string {
-	if phase == "post" {
-		return t.PostHookDir
-	}
-	return t.PreHookDir
-}
-
-// RunSingleHook executes one hook entry (an inline [[pre]]/[[post]]
-// command or a _pre/_post script file) in isolation, streaming its
-// echoed command and combined output through opts.Output. It is used by
-// the interactive TUI to preview a single hook: selecting a hook and
-// running it shows exactly the command that would run and its output in
-// the review pane. The relevant hook-asset directory is copied into dest
-// first so script files can be found, but the project's _base files are
-// not rendered (that only happens on a full run).
-func RunSingleHook(ctx context.Context, t *Template, values map[string]any, dest string, h HookView, opts HookOptions) error {
-	if t == nil || t.SpinToml == nil {
-		return nil
-	}
-	if err := os.MkdirAll(dest, 0o755); err != nil {
-		return fmt.Errorf("mkdir %q: %w", dest, err)
-	}
-	var step hookStep
-	switch {
-	case h.IsFile:
-		if err := copyHookAssets(ctx, hookAssetDir(t, h.Phase), filepath.Join(dest, "_"+h.Phase)); err != nil {
-			return err
-		}
-		cmd, err := scriptCommand(hookAssetDir(t, h.Phase), "_"+h.Phase, filepath.Base(h.File))
-		if err != nil {
-			return err
-		}
-		step = hookStep{Run: cmd}
-	default:
-		step = hookStep{Run: h.Run}
-	}
-	if opts.NoHooks || step.Run == "" {
-		return nil
-	}
-	return runHooks(ctx, h.Phase, []hookStep{step}, values, dest, opts)
 }
