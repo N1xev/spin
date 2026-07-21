@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/N1xev/spin/internal/template"
 )
@@ -78,86 +79,6 @@ func pump(t *testing.T, m hooksModel, cmd tea.Cmd) hooksModel {
 		}
 	}
 	return m
-}
-
-// TestHooksTUI_EnterRunsSelectedHook verifies that pressing Enter on a
-// hook runs just that hook, streaming its command + output into the
-// right pane, without scaffolding the project or setting didRun.
-func TestHooksTUI_EnterRunsSelectedHook(t *testing.T) {
-	tpl := writeFixtureTemplate(t)
-	dest := t.TempDir()
-	resolved := map[string]any{"name": "myapp", "project_name": "myapp"}
-	m := newHooksModel(tpl, newTUIStyles(), 100, 30, resolved, context.Background(), dest, "myapp", false, false, false)
-
-	// Enter runs the selected hook (index 0: inline pre).
-	m, cmd := m.update(keyPress("enter"))
-	if !m.running {
-		t.Fatal("expected running after enter")
-	}
-	if m.runningAll {
-		t.Fatal("single hook run must not be flagged runningAll")
-	}
-	if m.didRun {
-		t.Fatal("single hook run must not set didRun")
-	}
-	m = pump(t, m, cmd)
-	if m.running {
-		t.Fatal("expected running false after completion")
-	}
-	if !strings.Contains(m.output, "pre-hook") {
-		t.Fatalf("expected streamed output to include pre-hook lines, got:\n%s", m.output)
-	}
-	// A single hook run does not render _base files.
-	if _, err := os.Stat(filepath.Join(dest, "hello.txt")); !os.IsNotExist(err) {
-		t.Error("single hook run must not scaffold _base files")
-	}
-}
-
-// TestHooksTUI_EnterRunsFileHook verifies that a _pre/_post script file
-// hook is executed in place, with its asset copied into dest first.
-func TestHooksTUI_EnterRunsFileHook(t *testing.T) {
-	tpl := writeFixtureTemplate(t)
-	dest := t.TempDir()
-	resolved := map[string]any{"name": "myapp", "project_name": "myapp"}
-	m := newHooksModel(tpl, newTUIStyles(), 100, 30, resolved, context.Background(), dest, "myapp", false, false, true)
-
-	// Hook order: [inline pre(0), _pre/hi.sh(1), inline post(2)].
-	const fileIdx = 1
-	// Select the file hook in the list.
-	m.list.Select(fileIdx)
-	if m.list.Index() != fileIdx {
-		t.Fatalf("expected list index %d, got %d", fileIdx, m.list.Index())
-	}
-	m, cmd := m.update(keyPress("enter"))
-	m = pump(t, m, cmd)
-	if !strings.Contains(m.output, "from-file") {
-		t.Fatalf("expected file hook output, got:\n%s", m.output)
-	}
-	if _, err := os.Stat(filepath.Join(dest, "_pre", "hi.sh")); err != nil {
-		t.Errorf("expected _pre/hi.sh copied into dest: %v", err)
-	}
-}
-
-// TestHooksTUI_EnterRunsFileHookNoVerbose verifies that without
-// --verbose only the echoed command is streamed, not the command's
-// stdout. The script prints "from-file"; in non-verbose mode that must
-// not appear in the pane.
-func TestHooksTUI_EnterRunsFileHookNoVerbose(t *testing.T) {
-	tpl := writeFixtureTemplate(t)
-	dest := t.TempDir()
-	resolved := map[string]any{"name": "myapp", "project_name": "myapp"}
-	m := newHooksModel(tpl, newTUIStyles(), 100, 30, resolved, context.Background(), dest, "myapp", false, false, false)
-
-	const fileIdx = 1
-	m.list.Select(fileIdx)
-	m, cmd := m.update(keyPress("enter"))
-	m = pump(t, m, cmd)
-	if !strings.Contains(m.output, "→ pre-hook: sh _pre/hi.sh") {
-		t.Fatalf("expected echoed command in pane, got:\n%s", m.output)
-	}
-	if strings.Contains(m.output, "from-file") {
-		t.Fatalf("expected command output suppressed without --verbose, got:\n%s", m.output)
-	}
 }
 
 // TestHooksTUI_SelectedHookContent verifies that while reviewing
@@ -248,8 +169,8 @@ func TestHooksTUI_RunAllScaffolds(t *testing.T) {
 	if !m.didRun {
 		t.Fatal("expected didRun after submit")
 	}
-	if !m.runningAll {
-		t.Fatal("expected runningAll for full scaffold")
+	if !m.running {
+		t.Fatal("expected running true after full scaffold submit")
 	}
 	m = pump(t, m, cmd)
 	if m.running {
@@ -285,9 +206,39 @@ func TestHooksTUI_ModalRendersCanvas(t *testing.T) {
 		t.Fatal("expected modal open")
 	}
 	out := m.view().Content
-	for _, want := range []string{"fixture", "hooks?", "Run", "Skip", "echo preparing to scaffold"} {
+	for _, want := range []string{"fixture", "hooks?", "Run", "Skip", "Cancel"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected modal to contain %q, got:\n%s", want, out)
+		}
+	}
+}
+
+// TestHooksTUI_ModalKeepsRightBorder verifies the run/skip modal does not
+// clip the view pane's right border. The modal is composited over the full
+// screen via a canvas; the canvas must be sized to the rendered base (which
+// already includes the Base style's horizontal frame) so its right edge is
+// not truncated. Every rendered line that contains a box-drawing │ must end
+// with one, otherwise the view pane's right border on the rows the modal does
+// not overlap has been clipped.
+func TestHooksTUI_ModalKeepsRightBorder(t *testing.T) {
+	tpl := writeFixtureTemplate(t)
+	resolved := map[string]any{"name": "myapp", "project_name": "myapp"}
+	m := newHooksModel(tpl, newTUIStyles(), 100, 30, resolved, context.Background(), t.TempDir(), "fixture", false, false, false)
+
+	m, _ = m.update(keyPress("R"))
+	if !m.modalOpen {
+		t.Fatal("expected modal open")
+	}
+	out := m.view().Content
+	for i, line := range strings.Split(out, "\n") {
+		if !strings.Contains(line, "│") {
+			continue
+		}
+		// Strip ANSI so colored borders (rendered as ...│\x1b[m) compare
+		// correctly, then trim trailing padding before checking the edge.
+		plain := strings.TrimRight(ansi.Strip(line), " ")
+		if !strings.HasSuffix(plain, "│") {
+			t.Fatalf("line %d is missing the right border (clipped by modal canvas):\n%s", i, line)
 		}
 	}
 }
@@ -314,5 +265,29 @@ func TestHooksTUI_SkipRunsScaffoldWithoutHooks(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dest, "hello.txt")); err != nil {
 		t.Errorf("expected hello.txt rendered even when skipping hooks: %v", err)
+	}
+}
+
+// TestHooksTUI_ModalCancelDismisses verifies that choosing Cancel in the
+// modal dismisses it without running hooks or scaffolding.
+func TestHooksTUI_ModalCancelDismisses(t *testing.T) {
+	tpl := writeFixtureTemplate(t)
+	dest := t.TempDir()
+	resolved := map[string]any{"name": "myapp", "project_name": "myapp"}
+	m := newHooksModel(tpl, newTUIStyles(), 100, 30, resolved, context.Background(), dest, "myapp", false, false, false)
+
+	m, _ = m.update(keyPress("R"))
+	m, cmd := m.update(keyPress("c")) // choose Cancel in modal
+	if m.modalOpen {
+		t.Fatal("expected modal closed after cancel")
+	}
+	if m.didRun {
+		t.Fatal("cancel must not set didRun")
+	}
+	if cmd != nil {
+		t.Fatal("cancel must not start a run")
+	}
+	if _, err := os.Stat(filepath.Join(dest, "hello.txt")); !os.IsNotExist(err) {
+		t.Error("cancel must not scaffold _base files")
 	}
 }
