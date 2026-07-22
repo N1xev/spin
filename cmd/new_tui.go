@@ -334,9 +334,15 @@ func runNewTUI(tpl *template.Template, values map[string]any, ctx context.Contex
 	m.yes = yes
 	m.verbose = verbose
 	p := tea.NewProgram(m)
-	if _, err := p.Run(); err != nil {
+	finalModel, err := p.Run()
+	if err != nil {
 		return false, nil, err
 	}
+	// Use the final model returned by Run() instead of the original m
+	if finalM, ok := finalModel.(newTUIModel); ok {
+		m = finalM
+	}
+	// else: type assertion failed, fall back to original m
 	if m.resolved == nil {
 		m.resolved = collectResolved(m.params, name)
 	}

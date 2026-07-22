@@ -16,13 +16,23 @@ func writeToml(t *testing.T, dir string, pres, posts []string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	f.WriteString("name = \"t\"\n\n")
+	defer func() {
+		if err := f.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}()
+	if _, err := f.WriteString("name = \"t\"\n\n"); err != nil {
+		t.Fatal(err)
+	}
 	for _, r := range pres {
-		f.WriteString("[[pre]]\nrun = " + quote(r) + "\n\n")
+		if _, err := f.WriteString("[[pre]]\nrun = " + quote(r) + "\n\n"); err != nil {
+			t.Fatal(err)
+		}
 	}
 	for _, r := range posts {
-		f.WriteString("[[post]]\nrun = " + quote(r) + "\n\n")
+		if _, err := f.WriteString("[[post]]\nrun = " + quote(r) + "\n\n"); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
