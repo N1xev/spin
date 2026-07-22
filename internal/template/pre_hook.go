@@ -3,6 +3,7 @@ package template
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,6 +78,15 @@ type HookOptions struct {
 	// Verbose streams hook output to the caller. When false, output is
 	// captured and only returned on failure.
 	Verbose bool
+	// Output, when set, receives the echoed command lines and, when
+	// Verbose is true, the live command output of each step. It is used
+	// by the interactive TUI to stream hook execution into a viewport.
+	// When Output is nil, PrintCommands falls back to the package logger.
+	Output io.Writer
+	// StepStart, when set, is called before each step runs so the caller
+	// can print a styled header. Only used when PrintCommands is true;
+	// falls back to a plain log line otherwise.
+	StepStart func(kind, cmd string)
 }
 
 // hookStep is the common shape of PreStep and PostStep.
@@ -105,7 +115,13 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 			continue
 		}
 		if opts.PrintCommands {
-			log.Stdout.Print(fmt.Sprintf("→ %s-hook: %s", kind, rendered))
+			if opts.StepStart != nil {
+				opts.StepStart(kind, rendered)
+			} else if opts.Output != nil {
+				fmt.Fprintf(opts.Output, "→ %s-hook: %s\n", kind, rendered)
+			} else {
+				log.Stdout.Print(fmt.Sprintf("→ %s-hook: %s", kind, rendered))
+			}
 		}
 		if err := ctx.Err(); err != nil {
 			return err
@@ -113,10 +129,19 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 		c := exec.CommandContext(ctx, "sh", "-c", rendered)
 		c.Dir = dir
 		if opts.Verbose {
-			c.Stdout = os.Stdout
-			c.Stderr = os.Stderr
+			if opts.Output != nil {
+				c.Stdout = opts.Output
+				c.Stderr = opts.Output
+			} else {
+				c.Stdout = os.Stdout
+				c.Stderr = os.Stderr
+			}
 			if err := c.Run(); err != nil {
+				flushWriter(opts.Output) // best-effort; run error takes priority
 				return fmt.Errorf("%s-hook step %d %q failed: %w", kind, i+1, rendered, err)
+			}
+			if err := flushWriter(opts.Output); err != nil {
+				return fmt.Errorf("%s-hook step %d %q: flush: %w", kind, i+1, rendered, err)
 			}
 			continue
 		}
@@ -124,6 +149,19 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 		if err != nil {
 			return fmt.Errorf("%s-hook step %d %q failed: %s: %w", kind, i+1, rendered, string(out), err)
 		}
+	}
+	return nil
+}
+
+// flusher is implemented by callers that buffer streamed hook output and
+// need to emit a trailing partial line once a command finishes.
+type flusher interface{ Flush() error }
+
+// flushWriter flushes w if it buffers output (e.g. cmd's tree writer).
+// Writers that stream directly (os.Stdout) have no Flush and are ignored.
+func flushWriter(w io.Writer) error {
+	if f, ok := w.(flusher); ok {
+		return f.Flush()
 	}
 	return nil
 }
@@ -147,17 +185,38 @@ func autoHookScripts(dir, dirName string) ([]string, error) {
 		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		scriptPath := filepath.Join(dirName, e.Name())
-		info, err := e.Info()
+		cmd, err := scriptCommand(fullDir, dirName, e.Name())
 		if err != nil {
 			return nil, err
 		}
-		if info.Mode()&0o111 != 0 {
-			scripts = append(scripts, "./"+scriptPath)
-		} else {
-			scripts = append(scripts, "sh "+scriptPath)
-		}
+		scripts = append(scripts, cmd)
 	}
 	slices.Sort(scripts)
 	return scripts, nil
+}
+
+// scriptCommand returns the shell command used to run a single hook
+// script file: ./<dirName>/<name> when the file is executable, otherwise
+// `sh <dirName>/<name>`. The path component is single-quoted so filenames
+// with spaces or shell metacharacters are safe.
+func scriptCommand(fullDir, dirName, name string) (string, error) {
+	info, err := os.Stat(filepath.Join(fullDir, name))
+	if err != nil {
+		return "", err
+	}
+	scriptPath := filepath.Join(dirName, name)
+	scriptPath = shellQuote(scriptPath)
+	if info.Mode()&0o111 != 0 {
+		return "./" + scriptPath, nil
+	}
+	return "sh " + scriptPath, nil
+}
+
+// shellQuote wraps s in single quotes, escaping embedded single quotes
+// with the '"'"' trick so the result is safe for sh -c.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }

@@ -195,64 +195,6 @@ func promptPinAfterSuccess(ctx context.Context, _ string, tpl *template.Template
 	printSuccess("pinned %q (cloned to %s)", pinned.Name, pinned.LocalPath)
 }
 
-// confirmRunHooks asks the user whether to run a remote template's
-// pre/post hooks. A cancelled or failed prompt is treated as "no".
-func confirmRunHooks(tpl *template.Template) bool {
-	var run bool
-	desc := hookSummary(tpl)
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title(fmt.Sprintf("Run %q hooks?", tpl.Name)).
-				Description(desc).
-				Value(&run).
-				Affirmative("Run").
-				Negative("Skip"),
-		),
-	)
-	if err := form.Run(); err != nil {
-		return false
-	}
-	return run
-}
-
-// hookSummary builds a multiline description showing every hook command and
-// _pre/ / _post/ file that the template will execute.
-func hookSummary(tpl *template.Template) string {
-	var b strings.Builder
-	source := tpl.Repo
-	if source == "" {
-		source = tpl.Source
-	}
-	fmt.Fprintf(&b, "Source: %s\n", source)
-	if tpl.SpinToml != nil {
-		for _, s := range tpl.SpinToml.Pre {
-			fmt.Fprintf(&b, "  [[pre]] run = %q\n", s.Run)
-		}
-		for _, s := range tpl.SpinToml.Post {
-			fmt.Fprintf(&b, "  [[post]] run = %q\n", s.Run)
-		}
-	}
-	if entries, _ := os.ReadDir(tpl.PreHookDir); len(entries) > 0 {
-		b.WriteString("  _pre/ files:\n")
-		for _, e := range entries {
-			if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-				fmt.Fprintf(&b, "    - %s\n", e.Name())
-			}
-		}
-	}
-	if entries, _ := os.ReadDir(tpl.PostHookDir); len(entries) > 0 {
-		b.WriteString("  _post/ files:\n")
-		for _, e := range entries {
-			if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-				fmt.Fprintf(&b, "    - %s\n", e.Name())
-			}
-		}
-	}
-	b.WriteString("Only run hooks from templates you trust.")
-	return b.String()
-}
-
 // pinnedSnapshot returns the pin list. Swallows read errors:
 // "no pins" is the safe answer for a corrupt pinned.json.
 func pinnedSnapshot(ctx context.Context, client *registry.Client) []registry.Pinned {
