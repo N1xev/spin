@@ -200,6 +200,13 @@ func (m hooksModel) update(msg tea.Msg) (hooksModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case runLineMsg:
 		m.output += msg.text
+		// Cap accumulated output so wrapping stays cheap. The viewport
+		// scrolls to bottom; old lines are naturally out of view.
+		if len(m.output) > 16*1024 {
+			if idx := strings.Index(m.output[4096:], "\n"); idx > 0 {
+				m.output = m.output[4096+idx+1:]
+			}
+		}
 		m.viewport.SetContent(wrapForView(m.output, m.viewport.Width()))
 		m.viewport.GotoBottom()
 		return m, m.listen()

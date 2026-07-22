@@ -116,6 +116,14 @@ func (m newTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			WithHeight(msg.Height - 8)
 		return m, nil
 	case tea.KeyPressMsg:
+		if m.step == stepHooks {
+			// Let the hooks model handle esc/q/ctrl+c first
+			// (close modal, quit). Only fall through to global
+			// quit for the form step.
+			var cmd tea.Cmd
+			m.hooks, cmd = m.hooks.update(msg)
+			return m, cmd
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Interrupt
@@ -334,17 +342,13 @@ func runNewTUI(tpl *template.Template, values map[string]any, ctx context.Contex
 	m.yes = yes
 	m.verbose = verbose
 	p := tea.NewProgram(m)
-	finalModel, err := p.Run()
+	final, err := p.Run()
 	if err != nil {
 		return false, nil, err
 	}
-	// Use the final model returned by Run() instead of the original m
-	if finalM, ok := finalModel.(newTUIModel); ok {
-		m = finalM
+	fm := final.(newTUIModel)
+	if fm.resolved == nil {
+		fm.resolved = collectResolved(fm.params, fm.name)
 	}
-	// else: type assertion failed, fall back to original m
-	if m.resolved == nil {
-		m.resolved = collectResolved(m.params, name)
-	}
-	return m.hooks.didRun, m.resolved, nil
+	return fm.hooks.didRun, fm.resolved, nil
 }

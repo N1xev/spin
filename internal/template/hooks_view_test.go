@@ -16,11 +16,6 @@ func writeToml(t *testing.T, dir string, pres, posts []string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() {
-		if err := f.Close(); err != nil {
-			t.Fatal(err)
-		}
-	}()
 	if _, err := f.WriteString("name = \"t\"\n\n"); err != nil {
 		t.Fatal(err)
 	}
@@ -33,6 +28,9 @@ func writeToml(t *testing.T, dir string, pres, posts []string) {
 		if _, err := f.WriteString("[[post]]\nrun = " + quote(r) + "\n\n"); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
 	}
 }
 

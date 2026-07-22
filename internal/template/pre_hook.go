@@ -137,10 +137,12 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 				c.Stderr = os.Stderr
 			}
 			if err := c.Run(); err != nil {
-				flushWriter(opts.Output)
+				flushWriter(opts.Output) // best-effort; run error takes priority
 				return fmt.Errorf("%s-hook step %d %q failed: %w", kind, i+1, rendered, err)
 			}
-			flushWriter(opts.Output)
+			if err := flushWriter(opts.Output); err != nil {
+				return fmt.Errorf("%s-hook step %d %q: flush: %w", kind, i+1, rendered, err)
+			}
 			continue
 		}
 		out, err := c.CombinedOutput()
@@ -157,10 +159,11 @@ type flusher interface{ Flush() error }
 
 // flushWriter flushes w if it buffers output (e.g. cmd's tree writer).
 // Writers that stream directly (os.Stdout) have no Flush and are ignored.
-func flushWriter(w io.Writer) {
+func flushWriter(w io.Writer) error {
 	if f, ok := w.(flusher); ok {
-		_ = f.Flush()
+		return f.Flush()
 	}
+	return nil
 }
 
 // autoHookScripts returns shell commands for every file in
@@ -194,15 +197,26 @@ func autoHookScripts(dir, dirName string) ([]string, error) {
 
 // scriptCommand returns the shell command used to run a single hook
 // script file: ./<dirName>/<name> when the file is executable, otherwise
-// `sh <dirName>/<name>`.
+// `sh <dirName>/<name>`. The path component is single-quoted so filenames
+// with spaces or shell metacharacters are safe.
 func scriptCommand(fullDir, dirName, name string) (string, error) {
 	info, err := os.Stat(filepath.Join(fullDir, name))
 	if err != nil {
 		return "", err
 	}
 	scriptPath := filepath.Join(dirName, name)
+	scriptPath = shellQuote(scriptPath)
 	if info.Mode()&0o111 != 0 {
 		return "./" + scriptPath, nil
 	}
 	return "sh " + scriptPath, nil
+}
+
+// shellQuote wraps s in single quotes, escaping embedded single quotes
+// with the '"'"' trick so the result is safe for sh -c.
+func shellQuote(s string) string {
+	if s == "" {
+		return "''"
+	}
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
