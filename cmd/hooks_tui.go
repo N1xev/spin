@@ -214,17 +214,19 @@ func (m hooksModel) update(msg tea.Msg) (hooksModel, tea.Cmd) {
 		m.running = false
 		if msg.err != nil {
 			m.output += "\n" + lipgloss.NewStyle().Foreground(tuiBrightRed).Render("error: "+msg.err.Error())
-		} else {
-			m.output += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render("done.")
-			// Mirror the success summary into the pane so the user
-			// sees it before quitting. runNew reprints the same two
-			// lines on the restored terminal once they press q.
-			m.output += "\n"
-			m.output += lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render(
-				fmt.Sprintf("INFO created %s at %s", m.name, m.dest))
-			m.output += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(
-				fmt.Sprintf("cd %s", m.dest))
+			m.viewport.SetContent(wrapForView(m.output, m.viewport.Width()))
+			m.viewport.GotoBottom()
+			return m, nil
 		}
+		m.output += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render("done.")
+		// Mirror the success summary into the pane so the user
+		// sees it before quitting. runNew reprints the same two
+		// lines on the restored terminal once they press q.
+		m.output += "\n"
+		m.output += lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render(
+			fmt.Sprintf("INFO created %s at %s", m.name, m.dest))
+		m.output += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(
+			fmt.Sprintf("cd %s", m.dest))
 		m.viewport.SetContent(wrapForView(m.output, m.viewport.Width()))
 		m.viewport.GotoBottom()
 		return m, nil
@@ -262,10 +264,8 @@ func (m hooksModel) update(msg tea.Msg) (hooksModel, tea.Cmd) {
 		}
 		if m.running {
 			switch msg.String() {
-			case "ctrl+c":
+			case "ctrl+c", "esc", "q":
 				return m, tea.Interrupt
-			case "esc", "q":
-				return m, tea.Quit
 			}
 			return m, nil
 		}
@@ -275,9 +275,9 @@ func (m hooksModel) update(msg tea.Msg) (hooksModel, tea.Cmd) {
 			m.modalOpen = true
 			return m, nil
 		case "ctrl+c":
-			return m, tea.Interrupt
+			return m, m.quitCmd()
 		case "esc", "q":
-			return m, tea.Quit
+			return m, m.quitCmd()
 		case "left", "right", "tab":
 			if m.focus == "list" {
 				m.focus = "view"
@@ -355,6 +355,13 @@ func (m hooksModel) startRun(skip bool) (hooksModel, tea.Cmd) {
 		close(ch)
 	}()
 	return m, m.listen()
+}
+
+func (m hooksModel) quitCmd() tea.Cmd {
+	if m.didRun {
+		return tea.Quit
+	}
+	return tea.Interrupt
 }
 
 // listen resumes reading streamed hook output until the run finishes.
