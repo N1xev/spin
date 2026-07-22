@@ -171,7 +171,7 @@ func runNew(cmd *cobra.Command, args []string) error {
 		NoHooks:       newNoHooks,
 		PrintCommands: true,
 		Verbose:       newVerbose,
-		Output: stdoutHookOutput(),
+		Output:        stdoutHookOutput(),
 		StepStart: func(kind, cmd string) {
 			fmt.Fprint(os.Stdout, hookStepHeader(kind, cmd))
 		},

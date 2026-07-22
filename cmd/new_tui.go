@@ -50,14 +50,14 @@ const (
 )
 
 type newTUIModel struct {
-	styles  *tuiStyles
-	form    *huh.Form
-	width   int
-	height  int
-	tpl     *template.Template
-	params  []params.Param
-	step    tuiStep
-	hooks   hooksModel
+	styles *tuiStyles
+	form   *huh.Form
+	width  int
+	height int
+	tpl    *template.Template
+	params []params.Param
+	step   tuiStep
+	hooks  hooksModel
 
 	ctx     context.Context
 	dest    string

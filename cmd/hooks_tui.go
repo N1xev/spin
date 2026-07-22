@@ -101,11 +101,11 @@ type hooksModel struct {
 
 	running bool
 	output  string
-	didRun     bool // scaffold was executed by this model
-	stream     chan string
-	doneCh     chan error
+	didRun  bool // scaffold was executed by this model
+	stream  chan string
+	doneCh  chan error
 
-	verbose  bool
+	verbose   bool
 	autoStart int // 0 none, 1 run, 2 skip
 }
 
@@ -421,7 +421,7 @@ func (m hooksModel) view() tea.View {
 	viewStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(tuiAccent).
-		Padding(1,0)
+		Padding(1, 0)
 
 	if m.focus == "view" && !m.modalOpen {
 		viewStyle = viewStyle.BorderForeground(tuiBrightYellow)
@@ -521,4 +521,3 @@ func (m hooksModel) modalBox() string {
 		Padding(1, 3)
 	return boxStyle.Render(b.String())
 }
-
