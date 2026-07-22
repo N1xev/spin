@@ -6,8 +6,8 @@ import (
 	"image/color"
 	"strings"
 
-	tea "charm.land/bubbletea/v2"
 	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 
@@ -58,10 +58,10 @@ type newTUIModel struct {
 	preview *viewport.Model
 	width   int
 	height  int
-	tpl    *template.Template
-	params []params.Param
-	step   tuiStep
-	hooks  hooksModel
+	tpl     *template.Template
+	params  []params.Param
+	step    tuiStep
+	hooks   hooksModel
 
 	ctx     context.Context
 	dest    string
@@ -198,7 +198,7 @@ func (m newTUIModel) formView() tea.View {
 		header = m.appErrorBoundaryView(errorView(errors))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Left, form, status)
-	footer := m.appBoundaryViewFoot(m.form.WithWidth(m.width - 10).Help().ShortHelpView(m.form.KeyBinds()) + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" • ") + lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render("ctrl+↑/↓") + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" scroll preview"))
+	footer := m.appBoundaryViewFoot(m.form.WithWidth(m.width-10).Help().ShortHelpView(m.form.KeyBinds()) + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" • ") + lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render("ctrl+↑/↓") + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" scroll preview"))
 	m.form = m.form.WithWidth(min(m.width/2, 60))
 	if len(errors) > 0 {
 		footer = m.appErrorBoundaryView("")
