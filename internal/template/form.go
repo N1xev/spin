@@ -23,7 +23,7 @@ func (t *Template) BuildForm(values map[string]any) (*huh.Form, error) {
 			p.Apply(toParamValue(v))
 		}
 	}
-	form := params.Form(ps)
+	form := params.Form(ps, values)
 	// After Run, walk the params and copy their Values into values.
 	// We attach a callback by using huh's Key() -- but huh doesn't have
 	// a generic "post-run" hook. So we expose a separate helper.
@@ -48,9 +48,9 @@ func (t *Template) ResolveForm(values map[string]any, interactive bool) (map[str
 		return nil, err
 	}
 	if !interactive {
-		params.SetDefaults(ps)
+		params.SetDefaults(ps, values)
 	} else {
-		if err := params.Run(ps); err != nil {
+		if err := params.Run(ps, values); err != nil {
 			return nil, err
 		}
 	}
@@ -60,6 +60,12 @@ func (t *Template) ResolveForm(values map[string]any, interactive bool) (map[str
 		if v, ok := values[p.Name()]; ok {
 			p.Apply(toParamValue(v))
 		}
+	}
+	// huh validates select values on submit in interactive mode, but
+	// the non-interactive path (and --param overrides) skip that, so
+	// reject a select value outside its options here.
+	if err := params.ValidateDefaults(ps); err != nil {
+		return nil, err
 	}
 	out := map[string]any{}
 	for _, p := range ps {
@@ -78,25 +84,7 @@ func (t *Template) ResolveForm(values map[string]any, interactive bool) (map[str
 }
 
 func toParamValue(v any) params.Value {
-	switch x := v.(type) {
-	case string:
-		return params.Value{Kind: params.TypeText, String: x}
-	case int:
-		return params.Value{Kind: params.TypeNumber, Int: x}
-	case bool:
-		return params.Value{Kind: params.TypeBool, Bool: x}
-	case []string:
-		return params.Value{Kind: params.TypeMultiSelect, List: x}
-	case []any:
-		out := make([]string, 0, len(x))
-		for _, item := range x {
-			if s, ok := item.(string); ok {
-				out = append(out, s)
-			}
-		}
-		return params.Value{Kind: params.TypeMultiSelect, List: out}
-	}
-	return params.Value{}
+	return params.FromAny(v)
 }
 
 // UnwrapValue returns the underlying primitive held by a

@@ -258,7 +258,7 @@ func TestManager_RefreshLocalIsNoOp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := mgr.Refresh(context.Background(), "local")
+	out, _, err := mgr.Refresh(context.Background(), "local")
 	if err != nil {
 		t.Fatalf("Refresh on local: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestManager_RefreshLocalIsNoOp(t *testing.T) {
 
 func TestManager_RefreshUnknownAliasIsError(t *testing.T) {
 	mgr := newTestManager(t)
-	if _, err := mgr.Refresh(context.Background(), "nope"); !errors.Is(err, ErrRegistryMissing) {
+	if _, _, err := mgr.Refresh(context.Background(), "nope"); !errors.Is(err, ErrRegistryMissing) {
 		t.Errorf("expected ErrRegistryMissing; got %v", err)
 	}
 }

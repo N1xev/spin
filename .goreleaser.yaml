@@ -26,19 +26,16 @@ builds:
     goarch:
       - amd64
       - arm64
-    ignore:
-      # Windows ARM64 is not a real target. Skip it.
-      - goos: windows
-        goarch: arm64
     ldflags:
       - -s -w
       - -X github.com/N1xev/spin/internal/version.Version={{.Version}}
-      - -X github.com/N1xev/spin/internal/version.Commit={{.ShortCommit}}
-      - -X github.com/N1xev/spin/internal/version.Date={{.CommitDate}}
 
 archives:
   - id: spin
     formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md
@@ -68,8 +65,7 @@ release:
   name_template: "{{ .ProjectName }} v{{ .Version }}"
   header: |
     ## spin {{ .Tag }}
-    Released {{ .Date }}
-    Built with Go {{ .Env.GOVERSION }}.
+    Released {{ .Date }}.
   footer: |
     ## Install
 

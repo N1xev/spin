@@ -75,11 +75,24 @@ func newNewTUIModel(tpl *template.Template) (newTUIModel, error) {
 	if err != nil {
 		return m, err
 	}
-	params.SetDefaults(ps)
+	params.SetDefaults(ps, values)
+	// Seed builtins (name, project_name) and any other supplied values
+	// onto params whose name matches, so the form opens with them
+	// pre-filled -- matching the non-TTY ResolveForm behaviour. Guard
+	// against empty strings: an empty value must never clobber a
+	// param's own default.
+	for _, p := range ps {
+		if v, ok := values[p.Name()]; ok {
+			if s, ok := v.(string); ok && s == "" {
+				continue
+			}
+			p.Apply(params.FromAny(v))
+		}
+	}
 	m.params = ps
 	var fields []huh.Field
 	for _, p := range ps {
-		fields = append(fields, p.HuhField())
+		fields = append(fields, p.HuhField(values))
 	}
 	m.form = huh.NewForm(huh.NewGroup(fields...)).
 		WithWidth(min(m.width/2, 60)).
@@ -214,7 +227,7 @@ func (m newTUIModel) statusView(form string) string {
 		}
 	}
 	const statusWidth = 50
-	statusMarginLeft := max(m.width - statusWidth - lipgloss.Width(form) - s.Status.GetMarginRight(), 0)
+	statusMarginLeft := max(m.width-statusWidth-lipgloss.Width(form)-s.Status.GetMarginRight(), 0)
 	return s.Status.
 		Width(statusWidth).
 		Height(lipgloss.Height(form)).

@@ -66,8 +66,9 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		targets = pinned
 	}
 
-	var ok, failed int
+	var ok, failed, skipped int
 	for _, p := range targets {
+		oldVersion := p.Version
 		updated, err := refreshOne(cmd.Context(), client, p)
 		if err != nil {
 			printWarn("%s: %v", p.Name, err)
@@ -78,6 +79,11 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		if len(short) > 10 {
 			short = short[:10]
 		}
+		if oldVersion == updated.Version {
+			printInfo("%s already up to date (%s)", updated.Name, short)
+			skipped++
+			continue
+		}
 		printSuccess("updated %s -> %s", updated.Name, short)
 		ok++
 	}
@@ -85,9 +91,12 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		log.Error("template refresh finished with failures", "updated", ok, "failed", failed)
 		return fmt.Errorf("%d template(s) failed to refresh", failed)
 	}
-	if ok == 1 {
+	switch {
+	case ok == 0 && skipped > 0:
+		log.Stdout.Info(fmt.Sprintf("%d template(s) already up to date", skipped))
+	case ok == 1:
 		log.Stdout.Print("1 template refreshed")
-	} else {
+	default:
 		log.Stdout.Info(fmt.Sprintf("%d templates refreshed", ok))
 	}
 	return nil
