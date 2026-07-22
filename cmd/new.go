@@ -134,7 +134,7 @@ func runNew(cmd *cobra.Command, args []string) error {
 	var resolved map[string]any
 	renderedByTUI := false
 	if interactive && tpl.SpinToml != nil && len(tpl.SpinToml.Params) > 0 {
-		renderedByTUI, resolved, err = runNewTUI(tpl, cmd.Context(), dest, name, newNoHooks, newYes, newVerbose)
+		renderedByTUI, resolved, err = runNewTUI(tpl, values, cmd.Context(), dest, name, newNoHooks, newYes, newVerbose)
 	} else {
 		resolved, err = tpl.ResolveForm(values, interactive)
 	}

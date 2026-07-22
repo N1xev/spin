@@ -69,7 +69,7 @@ type newTUIModel struct {
 	resolved map[string]any
 }
 
-func newNewTUIModel(tpl *template.Template) (newTUIModel, error) {
+func newNewTUIModel(tpl *template.Template, values map[string]any) (newTUIModel, error) {
 	m := newTUIModel{tpl: tpl, styles: newTUIStyles(), width: termWidth(), height: 24}
 	ps, err := params.Parse(tpl.SpinToml.Params)
 	if err != nil {
@@ -322,8 +322,8 @@ func collectResolved(ps []params.Param, name string) map[string]any {
 // hooks) the hook review screen. It returns whether the scaffold was
 // already executed by the TUI (so runNew can skip its own render), the
 // resolved param values, and any error.
-func runNewTUI(tpl *template.Template, ctx context.Context, dest, name string, noHooks, yes, verbose bool) (bool, map[string]any, error) {
-	m, err := newNewTUIModel(tpl)
+func runNewTUI(tpl *template.Template, values map[string]any, ctx context.Context, dest, name string, noHooks, yes, verbose bool) (bool, map[string]any, error) {
+	m, err := newNewTUIModel(tpl, values)
 	if err != nil {
 		return false, nil, err
 	}
