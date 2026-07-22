@@ -126,19 +126,19 @@ func (m newTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyPressMsg:
 		if m.step == stepHooks {
-			m.hooks, _ = m.hooks.update(msg)
-			return m, nil
+			var cmd tea.Cmd
+			m.hooks, cmd = m.hooks.update(msg)
+			return m, cmd
 		}
 		switch msg.String() {
-		case "ctrl+c":
+		case "ctrl+c", "esc", "q":
 			return m, tea.Interrupt
-		case "esc", "q":
-			return m, tea.Quit
 		}
 	}
 	if m.step == stepHooks {
-		m.hooks, _ = m.hooks.update(msg)
-		return m, nil
+		var cmd tea.Cmd
+		m.hooks, cmd = m.hooks.update(msg)
+		return m, cmd
 	}
 	return m.updateForm(msg)
 }
