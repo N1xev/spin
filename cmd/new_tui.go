@@ -7,8 +7,11 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/bubbles/v2/viewport"
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
+
+	"os"
 
 	"github.com/N1xev/spin/internal/params"
 	"github.com/N1xev/spin/internal/template"
@@ -50,10 +53,11 @@ const (
 )
 
 type newTUIModel struct {
-	styles *tuiStyles
-	form   *huh.Form
-	width  int
-	height int
+	styles  *tuiStyles
+	form    *huh.Form
+	preview *viewport.Model
+	width   int
+	height  int
 	tpl    *template.Template
 	params []params.Param
 	step   tuiStep
@@ -98,6 +102,9 @@ func newNewTUIModel(tpl *template.Template, values map[string]any) (newTUIModel,
 		WithWidth(min(m.width/2, 60)).
 		WithShowHelp(false).
 		WithShowErrors(false)
+	vp := viewport.New(viewport.WithWidth(46), viewport.WithHeight(10))
+	vp.SoftWrap = true
+	m.preview = &vp
 	return m, nil
 }
 
@@ -112,17 +119,15 @@ func (m newTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hooks = m.hooks.resize(m.width, m.height)
 			return m, nil
 		}
-		m.form = m.form.WithWidth(min(m.width/2, 60)).
-			WithHeight(msg.Height - 8)
+		m.form = m.form.WithWidth(min(m.width/2, 60)).WithHeight(msg.Height - 8)
+		vp := viewport.New(viewport.WithWidth(46), viewport.WithHeight(max(msg.Height-13, 10)))
+		vp.SoftWrap = true
+		m.preview = &vp
 		return m, nil
 	case tea.KeyPressMsg:
 		if m.step == stepHooks {
-			// Let the hooks model handle esc/q/ctrl+c first
-			// (close modal, quit). Only fall through to global
-			// quit for the form step.
-			var cmd tea.Cmd
-			m.hooks, cmd = m.hooks.update(msg)
-			return m, cmd
+			m.hooks, _ = m.hooks.update(msg)
+			return m, nil
 		}
 		switch msg.String() {
 		case "ctrl+c":
@@ -131,19 +136,26 @@ func (m newTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	}
-
-	switch m.step {
-	case stepHooks:
-		var cmd tea.Cmd
-		m.hooks, cmd = m.hooks.update(msg)
-		return m, cmd
-	default:
-		return m.updateForm(msg)
+	if m.step == stepHooks {
+		m.hooks, _ = m.hooks.update(msg)
+		return m, nil
 	}
+	return m.updateForm(msg)
 }
 
 // updateForm is the Update loop for the param form step.
 func (m newTUIModel) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Ctrl+arrows scroll the preview viewport.
+	if key, ok := msg.(tea.KeyPressMsg); ok {
+		switch key.String() {
+		case "ctrl+up", "ctrl+k":
+			m.preview.PageUp()
+			return m, nil
+		case "ctrl+down", "ctrl+j":
+			m.preview.PageDown()
+			return m, nil
+		}
+	}
 	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
 		m.form = f
@@ -186,7 +198,7 @@ func (m newTUIModel) formView() tea.View {
 		header = m.appErrorBoundaryView(errorView(errors))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Left, form, status)
-	footer := m.appBoundaryViewFoot(m.form.WithWidth(m.width - 10).Help().ShortHelpView(m.form.KeyBinds()))
+	footer := m.appBoundaryViewFoot(m.form.WithWidth(m.width - 10).Help().ShortHelpView(m.form.KeyBinds()) + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" • ") + lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render("ctrl+↑/↓") + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" scroll preview"))
 	m.form = m.form.WithWidth(min(m.width/2, 60))
 	if len(errors) > 0 {
 		footer = m.appErrorBoundaryView("")
@@ -198,9 +210,14 @@ func (m newTUIModel) formView() tea.View {
 
 func (m newTUIModel) statusView(form string) string {
 	s := m.styles
-	if m.width-lipgloss.Width(form) < 45 {
+	fw := lipgloss.Width(form)
+	if fw > 0 && m.width-fw < 45 {
 		return ""
 	}
+	w := max(m.width-fw-4, 50)
+	label := lipgloss.NewStyle().Foreground(tuiAccent)
+	cmdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true)
+	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
 	thdr := func(text string, c color.Color) string {
 		return lipgloss.NewStyle().Foreground(c).Bold(true).Render(text)
 	}
@@ -217,14 +234,33 @@ func (m newTUIModel) statusView(form string) string {
 		if m.tpl.SpinToml.Type != "" {
 			fmt.Fprintf(&b, "Type: %s\n", m.tpl.SpinToml.Type)
 		}
-		hooks := len(m.tpl.SpinToml.Pre) + len(m.tpl.SpinToml.Post)
-		if hooks > 0 {
+		if len(m.tpl.SpinToml.Pre)+len(m.tpl.SpinToml.Post) > 0 {
 			fmt.Fprintf(&b, "\n%s\n", thdr("Hooks", tuiBrightRed))
 			for _, pre := range m.tpl.SpinToml.Pre {
-				fmt.Fprintf(&b, "  pre: %s\n", pre.Run)
+				fmt.Fprintf(&b, "  %s %s\n", label.Render("pre:"), cmdStyle.Render(pre.Run))
 			}
 			for _, post := range m.tpl.SpinToml.Post {
-				fmt.Fprintf(&b, "  post: %s\n", post.Run)
+				fmt.Fprintf(&b, "  %s %s\n", label.Render("post:"), cmdStyle.Render(post.Run))
+			}
+		}
+		if d := m.tpl.PreHookDir; d != "" {
+			if es, _ := os.ReadDir(d); len(es) > 0 {
+				fmt.Fprintf(&b, "\n%s\n", thdr("_pre/ scripts", tuiBrightRed))
+				for _, e := range es {
+					if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+						fmt.Fprintf(&b, "  %s\n", dim.Render(e.Name()))
+					}
+				}
+			}
+		}
+		if d := m.tpl.PostHookDir; d != "" {
+			if es, _ := os.ReadDir(d); len(es) > 0 {
+				fmt.Fprintf(&b, "\n%s\n", thdr("_post/ scripts", tuiBrightRed))
+				for _, e := range es {
+					if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+						fmt.Fprintf(&b, "  %s\n", dim.Render(e.Name()))
+					}
+				}
 			}
 		}
 	}
@@ -234,13 +270,16 @@ func (m newTUIModel) statusView(form string) string {
 			fmt.Fprintf(&b, "  %s: %s\n", p.Name(), val)
 		}
 	}
-	const statusWidth = 50
-	statusMarginLeft := max(m.width-statusWidth-lipgloss.Width(form)-s.Status.GetMarginRight(), 0)
-	return s.Status.
-		Width(statusWidth).
-		Height(lipgloss.Height(form)).
-		MarginLeft(statusMarginLeft).
-		Render(b.String())
+	fh := lipgloss.Height(form)
+	vpH := max(fh-3, 1)
+	if m.preview.Width() != w-4 || m.preview.Height() != vpH {
+		vp := viewport.New(viewport.WithWidth(w-4), viewport.WithHeight(vpH))
+		vp.SoftWrap = true
+		*m.preview = vp
+	}
+	m.preview.SetContent(b.String())
+	ml := max(m.width-w-fw-s.Status.GetMarginRight(), 0)
+	return s.Status.Width(w).Height(lipgloss.Height(form)).MarginLeft(ml).Render(m.preview.View())
 }
 
 func errorView(errs []error) string {
