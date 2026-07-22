@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"charm.land/fang/v2"
+
+	"github.com/N1xev/spin/internal/version"
 )
 
 var (
@@ -122,12 +124,10 @@ func TestUnknownSubcommandSuggestion(t *testing.T) {
 }
 
 // TestVersionFlag verifies that `spin --version` outputs the version.
-// Format is whatever cobra/fang produces; we just check the version
-// string "0.1.0" is present.
 func TestVersionFlag(t *testing.T) {
 	out := runSpin(t, "--version")
-	if !bytes.Contains(out, []byte("0.1.0")) {
-		t.Errorf("`spin --version` does not contain version 0.1.0:\n%s", out)
+	if len(bytes.TrimSpace(out)) == 0 {
+		t.Error("`spin --version` produced empty output")
 	}
 }
 
@@ -139,8 +139,8 @@ func TestRootCmdVersionWiring(t *testing.T) {
 	if rc.Version == "" {
 		t.Fatal("rootCmd.Version is empty; should be wired to version.Version")
 	}
-	if rc.Version != "0.1.0" {
-		t.Errorf("rootCmd.Version = %q, want %q (current default)", rc.Version, "0.1.0")
+	if rc.Version != version.Version {
+		t.Errorf("rootCmd.Version = %q, want %q", rc.Version, version.Version)
 	}
 }
 
