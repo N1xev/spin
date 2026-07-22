@@ -118,7 +118,7 @@ func runHooks(ctx context.Context, kind string, steps []hookStep, values map[str
 			if opts.StepStart != nil {
 				opts.StepStart(kind, rendered)
 			} else if opts.Output != nil {
-				fmt.Fprintln(opts.Output, fmt.Sprintf("→ %s-hook: %s", kind, rendered))
+				fmt.Fprintf(opts.Output, "→ %s-hook: %s\n", kind, rendered)
 			} else {
 				log.Stdout.Print(fmt.Sprintf("→ %s-hook: %s", kind, rendered))
 			}

@@ -72,7 +72,7 @@ func pump(t *testing.T, m hooksModel, cmd tea.Cmd) hooksModel {
 		case runLineMsg:
 			m, cmd = m.update(x)
 		case runDoneMsg:
-			m, cmd = m.update(x)
+			m, _ = m.update(x)
 			cmd = nil
 		default:
 			t.Fatalf("unexpected message type %T", msg)
