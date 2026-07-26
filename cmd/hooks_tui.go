@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/N1xev/spin/internal/template"
+	"github.com/N1xev/spin/internal/theme"
 )
 
 // hookItem adapts a template.HookView to the bubbles list.Item interface.
@@ -117,8 +118,10 @@ func newHooksModel(tpl *template.Template, styles *tuiStyles, width, height int,
 	}
 
 	delegate := list.NewDefaultDelegate()
+	delegate.Styles = theme.ListItemStyles()
 	listH := max(height-7, 1)
 	l := list.New(listItems, delegate, hooksListContentW, listH)
+	l.Styles = theme.ListStyles()
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
 	l.SetShowStatusBar(false)
@@ -213,19 +216,19 @@ func (m hooksModel) update(msg tea.Msg) (hooksModel, tea.Cmd) {
 	case runDoneMsg:
 		m.running = false
 		if msg.err != nil {
-			m.output += "\n" + lipgloss.NewStyle().Foreground(tuiBrightRed).Render("error: "+msg.err.Error())
+			m.output += "\n" + lipgloss.NewStyle().Foreground(theme.StatusError).Render("error: "+msg.err.Error())
 			m.viewport.SetContent(wrapForView(m.output, m.viewport.Width()))
 			m.viewport.GotoBottom()
 			return m, nil
 		}
-		m.output += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("14")).Render("done.")
+		m.output += "\n" + lipgloss.NewStyle().Foreground(theme.StatusInfo).Render("done.")
 		// Mirror the success summary into the pane so the user
 		// sees it before quitting. runNew reprints the same two
 		// lines on the restored terminal once they press q.
 		m.output += "\n"
-		m.output += lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render(
+		m.output += lipgloss.NewStyle().Foreground(theme.StatusSuccess).Render(
 			fmt.Sprintf("INFO created %s at %s", m.name, m.dest))
-		m.output += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Render(
+		m.output += "\n" + lipgloss.NewStyle().Foreground(theme.TextDimmed).Render(
 			fmt.Sprintf("cd %s", m.dest))
 		m.viewport.SetContent(wrapForView(m.output, m.viewport.Width()))
 		m.viewport.GotoBottom()
@@ -384,8 +387,8 @@ func (m hooksModel) appBoundaryView(text string) string {
 		m.width,
 		lipgloss.Left,
 		m.styles.HeaderText.Render(text),
-		lipgloss.WithWhitespaceChars("/"),
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(tuiAccent)),
+		lipgloss.WithWhitespaceChars(theme.BoundaryChar),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(theme.Accent)),
 	)
 }
 
@@ -394,8 +397,8 @@ func (m hooksModel) appBoundaryViewFoot(text string) string {
 		m.width,
 		lipgloss.Left,
 		lipgloss.NewStyle().PaddingRight(1).Render(text),
-		lipgloss.WithWhitespaceChars("/"),
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(tuiAccent)),
+		lipgloss.WithWhitespaceChars(theme.BoundaryChar),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(theme.Accent)),
 	)
 }
 
@@ -417,15 +420,15 @@ func (m hooksModel) resize(width, height int) hooksModel {
 
 func (m hooksModel) view() tea.View {
 	s := m.styles
-	title := gradientText("Spin  Hooks Review — "+m.name, tuiPink, tuiAccent)
+	title := gradientText("Spin  Hooks Review — "+m.name, theme.AccentAlt, theme.Accent)
 	header := m.appBoundaryView(title)
 
 	listStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(tuiAccent).
+		BorderForeground(theme.Accent).
 		Padding(1, 0)
 	if m.focus == "list" && !m.modalOpen {
-		listStyle = listStyle.BorderForeground(tuiBrightRed)
+		listStyle = listStyle.BorderForeground(theme.StatusError)
 	}
 	listBox := listStyle.
 		Width(hooksListContentW + hooksListBorderW).
@@ -434,11 +437,11 @@ func (m hooksModel) view() tea.View {
 
 	viewStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(tuiAccent).
+		BorderForeground(theme.Accent).
 		Padding(1, 0)
 
 	if m.focus == "view" && !m.modalOpen {
-		viewStyle = viewStyle.BorderForeground(tuiBrightYellow)
+		viewStyle = viewStyle.BorderForeground(theme.StatusWarning)
 	}
 	viewBox := viewStyle.
 		Width(max(m.viewport.Width(), hooksViewMinW) + hooksViewBorderW).
@@ -492,10 +495,12 @@ func (m hooksModel) view() tea.View {
 		canvas.Compose(comp)
 		v := tea.NewView(canvas.Render())
 		v.AltScreen = true
+		v.BackgroundColor = theme.ViewBg
 		return v
 	}
 	v := tea.NewView(s.Base.Render(inner))
 	v.AltScreen = true
+	v.BackgroundColor = theme.ViewBg
 	return v
 }
 
@@ -518,11 +523,11 @@ func (m hooksModel) modalBox() string {
 	cancelStyle := lipgloss.NewStyle()
 	switch m.modalChoice {
 	case 0:
-		runStyle = runStyle.Foreground(tuiBrightRed).Bold(true)
+		runStyle = runStyle.Foreground(theme.StatusError).Bold(true)
 	case 1:
-		skipStyle = skipStyle.Foreground(tuiBrightYellow).Bold(true)
+		skipStyle = skipStyle.Foreground(theme.StatusWarning).Bold(true)
 	default:
-		cancelStyle = cancelStyle.Foreground(lipgloss.Color("245")).Bold(true)
+		cancelStyle = cancelStyle.Foreground(theme.TextDimmed).Bold(true)
 	}
 	fmt.Fprintf(&b, "\n  %s    %s    %s\n",
 		runStyle.Render("Run"),
@@ -531,7 +536,7 @@ func (m hooksModel) modalBox() string {
 
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(tuiAccent).
+		BorderForeground(theme.Accent).
 		Padding(1, 3)
 	return boxStyle.Render(b.String())
 }
