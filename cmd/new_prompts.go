@@ -15,6 +15,7 @@ import (
 	"github.com/N1xev/spin/internal/log"
 	"github.com/N1xev/spin/internal/registry"
 	"github.com/N1xev/spin/internal/template"
+	"github.com/N1xev/spin/internal/theme"
 )
 
 func printHooks(tpl *template.Template) {
@@ -99,7 +100,7 @@ func dryRunRender(ctx context.Context, tpl *template.Template, values map[string
 // Asks "keep the broken clone, or remove it?"
 func promptInvalidPinned(name, localPath string, detectErr error) (bool, error) {
 	var keep bool
-	form := huh.NewForm(
+	form := theme.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title(fmt.Sprintf("Template %q is broken -- keep it?", name)).
@@ -123,7 +124,7 @@ func promptInvalidPinned(name, localPath string, detectErr error) (bool, error) 
 // source for offline use; Wipe re-clones; Cancel aborts.
 func promptExistingDest(name, localPath string) (template.DestAction, error) {
 	var action string
-	form := huh.NewForm(
+	form := theme.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title(fmt.Sprintf("%q already exists at %s", name, localPath)).
@@ -166,7 +167,7 @@ func promptPinAfterSuccess(ctx context.Context, _ string, tpl *template.Template
 		}
 	}
 	var pin bool
-	form := huh.NewForm(
+	form := theme.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title(fmt.Sprintf("Pin %q for offline use?", tpl.Name)).
@@ -209,7 +210,7 @@ func pinnedSnapshot(ctx context.Context, client *registry.Client) []registry.Pin
 // Returns true if the user confirms.
 func promptOverwriteExisting(name string, dir string) bool {
 	var overwrite bool
-	form := huh.NewForm(
+	form := theme.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title(fmt.Sprintf("Directory %q already exists", name)).
@@ -229,7 +230,7 @@ func promptOverwriteExisting(name string, dir string) bool {
 // 130 on cancel.
 func promptForName() (string, error) {
 	var name string
-	form := huh.NewForm(
+	form := theme.NewForm(
 		huh.NewGroup(
 			huh.NewInput().
 				Title("Project name").
@@ -277,7 +278,7 @@ func promptForTemplate(ctx context.Context) (string, error) {
 	for _, n := range names {
 		opts = append(opts, huh.NewOption(n, n))
 	}
-	form := huh.NewForm(
+	form := theme.NewForm(
 		huh.NewGroup(
 			huh.NewSelect[string]().
 				Title("Pick a pinned template").
