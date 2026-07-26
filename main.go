@@ -13,6 +13,7 @@ import (
 	"charm.land/fang/v2"
 
 	"github.com/N1xev/spin/cmd"
+	"github.com/N1xev/spin/internal/theme"
 	"github.com/N1xev/spin/internal/version"
 )
 
@@ -21,6 +22,7 @@ func main() {
 		context.Background(),
 		cmd.RootCmd(),
 		fang.WithVersion(version.Version),
+		fang.WithColorSchemeFunc(theme.FangColorScheme),
 	)
 	if err == nil {
 		return
