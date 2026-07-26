@@ -12,12 +12,13 @@ import (
 	"golang.org/x/term"
 
 	"github.com/N1xev/spin/internal/log"
+	"github.com/N1xev/spin/internal/theme"
 )
 
 var (
-	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("99"))
+	styleHeader = lipgloss.NewStyle().Bold(true).Foreground(theme.Accent)
 	styleCell   = lipgloss.NewStyle()
-	styleBorder = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	styleBorder = lipgloss.NewStyle().Foreground(theme.TextDimmed)
 )
 
 func printSuccess(format string, args ...any) {
@@ -32,7 +33,7 @@ func printWarn(format string, args ...any) {
 func printHint(format string, args ...any) {
 	style := lipgloss.NewStyle().
 		MarginTop(1).
-		Foreground(lipgloss.Color("245")).
+		Foreground(theme.TextDimmed).
 		Italic(true)
 	fmt.Fprintln(os.Stdout, style.Render(fmt.Sprintf(format, args...)))
 }
