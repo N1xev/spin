@@ -10,6 +10,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	tree "charm.land/lipgloss/v2/tree"
+
+	"github.com/N1xev/spin/internal/theme"
 )
 
 // hookSiblings is a dummy two-element Children used to derive lipgloss'
@@ -20,7 +22,7 @@ var hookSiblings = tree.NewStringData("a", "b")
 // It is the pipe mark from lipgloss/tree's DefaultIndenter plus a space.
 var hookIndent = strings.TrimRight(tree.DefaultIndenter(hookSiblings, 0), " ") + " "
 
-var hookBodyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+var hookBodyStyle = lipgloss.NewStyle().Foreground(theme.TextDimmed)
 
 // hookTreeWriter buffers hook stdout/stderr and emits each complete line
 // with the tree continuation indent in a dim colour. Headers are emitted
@@ -86,7 +88,7 @@ func channelHookOutput(ch chan<- string) io.Writer {
 // hookStepHeader renders a styled pre/post hook step header line.
 func hookStepHeader(kind, cmd string) string {
 	mark := tree.DefaultEnumerator(hookSiblings, 0)
-	node := lipgloss.NewStyle().Foreground(tuiAccent).Bold(true).
+	node := lipgloss.NewStyle().Foreground(theme.Accent).Bold(true).
 		Render(mark + " " + kind + "-hook")
 	return fmt.Sprintf("%s %s\n", node, cmd)
 }
