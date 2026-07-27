@@ -1,64 +1,53 @@
 # spin
 
-Scaffolder that doesn't care what language or framework you use. Point it
-at a template directory with a `spin.toml` and a `_base/` tree, it asks
-the template's questions, renders the files, runs the hooks. Done.
+A project scaffolding CLI for any language, framework, or stack, enabling developers to bootstrap fully configured projects from reusable templates sourced from GitHub, local directories, or template registries.
 
-```sh
-spin new myapp https://github.com/spin-templates/charm-tui.git
+```bash
+spin new myapp https://github.com/user/spin-template.git
 ```
-
-![spin logo](https://spincli.pages.dev/SpinLogo.png)
 
 ## Install
 
-```sh
+```bash
 go install github.com/N1xev/spin@latest
-
-# or
-
 curl -sSfL https://spincli.pages.dev/install.sh | sh
 ```
 
-Needs `git` on `$PATH`. Single static binary, nothing else.
+Single static binary. Needs git on $PATH.
 
-## Use
+## Commands
 
-```sh
-spin new myapp ./templates/go-cli                   # local path
-spin new myapp https://github.com/me/repo.git       # git URL
-spin new myapp go-cli-template                      # pinned name
-spin new myapp official/go-cli                      # registry shorthand
+| Command                          | Description                            |
+| -------------------------------- | -------------------------------------- |
+| `spin new [name] [template]`     | Scaffold a project from a template     |
+| `spin add [spec]`                | Pin a template locally for offline use |
+| `spin list`                      | Show pinned templates                  |
+| `spin update [name]`             | Refresh a pin's cache                  |
+| `spin remove [name]`             | Remove a pin (--purge deletes cache)   |
+| `spin search [query]`            | Search registered registries           |
+| `spin registry add [name] [url]` | Register a registry                    |
+| `spin registry list`             | Show registries                        |
+| `spin init [name]`               | Scaffold a new template directory      |
 
-spin add https://github.com/me/repo.git             # pin for offline
-spin list                                           # show pins
-spin update go-cli-template                         # refresh cache
-spin remove go-cli-template                         # unpin
-spin search tui                                     # search registries
-spin registry add official https://...              # register a registry
-spin init my-tpl                                    # create a template
+## Template Specs
+
+```txt
+./templates/go-cli              local path
+https://github.com/me/repo.git  git URL
+go-cli-template                 pinned name
+official/go-cli                 registry shorthand
 ```
 
-Non-interactive:
+## Template Anatomy
 
-```sh
-spin new myapp go-cli --param port=8080 --param name=myapp
-spin new myapp go-cli --print-params                # show params, no write
-spin new myapp go-cli --dry-run                     # show files, no write
-spin new myapp go-cli --no-hooks                    # skip hooks
-```
-
-## Template
-
-```
+```txt
 my-template/
-  spin.toml                                         # params, hooks, include rules
-  _base/                                            # file tree → project
+  spin.toml      params, hooks, include/exclude rules
+  _base/         directory tree rendered into the project
+  _pre/          scripts run before rendering
+  _post/         scripts run after rendering
 ```
-
-`spin init my-template` writes a starter. Full docs: https://spincli.pages.dev
 
 ## License
 
-[Apache 2.0](./LICENSE)
-
+Spin is licensed under [Apache 2.0](./LICENSE)
