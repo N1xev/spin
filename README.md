@@ -1,4 +1,4 @@
-# spin
+# Spin
 
 A project scaffolding CLI for any language, framework, or stack, enabling developers to bootstrap fully configured projects from reusable templates sourced from GitHub, local directories, or template registries.
 
