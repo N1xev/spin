@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"image/color"
+	"os"
 	"strings"
 
 	"charm.land/bubbles/v2/viewport"
@@ -11,18 +12,9 @@ import (
 	"charm.land/huh/v2"
 	"charm.land/lipgloss/v2"
 
-	"os"
-
 	"github.com/N1xev/spin/internal/params"
 	"github.com/N1xev/spin/internal/template"
-)
-
-var (
-	tuiAccent       = lipgloss.Color("99")
-	tuiPink         = lipgloss.Color("212")
-	tuiRed          = lipgloss.Color("9")
-	tuiBrightRed    = lipgloss.Color("#FF5555")
-	tuiBrightYellow = lipgloss.Color("#F1FA8C")
+	"github.com/N1xev/spin/internal/theme"
 )
 
 type tuiStyles struct {
@@ -33,15 +25,15 @@ func newTUIStyles() *tuiStyles {
 	return &tuiStyles{
 		Base: lipgloss.NewStyle().Padding(1, 4, 0, 1),
 		HeaderText: lipgloss.NewStyle().
-			Foreground(tuiAccent).Bold(true).Padding(0, 1, 0, 2),
+			Foreground(theme.Accent).Bold(true).Padding(0, 1, 0, 2),
 		ErrorHeaderText: lipgloss.NewStyle().
-			Foreground(tuiRed).Bold(true).Padding(0, 1, 0, 2),
+			Foreground(theme.ErrorFg).Bold(true).Padding(0, 1, 0, 2),
 		Status: lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(tuiAccent).
+			BorderForeground(theme.Accent).
 			PaddingLeft(1).MarginTop(1),
 		StatusHeader: lipgloss.NewStyle().
-			Foreground(tuiAccent).Bold(true),
+			Foreground(theme.Accent).Bold(true),
 	}
 }
 
@@ -99,6 +91,7 @@ func newNewTUIModel(tpl *template.Template, values map[string]any) (newTUIModel,
 		fields = append(fields, p.HuhField(values))
 	}
 	m.form = huh.NewForm(huh.NewGroup(fields...)).
+		WithTheme(huh.ThemeFunc(func(_ bool) *huh.Styles { return theme.Theme() })).
 		WithWidth(min(m.width/2, 60)).
 		WithShowHelp(false).
 		WithShowErrors(false)
@@ -108,7 +101,9 @@ func newNewTUIModel(tpl *template.Template, values map[string]any) (newTUIModel,
 	return m, nil
 }
 
-func (m newTUIModel) Init() tea.Cmd { return m.form.Init() }
+func (m newTUIModel) Init() tea.Cmd {
+	return m.form.Init()
+}
 
 func (m newTUIModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -185,7 +180,7 @@ func (m newTUIModel) View() tea.View {
 func (m newTUIModel) formView() tea.View {
 	s := m.styles
 
-	title := gradientText("Spin  Create Project — "+m.tpl.Name, tuiPink, tuiAccent)
+	title := gradientText("Spin  Create Project — "+m.tpl.Name, theme.AccentAlt, theme.Accent)
 
 	v := strings.TrimSuffix(m.form.View(), "\n\n")
 	form := lipgloss.NewStyle().Margin(1, 0).Render(v)
@@ -198,13 +193,14 @@ func (m newTUIModel) formView() tea.View {
 		header = m.appErrorBoundaryView(errorView(errors))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Left, form, status)
-	footer := m.appBoundaryViewFoot(m.form.WithWidth(m.width-10).Help().ShortHelpView(m.form.KeyBinds()) + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" • ") + lipgloss.NewStyle().Foreground(lipgloss.Color("#626262")).Render("ctrl+↑/↓") + lipgloss.NewStyle().Foreground(lipgloss.Color("#4A4A4A")).Render(" scroll preview"))
+	footer := m.appBoundaryViewFoot(m.form.WithWidth(m.width-10).Help().ShortHelpView(m.form.KeyBinds()) + lipgloss.NewStyle().Foreground(theme.TextDimmed).Render(" • ") + lipgloss.NewStyle().Foreground(theme.Accent).Render("ctrl+↑/↓") + lipgloss.NewStyle().Foreground(theme.TextMuted).Render(" scroll preview"))
 	m.form = m.form.WithWidth(min(m.width/2, 60))
 	if len(errors) > 0 {
 		footer = m.appErrorBoundaryView("")
 	}
 	hv := tea.NewView(s.Base.Render(header + "\n" + body + "\n\n" + footer))
 	hv.AltScreen = true
+	hv.BackgroundColor = theme.ViewBg
 	return hv
 }
 
@@ -215,14 +211,14 @@ func (m newTUIModel) statusView(form string) string {
 		return ""
 	}
 	w := max(m.width-fw-4, 50)
-	label := lipgloss.NewStyle().Foreground(tuiAccent)
-	cmdStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245")).Italic(true)
-	dim := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	label := lipgloss.NewStyle().Foreground(theme.Accent)
+	cmdStyle := lipgloss.NewStyle().Foreground(theme.TextDimmed).Italic(true)
+	dim := lipgloss.NewStyle().Foreground(theme.TextDimmed)
 	thdr := func(text string, c color.Color) string {
 		return lipgloss.NewStyle().Foreground(c).Bold(true).Render(text)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n", thdr("Template", lipgloss.Color("14")))
+	fmt.Fprintf(&b, "%s\n", thdr("Template", theme.StatusInfo))
 	fmt.Fprintf(&b, "%s\n", m.tpl.Name)
 	if m.tpl.SpinToml != nil {
 		if m.tpl.SpinToml.Description != "" {
@@ -235,7 +231,7 @@ func (m newTUIModel) statusView(form string) string {
 			fmt.Fprintf(&b, "Type: %s\n", m.tpl.SpinToml.Type)
 		}
 		if len(m.tpl.SpinToml.Pre)+len(m.tpl.SpinToml.Post) > 0 {
-			fmt.Fprintf(&b, "\n%s\n", thdr("Hooks", tuiBrightRed))
+			fmt.Fprintf(&b, "\n%s\n", thdr("Hooks", theme.StatusError))
 			for _, pre := range m.tpl.SpinToml.Pre {
 				fmt.Fprintf(&b, "  %s %s\n", label.Render("pre:"), cmdStyle.Render(pre.Run))
 			}
@@ -245,7 +241,7 @@ func (m newTUIModel) statusView(form string) string {
 		}
 		if d := m.tpl.PreHookDir; d != "" {
 			if es, _ := os.ReadDir(d); len(es) > 0 {
-				fmt.Fprintf(&b, "\n%s\n", thdr("_pre/ scripts", tuiBrightRed))
+				fmt.Fprintf(&b, "\n%s\n", thdr("_pre/ scripts", theme.StatusError))
 				for _, e := range es {
 					if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
 						fmt.Fprintf(&b, "  %s\n", dim.Render(e.Name()))
@@ -255,7 +251,7 @@ func (m newTUIModel) statusView(form string) string {
 		}
 		if d := m.tpl.PostHookDir; d != "" {
 			if es, _ := os.ReadDir(d); len(es) > 0 {
-				fmt.Fprintf(&b, "\n%s\n", thdr("_post/ scripts", tuiBrightRed))
+				fmt.Fprintf(&b, "\n%s\n", thdr("_post/ scripts", theme.StatusError))
 				for _, e := range es {
 					if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
 						fmt.Fprintf(&b, "  %s\n", dim.Render(e.Name()))
@@ -264,7 +260,7 @@ func (m newTUIModel) statusView(form string) string {
 			}
 		}
 	}
-	fmt.Fprintf(&b, "\n%s\n", thdr("Params", tuiBrightYellow))
+	fmt.Fprintf(&b, "\n%s\n", thdr("Params", theme.StatusWarning))
 	for _, p := range m.params {
 		if val := paramDisplay(p); val != "" {
 			fmt.Fprintf(&b, "  %s: %s\n", p.Name(), val)
@@ -327,8 +323,8 @@ func (m newTUIModel) appBoundaryView(text string) string {
 		m.width,
 		lipgloss.Left,
 		m.styles.HeaderText.Render(text),
-		lipgloss.WithWhitespaceChars("/"),
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(tuiAccent)),
+		lipgloss.WithWhitespaceChars(theme.BoundaryChar),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(theme.Accent)),
 	)
 }
 
@@ -337,8 +333,8 @@ func (m newTUIModel) appErrorBoundaryView(text string) string {
 		m.width,
 		lipgloss.Left,
 		m.styles.ErrorHeaderText.Render(text),
-		lipgloss.WithWhitespaceChars("/"),
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(tuiRed)),
+		lipgloss.WithWhitespaceChars(theme.BoundaryChar),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(theme.StatusError)),
 	)
 }
 
@@ -347,8 +343,8 @@ func (m newTUIModel) appBoundaryViewFoot(text string) string {
 		m.width,
 		lipgloss.Left,
 		lipgloss.NewStyle().PaddingRight(1).Render(text),
-		lipgloss.WithWhitespaceChars("/"),
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(tuiAccent)),
+		lipgloss.WithWhitespaceChars(theme.BoundaryChar),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Foreground(theme.Accent)),
 	)
 }
 
