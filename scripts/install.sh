@@ -62,14 +62,39 @@ case "$OS" in
   *) echo "unsupported OS: $OS" >&2; exit 2 ;;
 esac
 
-# Resolve the latest release tag from the GitHub API.
-if [[ -z "$VERSION" ]]; then
-  VERSION="$(curl -sfL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+# Resolve the latest release tag. Try in order:
+#   1. GitHub releases API (includes prereleases)
+#   2. GitHub releases/latest API (stable releases only)
+#   3. git ls-remote tags (if git is available)
+resolve_version() {
+  local v=""
+
+  # 1. All releases (includes prereleases, may be rate-limited).
+  v="$(curl -sfL "https://api.github.com/repos/$REPO/releases?per_page=1" 2>/dev/null \
     | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/' || true)"
-  if [[ -z "$VERSION" ]]; then
+  if [[ -n "$v" ]]; then echo "$v"; return 0; fi
+
+  # 2. Stable releases only (different API route, may evade a temporary issue).
+  v="$(curl -sfL "https://api.github.com/repos/$REPO/releases/latest" 2>/dev/null \
+    | grep '"tag_name"' | head -1 | sed -E 's/.*"v?([^"]+)".*/\1/' || true)"
+  if [[ -n "$v" ]]; then echo "$v"; return 0; fi
+
+  # 3. git ls-remote — no API rate limit.
+  if command -v git >/dev/null 2>&1; then
+    v="$(git ls-remote --tags --sort=-version:refname "https://github.com/$REPO.git" 2>/dev/null \
+      | grep -oE 'v?[0-9]+\.[0-9]+\.[0-9]+[^/]*$' | head -1 || true)"
+    v="${v#v}"
+    if [[ -n "$v" ]]; then echo "$v"; return 0; fi
+  fi
+
+  return 1
+}
+
+if [[ -z "$VERSION" ]]; then
+  VERSION="$(resolve_version)" || {
     echo "no release found; pass --version=vX.Y.Z or create a release first" >&2
     exit 1
-  fi
+  }
 fi
 VERSION="${VERSION#v}"
 TARBALL="${BIN}_${VERSION}_${OS}_${ARCH}.tar.gz"
