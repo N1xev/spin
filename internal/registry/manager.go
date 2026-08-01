@@ -356,6 +356,25 @@ func (m Manager) RefreshAll(ctx context.Context) ([]Registry, []string, []error)
 	return updated, skipped, errs
 }
 
+// Bootstrap adds the built-in official registry on first run when
+// registries.json does not yet exist. It is a no-op when the file is
+// already present, including corrupt or unreadable files: we never
+// overwrite user data. Returns true when the official registry was
+// added. Failures (e.g. network unreachable) are returned so the
+// caller can surface them; the user can retry on a later command.
+func (m Manager) Bootstrap(ctx context.Context) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(m.RegistriesPath()); err == nil || !os.IsNotExist(err) {
+		return false, nil
+	}
+	if _, err := m.Add(ctx, OfficialAlias, DefaultRegistryURL, false); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // Remove drops alias from registries.json and deletes the cache
 // directory under registries/<alias>/. pinnedTemplates is the
 // current Pinned list; if any pin's Source points inside the

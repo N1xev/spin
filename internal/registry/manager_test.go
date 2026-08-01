@@ -374,3 +374,119 @@ func TestManager_AddLocalNonDirectoryErrors(t *testing.T) {
 		t.Errorf("expected 'not a directory' in error; got %v", err)
 	}
 }
+
+// withFixtureOfficialURL points DefaultRegistryURL at a local registry
+// fixture for the duration of the test, so Bootstrap never touches the
+// network. It returns the fixture path.
+func withFixtureOfficialURL(t *testing.T) string {
+	t.Helper()
+	src := t.TempDir()
+	writeRegistryFixture(t, src)
+	oldURL := DefaultRegistryURL
+	DefaultRegistryURL = src
+	t.Cleanup(func() { DefaultRegistryURL = oldURL })
+	return src
+}
+
+func TestManager_BootstrapFirstRun(t *testing.T) {
+	src := withFixtureOfficialURL(t)
+	mgr := newTestManager(t)
+
+	did, err := mgr.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if !did {
+		t.Fatal("Bootstrap reported did=false on first run")
+	}
+	reg, ok := mgr.Get(context.Background(), "official")
+	if !ok {
+		t.Fatal("official registry should be registered after first-run bootstrap")
+	}
+	if reg.Source != src {
+		t.Errorf("Source = %q, want %q", reg.Source, src)
+	}
+	if reg.Kind != KindLocal {
+		t.Errorf("Kind = %q, want local (fixture symlink)", reg.Kind)
+	}
+}
+
+func TestManager_BootstrapIdempotent(t *testing.T) {
+	withFixtureOfficialURL(t)
+	mgr := newTestManager(t)
+
+	if _, err := mgr.Bootstrap(context.Background()); err != nil {
+		t.Fatalf("first Bootstrap: %v", err)
+	}
+	// Second call: registries.json now exists, so Bootstrap must be a
+	// no-op -- not a re-clone and not ErrAliasExists.
+	did, err := mgr.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatalf("second Bootstrap: %v", err)
+	}
+	if did {
+		t.Error("Bootstrap reported did=true when registries.json already exists")
+	}
+}
+
+func TestManager_BootstrapNoopWhenConfigured(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := os.WriteFile(mgr.RegistriesPath(),
+		[]byte(`{"registries":[{"alias":"custom","source":"/tmp/x","kind":"local"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	did, err := mgr.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if did {
+		t.Error("Bootstrap reported did=true for an existing registries.json")
+	}
+	if _, ok := mgr.Get(context.Background(), "official"); ok {
+		t.Error("official registry must not be added when registries.json already exists")
+	}
+}
+
+func TestManager_BootstrapNoopOnCorruptFile(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := os.WriteFile(mgr.RegistriesPath(), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	did, err := mgr.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if did {
+		t.Error("Bootstrap must not overwrite a corrupt registries.json")
+	}
+	if b, err := os.ReadFile(mgr.RegistriesPath()); err != nil || string(b) != "{not json" {
+		t.Errorf("corrupt file was modified: %q, err=%v", b, err)
+	}
+}
+
+func TestManager_BootstrapNoopOnEmptyFile(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := os.WriteFile(mgr.RegistriesPath(), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	did, err := mgr.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if did {
+		t.Error("Bootstrap reported did=true for an empty registries.json")
+	}
+}
+
+func TestManager_BootstrapHonoursContext(t *testing.T) {
+	mgr := newTestManager(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	did, err := mgr.Bootstrap(ctx)
+	if err == nil {
+		t.Fatal("Bootstrap should return the cancellation error")
+	}
+	if did {
+		t.Error("Bootstrap reported did=true on cancelled context")
+	}
+}
