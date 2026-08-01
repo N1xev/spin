@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -168,6 +169,26 @@ func TestManager_ResolveShorthandUnknownAlias(t *testing.T) {
 	_, err := mgr.ResolveShorthand(context.Background(), "ghost/nope")
 	if err == nil || !strings.Contains(err.Error(), "not registered") {
 		t.Errorf("expected 'not registered' error; got %v", err)
+	}
+}
+
+func TestManager_ResolveShorthandOfficialNotRegistered(t *testing.T) {
+	mgr := newTestManager(t)
+	_, err := mgr.ResolveShorthand(context.Background(), "official/go-api")
+	if err == nil {
+		t.Fatal("expected error for unregistered official alias")
+	}
+	var notRegistered AliasNotRegisteredError
+	if !errors.As(err, &notRegistered) {
+		t.Fatalf("expected AliasNotRegisteredError; got %T: %v", err, err)
+	}
+	if notRegistered.Alias != "official" {
+		t.Errorf("alias = %q; want official", notRegistered.Alias)
+	}
+	// The registry layer must stay transport-agnostic: the failure
+	// is structured data, and CLI hints belong to the cmd layer.
+	if strings.Contains(err.Error(), "spin registry add") {
+		t.Errorf("registry error must not contain CLI hints; got %v", err)
 	}
 }
 

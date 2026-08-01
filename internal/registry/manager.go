@@ -356,6 +356,100 @@ func (m Manager) RefreshAll(ctx context.Context) ([]Registry, []string, []error)
 	return updated, skipped, errs
 }
 
+// Bootstrap adds the built-in official registry on first run when
+// registries.json does not yet exist. It is a no-op when the file is
+// already present, including corrupt or unreadable files: we never
+// overwrite user data. First-run registration is serialized across
+// processes via a lock file so concurrent spin invocations cannot both
+// clone the official registry. Returns true when the official registry
+// was added. Failures (e.g. network unreachable) are returned so the
+// caller can surface them; the user can retry on a later command.
+func (m Manager) Bootstrap(ctx context.Context) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if _, err := os.Stat(m.RegistriesPath()); err == nil || !os.IsNotExist(err) {
+		return false, nil
+	}
+	// Serialize first-run registration: claim an exclusive lock file
+	// before re-checking RegistriesPath so two concurrent spin
+	// processes cannot both register the official registry. The claim
+	// is released once Add finishes.
+	lockPath := filepath.Join(m.CacheDir, ".bootstrap.lock")
+	if err := os.MkdirAll(m.CacheDir, 0o755); err != nil {
+		return false, err
+	}
+	claimed, err := acquireBootstrapLock(lockPath)
+	if err != nil {
+		return false, err
+	}
+	if !claimed {
+		// Another process is bootstrapping; defer to it.
+		return false, nil
+	}
+	defer releaseBootstrapLock(lockPath)
+	// Double-checked locking: the winning process may have finished
+	// while we were acquiring the claim.
+	if _, err := os.Stat(m.RegistriesPath()); err == nil || !os.IsNotExist(err) {
+		return false, nil
+	}
+	if _, err := m.Add(ctx, OfficialAlias, DefaultRegistryURL, false); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// bootstrapLockTTL is how long a .bootstrap.lock claim may stand
+// before a later process treats it as stale. The lock only guards
+// first-run registration; a process that crashes mid-bootstrap leaves
+// a claim behind, and the TTL lets a later command reclaim it instead
+// of deferring forever. It is generous so a slow clone is never
+// misread as stale.
+const bootstrapLockTTL = 2 * time.Minute
+
+// acquireBootstrapLock atomically claims lockPath with O_CREATE|O_EXCL
+// and reports whether this process won the claim. A fresh claim held
+// by another process yields false (the caller defers to it). A stale
+// claim, left by a crashed process, is moved aside via an atomic
+// rename and re-claimed, so a crash cannot block first-run bootstrap
+// permanently.
+func acquireBootstrapLock(lockPath string) (bool, error) {
+	for {
+		lock, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			_ = lock.Close()
+			return true, nil
+		}
+		if !os.IsExist(err) {
+			return false, err
+		}
+		info, err := os.Stat(lockPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue // released between OpenFile and Stat
+			}
+			return false, err
+		}
+		if time.Since(info.ModTime()) < bootstrapLockTTL {
+			return false, nil
+		}
+		// Stale claim: move it aside atomically, then retry. If a
+		// concurrent process wins the rename first, the retry sees its
+		// fresh claim and defers.
+		stalePath := lockPath + ".stale"
+		if err := os.Rename(lockPath, stalePath); err != nil && !os.IsNotExist(err) {
+			return false, err
+		}
+		_ = os.Remove(stalePath)
+	}
+}
+
+// releaseBootstrapLock drops a claim held by this process. Best-effort:
+// a leftover lock file is reclaimed later via the staleness TTL.
+func releaseBootstrapLock(lockPath string) {
+	_ = os.Remove(lockPath)
+}
+
 // Remove drops alias from registries.json and deletes the cache
 // directory under registries/<alias>/. pinnedTemplates is the
 // current Pinned list; if any pin's Source points inside the

@@ -53,8 +53,16 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	// resolved git URL or local path.
 	if registry.IsShorthand(spec) {
 		mgr := registry.NewManager()
+		// First-run: add the official registry so the shorthand can
+		// resolve without manual setup (same behavior as `spin new`).
+		maybeBootstrapOfficial(ctx, mgr)
 		resolved, err := mgr.ResolveShorthand(ctx, spec)
 		if err != nil {
+			// Re-add hint for the removed built-in registry; for any
+			// other missing alias fall back to the generic guidance.
+			if enriched, ok := annotateShorthandError(err); ok {
+				return enriched
+			}
 			alias, _ := registry.SplitAliasID(spec)
 			return fmt.Errorf("alias %q is not a registered registry; use a full git URL instead", alias)
 		}

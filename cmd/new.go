@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/N1xev/spin/internal/params"
+	"github.com/N1xev/spin/internal/registry"
 	srcspec "github.com/N1xev/spin/internal/spec"
 	"github.com/N1xev/spin/internal/template"
 )
@@ -111,8 +112,19 @@ func runNew(cmd *cobra.Command, args []string) error {
 		loader.PromptInvalidPinned = promptInvalidPinned
 		loader.PromptExistingDest = promptExistingDest
 	}
+
+	// If the spec is a registry shorthand and no registries are
+	// configured yet, bootstrap the official registry so the
+	// shorthand can resolve without manual setup.
+	if registry.IsShorthand(tplSpec) {
+		maybeBootstrapOfficial(cmd.Context(), registry.NewManager())
+	}
+
 	tpl, err := loader.LoadContext(cmd.Context(), tplSpec)
 	if err != nil {
+		if enriched, ok := annotateShorthandError(err); ok {
+			return enriched
+		}
 		return err
 	}
 
