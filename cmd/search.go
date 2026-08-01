@@ -15,7 +15,7 @@ import (
 var searchCmd = &cobra.Command{
 	Use:   "search <query>",
 	Short: "Search registries and pinned templates",
-	Long:  "Search across templates in registered registries and pinned templates. Reads ~/.config/spin/registries/*/templates/*.toml and ~/.config/spin/pinned.json directly -- no network call. Use `spin registry add` to register a registry first.",
+	Long:  "Search across templates in registered registries and pinned templates. Reads ~/.config/spin/registries/*/templates/*.toml and ~/.config/spin/pinned.json directly -- no network call once registries are registered. The official registry is added automatically on first run; register more with `spin registry add`.",
 	Example: `  spin search "go cli"
   spin search rust --limit 5
   spin search tauri --json`,
@@ -106,6 +106,11 @@ func pinnedSearchEntries(ctx *cobra.Command, client *registry.Client, query stri
 func runSearch(cmd *cobra.Command, args []string) error {
 	query := args[0]
 	mgr := registry.NewManager()
+
+	// Bootstrap the official registry on first run so search is
+	// useful without manual setup.
+	maybeBootstrapOfficial(cmd.Context(), mgr)
+
 	idx, _, err := mgr.Build(cmd.Context())
 	if err != nil {
 		return err
