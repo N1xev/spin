@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/N1xev/spin/internal/log"
 	"github.com/N1xev/spin/internal/registry"
 )
 
@@ -18,7 +19,8 @@ func maybeBootstrapOfficial(ctx context.Context, mgr *registry.Manager) {
 	did, err := mgr.Bootstrap(ctx)
 	switch {
 	case err != nil:
-		printWarn("could not bootstrap official registry: %v", err)
+		log.Debug("could not bootstrap official registry", "err", err)
+		printWarn("could not set up the official registry; run this command again to retry")
 	case did:
 		printInfo("bootstrapped official registry")
 	}

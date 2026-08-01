@@ -490,3 +490,50 @@ func TestManager_BootstrapHonoursContext(t *testing.T) {
 		t.Error("Bootstrap reported did=true on cancelled context")
 	}
 }
+
+func TestManager_BootstrapDefersToLockHolder(t *testing.T) {
+	mgr := newTestManager(t)
+	if err := os.MkdirAll(mgr.CacheDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(mgr.CacheDir, ".bootstrap.lock")
+	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	did, err := mgr.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if did {
+		t.Error("Bootstrap reported did=true while another process holds the lock")
+	}
+	if _, ok := mgr.Get(context.Background(), "official"); ok {
+		t.Error("official registry must not be added while another process holds the lock")
+	}
+}
+
+func TestManager_BootstrapReclaimsStaleLock(t *testing.T) {
+	withFixtureOfficialURL(t)
+	mgr := newTestManager(t)
+	if err := os.MkdirAll(mgr.CacheDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lockPath := filepath.Join(mgr.CacheDir, ".bootstrap.lock")
+	if err := os.WriteFile(lockPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stale := time.Now().Add(-bootstrapLockTTL - time.Minute)
+	if err := os.Chtimes(lockPath, stale, stale); err != nil {
+		t.Fatal(err)
+	}
+	did, err := mgr.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatalf("Bootstrap: %v", err)
+	}
+	if !did {
+		t.Error("Bootstrap should reclaim a stale lock and register the official registry")
+	}
+	if _, ok := mgr.Get(context.Background(), "official"); !ok {
+		t.Error("official registry should be registered after reclaiming a stale lock")
+	}
+}
