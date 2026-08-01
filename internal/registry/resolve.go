@@ -17,6 +17,19 @@ import (
 // be matched to a registered template.
 var ErrUnresolved = errors.New("shorthand unresolved")
 
+// AliasNotRegisteredError is returned by ResolveShorthand when the
+// alias part of a `<alias>/<id>` spec is not a registered registry.
+// It carries the alias so the CLI can enrich the failure with
+// user-facing hints; the registry package itself stays
+// transport-agnostic and never emits CLI guidance.
+type AliasNotRegisteredError struct {
+	Alias string
+}
+
+func (e AliasNotRegisteredError) Error() string {
+	return fmt.Sprintf("alias %q not registered", e.Alias)
+}
+
 // SplitAliasID splits a `<alias>/<id>` shorthand into its parts.
 func SplitAliasID(spec string) (alias, id string) {
 	i := strings.IndexByte(spec, '/')
@@ -71,7 +84,7 @@ func (m Manager) resolveShorthandDepth(ctx context.Context, spec string, depth i
 	alias, id := splitAliasID(spec)
 	reg, ok := m.Get(ctx, alias)
 	if !ok {
-		return Resolved{}, fmt.Errorf("alias %q not registered", alias)
+		return Resolved{}, AliasNotRegisteredError{Alias: alias}
 	}
 	tplPath := filepath.Join(reg.Path, "templates", id+".toml")
 	if _, err := os.Stat(tplPath); err != nil {
