@@ -25,3 +25,6 @@ coverage.txt
 /e2e-*/
 test-template/
 .codegraph/
+
+COMPARISON.md
+TODOS.md
