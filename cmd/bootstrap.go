@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/N1xev/spin/internal/log"
-	"github.com/N1xev/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/log"
+	"github.com/sam0uly/spin/internal/registry"
 )
 
 // maybeBootstrapOfficial registers the built-in official registry on

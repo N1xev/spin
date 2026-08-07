@@ -5,7 +5,7 @@ import (
 
 	"charm.land/huh/v2"
 
-	"github.com/N1xev/spin/internal/params"
+	"github.com/sam0uly/spin/internal/params"
 )
 
 // BuildForm constructs a huh.Form from the template's spin.toml params.

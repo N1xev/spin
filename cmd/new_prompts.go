@@ -12,10 +12,10 @@ import (
 
 	"charm.land/huh/v2"
 
-	"github.com/N1xev/spin/internal/log"
-	"github.com/N1xev/spin/internal/registry"
-	"github.com/N1xev/spin/internal/template"
-	"github.com/N1xev/spin/internal/theme"
+	"github.com/sam0uly/spin/internal/log"
+	"github.com/sam0uly/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/template"
+	"github.com/sam0uly/spin/internal/theme"
 )
 
 func printHooks(tpl *template.Template) {

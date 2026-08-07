@@ -1,4 +1,4 @@
-module github.com/N1xev/spin
+module github.com/sam0uly/spin
 
 go 1.26
 

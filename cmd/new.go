@@ -13,10 +13,10 @@ import (
 	"charm.land/huh/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/N1xev/spin/internal/params"
-	"github.com/N1xev/spin/internal/registry"
-	srcspec "github.com/N1xev/spin/internal/spec"
-	"github.com/N1xev/spin/internal/template"
+	"github.com/sam0uly/spin/internal/params"
+	"github.com/sam0uly/spin/internal/registry"
+	srcspec "github.com/sam0uly/spin/internal/spec"
+	"github.com/sam0uly/spin/internal/template"
 )
 
 // ErrCancelled is returned when the user cancels an interactive prompt.

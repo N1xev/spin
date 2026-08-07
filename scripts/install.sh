@@ -13,7 +13,7 @@
 #   curl -sSfL https://spincli.pages.dev/install.sh | sh -s -- --force
 set -euo pipefail
 
-REPO="N1xev/spin"
+REPO="sam0uly/spin"
 BIN="spin"
 FORCE=0
 VERSION=""

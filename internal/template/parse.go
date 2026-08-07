@@ -5,7 +5,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 
-	"github.com/N1xev/spin/internal/params"
+	"github.com/sam0uly/spin/internal/params"
 )
 
 // rawSpinToml is the intermediate shape BurntSushi/toml decodes into.

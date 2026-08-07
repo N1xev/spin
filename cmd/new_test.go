@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/N1xev/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/registry"
 )
 
 // TestNew_PositionalForm covers `spin new <name> <template>`

@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 	tree "charm.land/lipgloss/v2/tree"
 
-	"github.com/N1xev/spin/internal/theme"
+	"github.com/sam0uly/spin/internal/theme"
 )
 
 // hookSiblings is a dummy two-element Children used to derive lipgloss'

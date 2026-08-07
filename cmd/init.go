@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/N1xev/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/registry"
 )
 
 var initCmd = &cobra.Command{
@@ -46,14 +46,14 @@ param values. {{.name}} is the project name passed to
 become available here.
 
 Edit this file and spin.toml to taste. The full template docs
-live at <https://github.com/N1xev/spin>.
+live at <https://github.com/sam0uly/spin>.
 `
 
 // initReadme is the README body for the new template. It links
 // to the spin docs and lists the editable parts.
 const initReadme = `# <name> template
 
-A [spin](https://github.com/N1xev/spin) template. Scaffold a
+A [spin](https://github.com/sam0uly/spin) template. Scaffold a
 project from it with:
 
 ` + "```" + `

@@ -28,7 +28,7 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/N1xev/spin/internal/version.Version={{.Version}}
+      - -X github.com/sam0uly/spin/internal/version.Version={{.Version}}
 
 archives:
   - id: spin
@@ -42,7 +42,7 @@ archives:
       - LICENSE
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: "checksums.txt"
   algorithm: sha256
 
 snapshot:
@@ -58,7 +58,7 @@ changelog:
 
 release:
   github:
-    owner: N1xev
+    owner: sam0uly
     name: spin
   prerelease: auto
   draft: false
@@ -70,7 +70,7 @@ release:
     ## Install
 
     ```
-    go install github.com/N1xev/spin@{{ .Tag }}
+    go install github.com/sam0uly/spin@{{ .Tag }}
     ```
 
     Or download a binary below.

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/N1xev/spin/internal/params"
+	"github.com/sam0uly/spin/internal/params"
 )
 
 // SpinToml is the parsed manifest at the root of an external template.

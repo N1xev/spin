@@ -14,8 +14,8 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/N1xev/spin/internal/template"
-	"github.com/N1xev/spin/internal/theme"
+	"github.com/sam0uly/spin/internal/template"
+	"github.com/sam0uly/spin/internal/theme"
 )
 
 // hookItem adapts a template.HookView to the bubbles list.Item interface.

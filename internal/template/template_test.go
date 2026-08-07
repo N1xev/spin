@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/N1xev/spin/internal/params"
+	"github.com/sam0uly/spin/internal/params"
 )
 
 // TestTemplate_RenderToWithPost_DeletesSpinToml verifies that

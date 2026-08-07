@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/N1xev/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/registry"
 )
 
 // makeFixtureLocalSource creates a small on-disk "template" that

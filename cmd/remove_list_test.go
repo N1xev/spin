@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/N1xev/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/registry"
 )
 
 // withEmptyPinned sets XDG_CONFIG_HOME to a temp dir for the

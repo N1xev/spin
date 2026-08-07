@@ -3,7 +3,7 @@ package template
 import (
 	"testing"
 
-	"github.com/N1xev/spin/internal/params"
+	"github.com/sam0uly/spin/internal/params"
 )
 
 // TestResolveForm_BuiltinsSeededAndCopiedThrough verifies the

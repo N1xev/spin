@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/N1xev/spin/internal/log"
-	"github.com/N1xev/spin/internal/registry"
-	srcspec "github.com/N1xev/spin/internal/spec"
-	"github.com/N1xev/spin/internal/version"
+	"github.com/sam0uly/spin/internal/log"
+	"github.com/sam0uly/spin/internal/registry"
+	srcspec "github.com/sam0uly/spin/internal/spec"
+	"github.com/sam0uly/spin/internal/version"
 )
 
 // Loader fetches a template from a local path, a git URL, or a name

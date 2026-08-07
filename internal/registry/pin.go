@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	srcspec "github.com/N1xev/spin/internal/spec"
+	srcspec "github.com/sam0uly/spin/internal/spec"
 )
 
 // Client is the local pin store. It owns ~/.config/spin/pinned.json

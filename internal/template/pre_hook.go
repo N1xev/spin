@@ -10,8 +10,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/N1xev/spin/internal/log"
-	"github.com/N1xev/spin/internal/params"
+	"github.com/sam0uly/spin/internal/log"
+	"github.com/sam0uly/spin/internal/params"
 )
 
 // RunPreHook executes the template's [[pre]] steps (if any) after

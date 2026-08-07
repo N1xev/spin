@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/N1xev/spin/internal/registry"
-	srcspec "github.com/N1xev/spin/internal/spec"
+	"github.com/sam0uly/spin/internal/registry"
+	srcspec "github.com/sam0uly/spin/internal/spec"
 )
 
 // TestLoader_Load_LocalPath verifies Load with a local dir

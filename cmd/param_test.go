@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/N1xev/spin/internal/params"
-	"github.com/N1xev/spin/internal/template"
+	"github.com/sam0uly/spin/internal/params"
+	"github.com/sam0uly/spin/internal/template"
 )
 
 // tplWithParams builds an in-memory *template.Template with the

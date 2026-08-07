@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/N1xev/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/registry"
 )
 
 // writeMiniRegistry creates a minimal valid registry at root

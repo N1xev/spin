@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/N1xev/spin/internal/params"
+	"github.com/sam0uly/spin/internal/params"
 )
 
 // Template is a loaded external template, ready to render.

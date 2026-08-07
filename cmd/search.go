@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/N1xev/spin/internal/registry"
-	"github.com/N1xev/spin/internal/template"
+	"github.com/sam0uly/spin/internal/registry"
+	"github.com/sam0uly/spin/internal/template"
 )
 
 var searchCmd = &cobra.Command{
